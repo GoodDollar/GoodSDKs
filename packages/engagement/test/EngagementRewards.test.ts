@@ -7,7 +7,7 @@ import {
   EngagementRewards,
   MockApp,
 } from "../typechain-types";
-import { parseEther } from "ethers";
+import { Contract, parseEther, ZeroAddress } from "ethers";
 
 const { deployContract } = ethers;
 
@@ -20,9 +20,10 @@ describe("EngagementRewards", function () {
   const APP_EXPIRATION = BigInt(365 * 24 * 60 * 60); // 365 days in seconds
 
   async function deployFixture() {
-    const [owner, admin, app, user, nonAdmin] = await ethers.getSigners();
+    const [owner, admin, appOwner, user, nonAdmin, inviter] =
+      await ethers.getSigners();
 
-    const rewardToken = (await ethers.deployContract("MockERC20", [
+    const rewardToken = (await deployContract("MockERC20", [
       "RewardToken",
       "RWT",
     ])) as MockERC20;
@@ -42,34 +43,35 @@ describe("EngagementRewards", function () {
     )) as EngagementRewards;
 
     await engagementRewards.grantRole(ADMIN_ROLE, admin.address);
-    await engagementRewards.connect(admin).register(app.address);
+
+    const mockApp = await deployContract("MockApp", [
+      await engagementRewards.getAddress(),
+    ]);
+    await engagementRewards
+      .connect(appOwner)
+      .applyApp(await mockApp.getAddress(), 80, 75);
+    await engagementRewards.connect(admin).approve(await mockApp.getAddress());
+
     await identityContract.setWhitelistedRoot(user.address, user.address);
     await rewardToken.transfer(
       await engagementRewards.getAddress(),
       parseEther("10000"),
     );
 
-    const mockApp = (await deployContract("MockApp", [
-      await engagementRewards.getAddress(),
-    ])) as MockApp;
-    await engagementRewards.connect(admin).register(mockApp.address);
-
     return {
       engagementRewards,
       rewardToken,
       identityContract,
+      mockApp,
       owner,
       admin,
-      app,
+      appOwner,
       user,
       nonAdmin,
-      mockApp,
+      inviter,
     };
   }
 
-  async function registeredFixture() {
-    await deployFixture();
-  }
   describe("Initialization", function () {
     it("Should initialize with correct values", async function () {
       const { engagementRewards, rewardToken, identityContract } =
@@ -89,8 +91,32 @@ describe("EngagementRewards", function () {
   });
 
   describe("App Registration", function () {
-    it("Should allow admin to register an app", async function () {
-      const { engagementRewards, admin, nonAdmin } =
+    it("Should allow app owner to apply for registration", async function () {
+      const { engagementRewards, appOwner } = await loadFixture(deployFixture);
+
+      const newMockApp = await (
+        await deployContract("MockApp", [await engagementRewards.getAddress()])
+      ).waitForDeployment();
+
+      await expect(
+        engagementRewards
+          .connect(appOwner)
+          .applyApp(await newMockApp.getAddress(), 80, 75),
+      )
+        .to.emit(engagementRewards, "AppApplied")
+        .withArgs(await newMockApp.getAddress(), appOwner.address, 80, 75);
+
+      const appInfo = await engagementRewards.registeredApps(
+        await newMockApp.getAddress(),
+      );
+      console.log(appInfo);
+      expect(appInfo.isRegistered).to.be.true;
+      expect(appInfo.isApproved).to.be.false;
+      expect(appInfo.owner).to.equal(appOwner.address);
+    });
+
+    it("Should allow admin to approve an app", async function () {
+      const { engagementRewards, admin, mockApp, appOwner } =
         await loadFixture(deployFixture);
 
       const newMockApp = await (
@@ -99,26 +125,44 @@ describe("EngagementRewards", function () {
 
       await expect(
         engagementRewards
-          .connect(admin)
-          .register(await newMockApp.getAddress()),
+          .connect(appOwner)
+          .applyApp(await newMockApp.getAddress(), 80, 75),
       )
-        .to.emit(engagementRewards, "AppRegistered")
-        .withArgs(newMockApp.getAddress());
+        .to.emit(engagementRewards, "AppApplied")
+        .withArgs(await newMockApp.getAddress(), appOwner.address, 80, 75);
+
+      await expect(
+        engagementRewards.connect(admin).approve(await newMockApp.getAddress()),
+      )
+        .to.emit(engagementRewards, "AppApproved")
+        .withArgs(await newMockApp.getAddress());
 
       const appInfo = await engagementRewards.registeredApps(
         await newMockApp.getAddress(),
       );
-      expect(appInfo.isRegistered).to.be.true;
+      expect(appInfo.isApproved).to.be.true;
     });
 
-    it("Should not allow non-admin to register an app", async function () {
-      const { engagementRewards, nonAdmin } = await loadFixture(deployFixture);
+    it("Should not allow non-admin to approve an app", async function () {
+      const { engagementRewards, nonAdmin, mockApp, appOwner } =
+        await loadFixture(deployFixture);
 
-      const newMockApp = (await deployContract("MockApp", [
-        engagementRewards.address,
-      ])) as MockApp;
+      const newMockApp = await (
+        await deployContract("MockApp", [await engagementRewards.getAddress()])
+      ).waitForDeployment();
+
       await expect(
-        engagementRewards.connect(nonAdmin).register(nonAdmin.address),
+        engagementRewards
+          .connect(appOwner)
+          .applyApp(await newMockApp.getAddress(), 80, 75),
+      )
+        .to.emit(engagementRewards, "AppApplied")
+        .withArgs(await newMockApp.getAddress(), appOwner.address, 80, 75);
+
+      await expect(
+        engagementRewards
+          .connect(nonAdmin)
+          .approve(await newMockApp.getAddress()),
       ).to.be.revertedWithCustomError(
         engagementRewards,
         "AccessControlUnauthorizedAccount",
@@ -127,39 +171,89 @@ describe("EngagementRewards", function () {
   });
 
   describe("Claim", function () {
-    it.only("Should allow registered app to claim rewards", async function () {
-      const { engagementRewards, app, user } = await loadFixture(deployFixture);
-      await expect(engagementRewards.connect(app).claim())
+    it("Should allow registered app to claim rewards with inviter", async function () {
+      const { mockApp, user, inviter, engagementRewards, rewardToken } =
+        await loadFixture(deployFixture);
+
+      const initialAppBalance = await rewardToken.balanceOf(
+        await mockApp.getAddress(),
+      );
+      const initialUserBalance = await rewardToken.balanceOf(user.address);
+      const initialInviterBalance = await rewardToken.balanceOf(
+        inviter.address,
+      );
+      const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
+      const userInviterReward = (REWARD_AMOUNT * BigInt(80)) / BigInt(100); // 80% goes to user+inviter
+      const userReward = (userInviterReward * BigInt(75)) / BigInt(100); // 75% of user+inviter reward goes to user
+      const inviterReward = userInviterReward - userReward; // Remaining goes to inviter
+
+      expect(
+        await mockApp.connect(user).claimReward.staticCall(inviter.address),
+      ).to.be.true;
+      await expect(mockApp.connect(user).claimReward(inviter.address))
         .to.emit(engagementRewards, "RewardClaimed")
-        .withArgs(app.address, user.address, REWARD_AMOUNT);
+        .withArgs(
+          await mockApp.getAddress(),
+          user.address,
+          inviter.address,
+          appReward,
+          userReward,
+          inviterReward,
+        );
+
+      expect(await rewardToken.balanceOf(await mockApp.getAddress())).to.equal(
+        initialAppBalance + appReward,
+      );
+      expect(await rewardToken.balanceOf(user.address)).to.equal(
+        initialUserBalance + userReward,
+      );
+      expect(await rewardToken.balanceOf(inviter.address)).to.equal(
+        initialInviterBalance + inviterReward,
+      );
     });
 
     it("Should not allow claiming twice within cooldown period", async function () {
-      const { engagementRewards, app } = await loadFixture(deployFixture);
+      const { mockApp, user, inviter } = await loadFixture(deployFixture);
 
-      await engagementRewards.connect(app).claim();
-      await expect(engagementRewards.connect(app).claim()).to.be.reverted;
+      await mockApp.connect(user).claimReward(inviter.address);
+      expect(
+        await mockApp.connect(user).claimReward.staticCall(inviter.address),
+      ).to.be.false;
     });
 
     it("Should allow claiming after cooldown period", async function () {
-      const { engagementRewards, app } = await loadFixture(deployFixture);
+      const { mockApp, user, inviter, engagementRewards } =
+        await loadFixture(deployFixture);
 
-      await engagementRewards.connect(app).claim();
+      await mockApp.connect(user).claimReward(inviter.address);
       await time.increase(CLAIM_COOLDOWN);
-      await expect(engagementRewards.connect(app).claim()).to.not.be.reverted;
+      expect(
+        await mockApp.connect(user).claimReward.staticCall(inviter.address),
+      ).to.true;
+      await expect(mockApp.connect(user).claimReward(inviter.address)).to.emit(
+        engagementRewards,
+        "RewardClaimed",
+      );
     });
 
     it("Should not allow claiming for expired app", async function () {
-      const { engagementRewards, app } = await loadFixture(deployFixture);
+      const { mockApp, user, inviter, engagementRewards } =
+        await loadFixture(deployFixture);
 
       await time.increase(APP_EXPIRATION + BigInt(1));
-      await expect(engagementRewards.connect(app).claim()).to.be.reverted;
+      expect(
+        await mockApp.connect(user).claimReward.staticCall(inviter.address),
+      ).to.false;
+      expect(
+        await mockApp.connect(user).claimReward(inviter.address),
+      ).to.not.emit(engagementRewards, "RewardClaimed");
     });
   });
 
   describe("Claim with Signature", function () {
     it("Should allow claiming with valid signature", async function () {
-      const { engagementRewards, app, user } = await loadFixture(deployFixture);
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
 
       const nonce = 1n;
       const chainId = (await ethers.provider.getNetwork()).chainId;
@@ -174,26 +268,42 @@ describe("EngagementRewards", function () {
       const types = {
         Claim: [
           { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
           { name: "nonce", type: "uint256" },
         ],
       };
 
       const message = {
-        app: app.address,
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
         nonce: nonce,
       };
 
       const signature = await user.signTypedData(domain, types, message);
+      const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
       await expect(
-        engagementRewards.claimWithSignature(app.address, nonce, signature),
+        engagementRewards.claimWithSignature(
+          await mockApp.getAddress(),
+          inviter.address,
+          nonce,
+          signature,
+        ),
       )
         .to.emit(engagementRewards, "RewardClaimed")
-        .withArgs(app.address, user.address, REWARD_AMOUNT);
+        .withArgs(
+          await mockApp.getAddress(),
+          user.address,
+          inviter.address,
+          appReward,
+          (REWARD_AMOUNT * BigInt(60)) / BigInt(100),
+          (REWARD_AMOUNT * BigInt(20)) / BigInt(100),
+        );
     });
 
     it("Should not allow using the same signature twice", async function () {
-      const { engagementRewards, app, user } = await loadFixture(deployFixture);
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
 
       const nonce = 1n;
       const chainId = (await ethers.provider.getNetwork()).chainId;
@@ -208,20 +318,32 @@ describe("EngagementRewards", function () {
       const types = {
         Claim: [
           { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
           { name: "nonce", type: "uint256" },
         ],
       };
 
       const message = {
-        app: app.address,
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
         nonce: nonce,
       };
 
       const signature = await user.signTypedData(domain, types, message);
 
-      await engagementRewards.claimWithSignature(app.address, nonce, signature);
+      await engagementRewards.claimWithSignature(
+        await mockApp.getAddress(),
+        inviter.address,
+        nonce,
+        signature,
+      );
       await expect(
-        engagementRewards.claimWithSignature(app.address, nonce, signature),
+        engagementRewards.claimWithSignature(
+          await mockApp.getAddress(),
+          inviter.address,
+          nonce,
+          signature,
+        ),
       ).to.be.revertedWith("Signature already used");
     });
   });
@@ -256,7 +378,10 @@ describe("EngagementRewards", function () {
         engagementRewards
           .connect(nonAdmin)
           .setMaxRewardsPerApp(parseEther("2000")),
-      ).to.be.revertedWith(/AccessControl: account .* is missing role .*/);
+      ).to.be.revertedWithCustomError(
+        engagementRewards,
+        "AccessControlUnauthorizedAccount",
+      );
     });
 
     it("Should not allow non-admin to set reward amount", async function () {
@@ -264,47 +389,105 @@ describe("EngagementRewards", function () {
 
       await expect(
         engagementRewards.connect(nonAdmin).setRewardAmount(parseEther("20")),
-      ).to.be.revertedWith(/AccessControl: account .* is missing role .*/);
+      ).to.be.revertedWithCustomError(
+        engagementRewards,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+  });
+
+  describe("App Settings", function () {
+    it("Should allow app owner to update app settings", async function () {
+      const { engagementRewards, appOwner, mockApp } =
+        await loadFixture(deployFixture);
+
+      await expect(
+        engagementRewards
+          .connect(appOwner)
+          .updateAppSettings(await mockApp.getAddress(), 90, 80),
+      )
+        .to.emit(engagementRewards, "AppSettingsUpdated")
+        .withArgs(await mockApp.getAddress(), 90, 80);
+
+      const appInfo = await engagementRewards.registeredApps(
+        await mockApp.getAddress(),
+      );
+      expect(appInfo.userAndInviterPercentage).to.equal(90);
+      expect(appInfo.userPercentage).to.equal(80);
+    });
+
+    it("Should not allow non-owner to update app settings", async function () {
+      const { engagementRewards, nonAdmin, mockApp } =
+        await loadFixture(deployFixture);
+
+      await expect(
+        engagementRewards
+          .connect(nonAdmin)
+          .updateAppSettings(await mockApp.getAddress(), 90, 80),
+      ).to.be.revertedWith("Not app owner");
     });
   });
 
   describe("Edge Cases", function () {
     it("Should not allow claiming when reward amount is zero", async function () {
-      const { engagementRewards, admin, app } =
+      const { engagementRewards, admin, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
       await engagementRewards.connect(admin).setRewardAmount(0);
-      await expect(engagementRewards.connect(app).claim()).to.be.reverted;
+      expect(
+        await mockApp.connect(user).claimReward.staticCall(inviter.address),
+      ).to.false;
+      await expect(
+        mockApp.connect(user).claimReward(inviter.address),
+      ).to.not.emit(engagementRewards, "RewardClaimed");
     });
 
     it("Should reset total rewards claimed after cooldown period", async function () {
-      const { engagementRewards, app } = await loadFixture(deployFixture);
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
 
       const claimCount = 5;
       for (let i = 0; i < claimCount; i++) {
-        await engagementRewards.connect(app).claim();
+        await mockApp.connect(user).claimReward(inviter.address);
         await time.increase(CLAIM_COOLDOWN);
       }
 
-      const appInfo = await engagementRewards.registeredApps(app.address);
+      const appInfo = await engagementRewards.registeredApps(
+        await mockApp.getAddress(),
+      );
       expect(appInfo.totalRewardsClaimed).to.equal(REWARD_AMOUNT);
     });
 
     it("Should not allow claiming more than max rewards per app", async function () {
-      const { engagementRewards, admin, app } =
-        await loadFixture(deployFixture);
+      const {
+        engagementRewards,
+        admin,
+        mockApp,
+        user,
+        inviter,
+        identityContract,
+      } = await loadFixture(deployFixture);
 
       const lowMaxRewards = REWARD_AMOUNT * 2n;
       await engagementRewards.connect(admin).setMaxRewardsPerApp(lowMaxRewards);
+      identityContract.setWhitelistedRoot(inviter.address, inviter.address);
+      identityContract.setWhitelistedRoot(admin.address, admin.address);
 
-      await engagementRewards.connect(app).claim();
-      await time.increase(CLAIM_COOLDOWN);
-      await engagementRewards.connect(app).claim();
-      await time.increase(CLAIM_COOLDOWN);
-
-      await expect(engagementRewards.connect(app).claim()).to.be.revertedWith(
-        "Max rewards per app exceeded",
+      await expect(mockApp.connect(user).claimReward(inviter.address)).to.emit(
+        engagementRewards,
+        "RewardClaimed",
       );
+      await expect(mockApp.connect(inviter).claimReward(ZeroAddress)).to.emit(
+        engagementRewards,
+        "RewardClaimed",
+      );
+
+      expect(
+        await mockApp.connect(admin).claimReward.staticCall(inviter.address),
+      ).to.false;
+      await expect(
+        mockApp.connect(admin).claimReward(inviter.address),
+      ).to.not.emit(engagementRewards, "RewardClaimed");
     });
   });
 });

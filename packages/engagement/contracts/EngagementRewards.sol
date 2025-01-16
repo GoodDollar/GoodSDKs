@@ -196,8 +196,8 @@ contract EngagementRewards is
         if (!canClaim(app, user)) return false;
         if (rewardAmount == 0) return false;
 
-        updateClaimInfo(app, user);
-
+        bool isAppWithinLimit = updateClaimInfo(app, user);
+        if (isAppWithinLimit == false) return false;
         uint256 userAndInviterAmount = (rewardAmount *
             appInfo.userAndInviterPercentage) / 100;
         uint256 userAmount = (userAndInviterAmount * appInfo.userPercentage) /
@@ -229,7 +229,10 @@ contract EngagementRewards is
         return block.timestamp >= lastClaim + CLAIM_COOLDOWN;
     }
 
-    function updateClaimInfo(address app, address user) internal {
+    function updateClaimInfo(
+        address app,
+        address user
+    ) internal returns (bool) {
         lastClaimTimestamp[app][user] = block.timestamp;
 
         AppInfo storage appInfo = registeredApps[app];
@@ -239,11 +242,11 @@ contract EngagementRewards is
             appInfo.lastResetAt = block.timestamp;
         }
 
+        if (appInfo.totalRewardsClaimed + rewardAmount > maxRewardsPerApp)
+            return false;
+
         appInfo.totalRewardsClaimed += rewardAmount;
-        require(
-            appInfo.totalRewardsClaimed <= maxRewardsPerApp,
-            "Max rewards per app exceeded"
-        );
+        return true;
     }
 
     function setMaxRewardsPerApp(
