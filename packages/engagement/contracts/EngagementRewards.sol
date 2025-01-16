@@ -37,6 +37,7 @@ contract EngagementRewards is
         bool isRegistered;
         bool isApproved;
         address owner;
+        address rewardReceiver;
         uint256 registeredAt;
         uint256 lastResetAt;
         uint256 totalRewardsClaimed;
@@ -51,6 +52,7 @@ contract EngagementRewards is
     event AppApplied(
         address indexed app,
         address indexed owner,
+        address rewardReceiver,
         uint256 userAndInviterPercentage,
         uint256 userPercentage
     );
@@ -96,6 +98,7 @@ contract EngagementRewards is
 
     function applyApp(
         address app,
+        address rewardReceiver,
         uint256 userAndInviterPercentage,
         uint256 userPercentage
     ) external {
@@ -110,6 +113,7 @@ contract EngagementRewards is
             isRegistered: true,
             isApproved: false,
             owner: msg.sender,
+            rewardReceiver: rewardReceiver,
             registeredAt: block.timestamp,
             lastResetAt: block.timestamp,
             totalRewardsClaimed: 0,
@@ -120,6 +124,7 @@ contract EngagementRewards is
         emit AppApplied(
             app,
             msg.sender,
+            rewardReceiver,
             userAndInviterPercentage,
             userPercentage
         );
@@ -136,6 +141,7 @@ contract EngagementRewards is
 
     function updateAppSettings(
         address app,
+        address rewardReceiver,
         uint256 userAndInviterPercentage,
         uint256 userPercentage
     ) external {
@@ -147,6 +153,7 @@ contract EngagementRewards is
         );
         require(userPercentage <= 100, "Invalid userPercentage");
 
+        registeredApps[app].rewardReceiver = rewardReceiver;
         registeredApps[app].userAndInviterPercentage = userAndInviterPercentage;
         registeredApps[app].userPercentage = userPercentage;
 
@@ -198,6 +205,7 @@ contract EngagementRewards is
 
         bool isAppWithinLimit = updateClaimInfo(app, user);
         if (isAppWithinLimit == false) return false;
+
         uint256 userAndInviterAmount = (rewardAmount *
             appInfo.userAndInviterPercentage) / 100;
         uint256 userAmount = (userAndInviterAmount * appInfo.userPercentage) /
@@ -207,7 +215,7 @@ contract EngagementRewards is
         uint256 appAmount = inviter != address(0)
             ? rewardAmount - userAndInviterAmount
             : rewardAmount - userAndInviterAmount + inviterAmount;
-        rewardToken.transfer(app, appAmount);
+        rewardToken.transfer(appInfo.rewardReceiver, appAmount);
         rewardToken.transfer(user, userAmount);
         if (inviter != address(0)) {
             rewardToken.transfer(inviter, inviterAmount);
