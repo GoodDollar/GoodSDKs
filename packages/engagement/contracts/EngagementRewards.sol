@@ -22,7 +22,7 @@ contract EngagementRewards is
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 private constant CLAIM_TYPEHASH =
-        keccak256("Claim(address app,uint256 nonce)");
+        keccak256("Claim(address app,address inviter,uint256 nonce)");
 
     IERC20 public rewardToken;
     IIdentity public identityContract;
@@ -35,20 +35,38 @@ contract EngagementRewards is
 
     struct AppInfo {
         bool isRegistered;
+        bool isApproved;
+        address owner;
         uint256 registeredAt;
         uint256 lastResetAt;
         uint256 totalRewardsClaimed;
+        uint256 userAndInviterPercentage;
+        uint256 userPercentage;
     }
 
     mapping(address => AppInfo) public registeredApps;
     mapping(address => mapping(address => uint256)) public lastClaimTimestamp;
     mapping(bytes32 => bool) public usedSignatures;
 
-    event AppRegistered(address indexed app);
+    event AppApplied(
+        address indexed app,
+        address indexed owner,
+        uint256 userAndInviterPercentage,
+        uint256 userPercentage
+    );
+    event AppApproved(address indexed app);
+    event AppSettingsUpdated(
+        address indexed app,
+        uint256 userAndInviterPercentage,
+        uint256 userPercentage
+    );
     event RewardClaimed(
         address indexed app,
         address indexed user,
-        uint256 amount
+        address indexed inviter,
+        uint256 appReward,
+        uint256 userAmount,
+        uint256 inviterAmount
     );
     event RewardAmountUpdated(uint256 newAmount);
 
@@ -76,31 +94,82 @@ contract EngagementRewards is
         _grantRole(ADMIN_ROLE, msg.sender);
     }
 
-    function register(address app) external onlyRole(ADMIN_ROLE) {
+    function applyApp(
+        address app,
+        uint256 userAndInviterPercentage,
+        uint256 userPercentage
+    ) external {
+        require(
+            userAndInviterPercentage <= 100,
+            "Invalid userAndInviterPercentage"
+        );
+        require(userPercentage <= 100, "Invalid userPercentage");
+        require(!registeredApps[app].isRegistered, "App already registered");
+
         registeredApps[app] = AppInfo({
             isRegistered: true,
+            isApproved: false,
+            owner: msg.sender,
             registeredAt: block.timestamp,
             lastResetAt: block.timestamp,
-            totalRewardsClaimed: 0
+            totalRewardsClaimed: 0,
+            userAndInviterPercentage: userAndInviterPercentage,
+            userPercentage: userPercentage
         });
 
-        emit AppRegistered(app);
+        emit AppApplied(
+            app,
+            msg.sender,
+            userAndInviterPercentage,
+            userPercentage
+        );
     }
 
-    function claim() external returns (bool) {
+    function approve(address app) external onlyRole(ADMIN_ROLE) {
+        require(registeredApps[app].isRegistered, "App not registered");
+        require(!registeredApps[app].isApproved, "App already approved");
+
+        registeredApps[app].isApproved = true;
+
+        emit AppApproved(app);
+    }
+
+    function updateAppSettings(
+        address app,
+        uint256 userAndInviterPercentage,
+        uint256 userPercentage
+    ) external {
+        require(registeredApps[app].isRegistered, "App not registered");
+        require(msg.sender == registeredApps[app].owner, "Not app owner");
+        require(
+            userAndInviterPercentage <= 100,
+            "Invalid userAndInviterPercentage"
+        );
+        require(userPercentage <= 100, "Invalid userPercentage");
+
+        registeredApps[app].userAndInviterPercentage = userAndInviterPercentage;
+        registeredApps[app].userPercentage = userPercentage;
+
+        emit AppSettingsUpdated(app, userAndInviterPercentage, userPercentage);
+    }
+
+    function claim(address inviter) external returns (bool) {
         address app = msg.sender;
         address user = identityContract.getWhitelistedRoot(tx.origin);
         if (user == address(0)) return false;
 
-        return _claim(app, user);
+        return _claim(app, user, inviter);
     }
 
     function claimWithSignature(
         address app,
+        address inviter,
         uint256 nonce,
         bytes memory signature
     ) external returns (bool) {
-        bytes32 structHash = keccak256(abi.encode(CLAIM_TYPEHASH, app, nonce));
+        bytes32 structHash = keccak256(
+            abi.encode(CLAIM_TYPEHASH, app, inviter, nonce)
+        );
         bytes32 hash = _hashTypedDataV4(structHash);
 
         require(!usedSignatures[hash], "Signature already used");
@@ -112,22 +181,46 @@ contract EngagementRewards is
             "Signer not whitelisted"
         );
 
-        return _claim(app, signer);
+        return _claim(app, signer, inviter);
     }
 
-    function _claim(address app, address user) internal returns (bool) {
-        if (
-            registeredApps[app].registeredAt + APP_EXPIRATION <= block.timestamp
-        ) return false;
-        if (registeredApps[app].isRegistered == false) return false;
-        if (canClaim(app, user) == false) return false;
+    function _claim(
+        address app,
+        address user,
+        address inviter
+    ) internal returns (bool) {
+        AppInfo storage appInfo = registeredApps[app];
+        if (!appInfo.isRegistered || !appInfo.isApproved) return false;
+        if (appInfo.registeredAt + APP_EXPIRATION < block.timestamp)
+            return false;
+        if (!canClaim(app, user)) return false;
         if (rewardAmount == 0) return false;
 
         updateClaimInfo(app, user);
 
-        rewardToken.transfer(app, rewardAmount);
+        uint256 userAndInviterAmount = (rewardAmount *
+            appInfo.userAndInviterPercentage) / 100;
+        uint256 userAmount = (userAndInviterAmount * appInfo.userPercentage) /
+            100;
+        uint256 inviterAmount = userAndInviterAmount - userAmount;
 
-        emit RewardClaimed(app, user, rewardAmount);
+        uint256 appAmount = inviter != address(0)
+            ? rewardAmount - userAndInviterAmount
+            : rewardAmount - userAndInviterAmount + inviterAmount;
+        rewardToken.transfer(app, appAmount);
+        rewardToken.transfer(user, userAmount);
+        if (inviter != address(0)) {
+            rewardToken.transfer(inviter, inviterAmount);
+        }
+
+        emit RewardClaimed(
+            app,
+            user,
+            inviter,
+            appAmount,
+            userAmount,
+            inviterAmount
+        );
         return true;
     }
 
