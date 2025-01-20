@@ -5,9 +5,9 @@ import App from "./App"
 import "./index.css"
 
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
   <React.StrictMode>
-    <AppKitProvider></AppKitProvider>
+    <AppKitProvider><App/></AppKitProvider>
   </React.StrictMode>,
 )
 
