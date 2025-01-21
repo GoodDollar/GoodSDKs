@@ -1,14 +1,11 @@
 import type React from "react"
 import { BrowserRouter as Router, Route, Routes, Link } from "react-router-dom"
-import { useAccount } from "wagmi"
-import { Web3Button } from "@web3modal/react"
 import ApplyForm from "./components/ApplyForm"
 import ApproveForm from "./components/ApproveForm"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/toaster"
 
 const App: React.FC = () => {
-  const { isConnected, address } = useAccount()
 
   return (
     <Router>

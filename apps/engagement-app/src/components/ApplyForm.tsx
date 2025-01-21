@@ -1,5 +1,5 @@
 import React from 'react'
-// import { useEngagementRewards } from '../useEngagementRewards'
+import {useEngagementRewards} from '@GoodSDKs/engagement-sdk'
 import { useAccount } from 'wagmi'
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { zeroAddress } from 'viem'
 
 const formSchema = z.object({
   app: z.string().startsWith("0x", { message: "Must be a valid Ethereum address" }),
@@ -28,7 +29,7 @@ const formSchema = z.object({
 const ApplyForm: React.FC = () => {
   const { isConnected } = useAccount()
   const { toast } = useToast()
-  const engagementRewards = {} //useEngagementRewards('0x...')  // Replace with actual contract address
+  const engagementRewards = useEngagementRewards(zeroAddress)  // Replace with actual contract address
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -51,7 +52,7 @@ const ApplyForm: React.FC = () => {
     }
 
     try {
-      const tx = await engagementRewards.apply(
+      const tx = await engagementRewards.applyApp(
         values.app as `0x${string}`,
         values.rewardReceiver as `0x${string}`,
         values.userInviterPercentage,
@@ -69,7 +70,7 @@ const ApplyForm: React.FC = () => {
         toast({
           title: "Application Successful",
           description: "Your application has been submitted successfully!",
-          variant: "success",
+          variant: "default"
         })
         form.reset()
       } else {
