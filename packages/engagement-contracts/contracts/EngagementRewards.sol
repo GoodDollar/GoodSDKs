@@ -44,10 +44,16 @@ contract EngagementRewards is
         uint256 userAndInviterPercentage;
         uint256 userPercentage;
     }
-
+    struct AppStats {
+        uint256 numberOfRewards;
+        uint256 totalAppRewards;
+        uint256 totalUserRewards;
+        uint256 totalInviterRewards;
+    }
     mapping(address => AppInfo) public registeredApps;
     mapping(address => mapping(address => uint256)) public lastClaimTimestamp;
     mapping(bytes32 => bool) public usedSignatures;
+    mapping(address => AppStats) public appsStats;
 
     event AppApplied(
         address indexed app,
@@ -215,9 +221,17 @@ contract EngagementRewards is
         uint256 appAmount = inviter != address(0)
             ? rewardAmount - userAndInviterAmount
             : rewardAmount - userAndInviterAmount + inviterAmount;
-        rewardToken.transfer(appInfo.rewardReceiver, appAmount);
-        rewardToken.transfer(user, userAmount);
-        if (inviter != address(0)) {
+
+        AppStats storage appStat = appsStats[app];
+        appStat.numberOfRewards += 1;
+        appStat.totalAppRewards += appAmount;
+        appStat.totalInviterRewards += inviterAmount;
+        appStat.totalUserRewards += userAmount;
+
+        if (appAmount > 0)
+            rewardToken.transfer(appInfo.rewardReceiver, appAmount);
+        if (userAmount > 0) rewardToken.transfer(user, userAmount);
+        if (inviter != address(0) && inviterAmount > 0) {
             rewardToken.transfer(inviter, inviterAmount);
         }
 

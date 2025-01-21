@@ -197,7 +197,7 @@ describe("EngagementRewards", function () {
   });
 
   describe("Claim", function () {
-    it.only("Should allow registered app to claim rewards with inviter and send app reward to rewardReceiver", async function () {
+    it("Should allow registered app to claim rewards with inviter and send app reward to rewardReceiver", async function () {
       const {
         mockApp,
         user,
@@ -278,6 +278,26 @@ describe("EngagementRewards", function () {
       expect(
         await mockApp.connect(user).claimReward(inviter.address),
       ).to.not.emit(engagementRewards, "RewardClaimed");
+    });
+
+    it("Should update AppStats correctly when rewards are claimed", async function () {
+      const { mockApp, user, inviter, engagementRewards } =
+        await loadFixture(deployFixture);
+
+      const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
+      const userInviterReward = (REWARD_AMOUNT * BigInt(80)) / BigInt(100); // 80% goes to user+inviter
+      const userReward = (userInviterReward * BigInt(75)) / BigInt(100); // 75% of user+inviter reward goes to user
+      const inviterReward = userInviterReward - userReward; // Remaining goes to inviter
+
+      await mockApp.connect(user).claimReward(inviter.address);
+
+      const appStats = await engagementRewards.appsStats(
+        await mockApp.getAddress(),
+      );
+      expect(appStats.numberOfRewards).to.equal(1);
+      expect(appStats.totalAppRewards).to.equal(appReward);
+      expect(appStats.totalUserRewards).to.equal(userReward);
+      expect(appStats.totalInviterRewards).to.equal(inviterReward);
     });
   });
 
@@ -376,6 +396,57 @@ describe("EngagementRewards", function () {
           signature,
         ),
       ).to.be.revertedWith("Signature already used");
+    });
+
+    it("Should update AppStats correctly when rewards are claimed with signature", async function () {
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
+
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+      const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
+
+      await engagementRewards.claimWithSignature(
+        await mockApp.getAddress(),
+        inviter.address,
+        nonce,
+        signature,
+      );
+
+      const appStats = await engagementRewards.appsStats(
+        await mockApp.getAddress(),
+      );
+      expect(appStats.numberOfRewards).to.equal(1);
+      expect(appStats.totalAppRewards).to.equal(appReward);
+      expect(appStats.totalUserRewards).to.equal(
+        (REWARD_AMOUNT * BigInt(60)) / BigInt(100),
+      );
+      expect(appStats.totalInviterRewards).to.equal(
+        (REWARD_AMOUNT * BigInt(20)) / BigInt(100),
+      );
     });
   });
 

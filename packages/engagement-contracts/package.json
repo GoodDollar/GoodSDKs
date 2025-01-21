@@ -31,8 +31,9 @@
     "dotenv": "^16.4.7",
     "ethers": "^6.13.5",
     "hardhat": "^2.22.18",
-    "hardhat-gas-reporter": "^1.0.8",
+    "hardhat-gas-reporter": "^2.2.2",
     "solidity-coverage": "^0.8.1",
+    "ts-node": "^10.9.2",
     "typechain": "^8.3.0",
     "typescript": "^5.7.3"
   }
