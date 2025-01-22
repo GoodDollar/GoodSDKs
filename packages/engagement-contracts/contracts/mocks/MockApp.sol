@@ -2,7 +2,11 @@
 pragma solidity ^0.8.0;
 
 interface IEngagementRewards {
-    function claim(address inviter) external returns (bool);
+    function claimAndRegister(
+        address inviter,
+        uint256 nonce,
+        bytes memory signature
+    ) external returns (bool);
 }
 
 contract MockApp {
@@ -12,7 +16,11 @@ contract MockApp {
         engagementRewards = IEngagementRewards(_engagementRewards);
     }
 
-    function claimReward(address inviter) external returns (bool) {
-        return engagementRewards.claim(inviter);
+    function claimReward(
+        address inviter,
+        uint256 nonce,
+        bytes memory signature
+    ) external returns (bool) {
+        return engagementRewards.claimAndRegister(inviter, nonce, signature);
     }
 }

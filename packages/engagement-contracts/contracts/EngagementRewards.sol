@@ -8,6 +8,8 @@ import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+// import "hardhat/console.sol";
+
 interface IIdentity {
     function getWhitelistedRoot(address) external view returns (address);
 }
@@ -22,7 +24,9 @@ contract EngagementRewards is
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 private constant CLAIM_TYPEHASH =
-        keccak256("Claim(address app,address inviter,uint256 nonce)");
+        keccak256(
+            "Claim(address app,address inviter,uint256 nonce,string description)"
+        );
 
     IERC20 public rewardToken;
     IIdentity public identityContract;
@@ -43,6 +47,7 @@ contract EngagementRewards is
         uint256 totalRewardsClaimed;
         uint256 userAndInviterPercentage;
         uint256 userPercentage;
+        string description;
     }
     struct AppStats {
         uint256 numberOfRewards;
@@ -50,10 +55,14 @@ contract EngagementRewards is
         uint256 totalUserRewards;
         uint256 totalInviterRewards;
     }
+    struct UserInfo {
+        bool isRegistered;
+    }
     mapping(address => AppInfo) public registeredApps;
     mapping(address => mapping(address => uint256)) public lastClaimTimestamp;
     mapping(bytes32 => bool) public usedSignatures;
     mapping(address => AppStats) public appsStats;
+    mapping(address => mapping(address => UserInfo)) public userRegistrations;
 
     event AppApplied(
         address indexed app,
@@ -106,7 +115,8 @@ contract EngagementRewards is
         address app,
         address rewardReceiver,
         uint256 userAndInviterPercentage,
-        uint256 userPercentage
+        uint256 userPercentage,
+        string memory description
     ) external {
         require(
             userAndInviterPercentage <= 100,
@@ -114,6 +124,10 @@ contract EngagementRewards is
         );
         require(userPercentage <= 100, "Invalid userPercentage");
         require(!registeredApps[app].isRegistered, "App already registered");
+        require(
+            bytes(description).length <= 512 && bytes(description).length >= 50,
+            "Invalid description"
+        );
 
         registeredApps[app] = AppInfo({
             isRegistered: true,
@@ -124,7 +138,8 @@ contract EngagementRewards is
             lastResetAt: block.timestamp,
             totalRewardsClaimed: 0,
             userAndInviterPercentage: userAndInviterPercentage,
-            userPercentage: userPercentage
+            userPercentage: userPercentage,
+            description: description
         });
 
         emit AppApplied(
@@ -166,7 +181,17 @@ contract EngagementRewards is
         emit AppSettingsUpdated(app, userAndInviterPercentage, userPercentage);
     }
 
-    function claim(address inviter) external returns (bool) {
+    function claimAndRegister(
+        address inviter,
+        uint256 nonce,
+        bytes memory signature
+    ) public returns (bool) {
+        if (nonce > 0 && signature.length > 0)
+            return claimWithSignature(msg.sender, inviter, nonce, signature);
+        else return claim(inviter);
+    }
+
+    function claim(address inviter) public returns (bool) {
         address app = msg.sender;
         address user = identityContract.getWhitelistedRoot(tx.origin);
         if (user == address(0)) return false;
@@ -179,20 +204,32 @@ contract EngagementRewards is
         address inviter,
         uint256 nonce,
         bytes memory signature
-    ) external returns (bool) {
+    ) public returns (bool) {
+        string memory description = registeredApps[app].description;
         bytes32 structHash = keccak256(
-            abi.encode(CLAIM_TYPEHASH, app, inviter, nonce)
+            abi.encode(
+                CLAIM_TYPEHASH,
+                app,
+                inviter,
+                nonce,
+                keccak256(bytes(description))
+            )
         );
         bytes32 hash = _hashTypedDataV4(structHash);
-
-        require(!usedSignatures[hash], "Signature already used");
-        usedSignatures[hash] = true;
+        bytes32 sigHash = keccak256(signature);
+        require(!usedSignatures[sigHash], "Signature already used");
+        usedSignatures[sigHash] = true;
 
         address signer = hash.recover(signature);
+
         require(
             identityContract.getWhitelistedRoot(signer) != address(0),
             "Signer not whitelisted"
         );
+
+        if (!userRegistrations[app][signer].isRegistered) {
+            userRegistrations[app][signer].isRegistered = true;
+        }
 
         return _claim(app, signer, inviter);
     }
@@ -202,12 +239,14 @@ contract EngagementRewards is
         address user,
         address inviter
     ) internal returns (bool) {
+        if (!userRegistrations[app][user].isRegistered) return false;
+        if (!canClaim(app, user)) return false;
+        if (rewardAmount == 0) return false;
+
         AppInfo storage appInfo = registeredApps[app];
         if (!appInfo.isRegistered || !appInfo.isApproved) return false;
         if (appInfo.registeredAt + APP_EXPIRATION < block.timestamp)
             return false;
-        if (!canClaim(app, user)) return false;
-        if (rewardAmount == 0) return false;
 
         bool isAppWithinLimit = updateClaimInfo(app, user);
         if (isAppWithinLimit == false) return false;

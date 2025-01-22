@@ -1,0 +1,6 @@
+{
+  "EngagementRewards#EngagementRewards": "0x8B9e29235051C05Eec5f3C6fbFEF887639A74F2E",
+  "EngagementRewardsUpgrade#EngagementRewards": "0x3Fbb3219DD6Af51A9973D2E4b8f5eE7c3Ecf1735",
+  "EngagementRewards#ERC1967Proxy": "0x3f410723ccFfc918CC7c3EC66F69aDE3e63B9f10",
+  "EngagementRewardsUpgrade#deployed": "0x3f410723ccFfc918CC7c3EC66F69aDE3e63B9f10"
+}

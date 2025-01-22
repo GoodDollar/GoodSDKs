@@ -1,13 +1,8 @@
 import { expect } from "chai";
-import hre, { ethers, upgrades } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import {
-  MockERC20,
-  MockIdentity,
-  EngagementRewards,
-  MockApp,
-} from "../typechain-types";
-import { Contract, parseEther, ZeroAddress } from "ethers";
+import { MockERC20, MockIdentity, EngagementRewards } from "../typechain-types";
+import { parseEther, ZeroAddress } from "ethers";
 
 const { deployContract } = ethers;
 
@@ -18,7 +13,8 @@ describe("EngagementRewards", function () {
   const REWARD_AMOUNT = parseEther("10");
   const CLAIM_COOLDOWN = BigInt(180 * 24 * 60 * 60); // 180 days in seconds
   const APP_EXPIRATION = BigInt(365 * 24 * 60 * 60); // 365 days in seconds
-
+  const VALID_DESCRIPTION =
+    "Valid Description for an app is longer than 50 chars";
   async function deployFixture() {
     const [owner, admin, appOwner, user, nonAdmin, inviter, rewardReceiver] =
       await ethers.getSigners();
@@ -46,10 +42,16 @@ describe("EngagementRewards", function () {
       await engagementRewards.getAddress(),
     ]);
 
-    // Apply for app registration with rewardReceiver
+    // Apply for app registration with rewardReceiver and description
     await engagementRewards
       .connect(appOwner)
-      .applyApp(await mockApp.getAddress(), rewardReceiver.address, 80, 75);
+      .applyApp(
+        await mockApp.getAddress(),
+        rewardReceiver.address,
+        80,
+        75,
+        VALID_DESCRIPTION,
+      );
     // Admin approves the app
     await engagementRewards.connect(admin).approve(await mockApp.getAddress());
 
@@ -93,7 +95,7 @@ describe("EngagementRewards", function () {
   });
 
   describe("App Registration", function () {
-    it("Should allow app owner to apply for registration with reward receiver", async function () {
+    it("Should allow app owner to apply for registration with reward receiver and description", async function () {
       const { engagementRewards, appOwner, rewardReceiver } =
         await loadFixture(deployFixture);
 
@@ -109,6 +111,7 @@ describe("EngagementRewards", function () {
             rewardReceiver.address,
             80,
             75,
+            VALID_DESCRIPTION,
           ),
       )
         .to.emit(engagementRewards, "AppApplied")
@@ -127,6 +130,7 @@ describe("EngagementRewards", function () {
       expect(appInfo.isApproved).to.be.false;
       expect(appInfo.owner).to.equal(appOwner.address);
       expect(appInfo.rewardReceiver).to.equal(rewardReceiver.address);
+      expect(appInfo.description).to.equal(VALID_DESCRIPTION);
     });
 
     it("Should allow admin to approve an app", async function () {
@@ -140,7 +144,13 @@ describe("EngagementRewards", function () {
       await expect(
         engagementRewards
           .connect(appOwner)
-          .applyApp(await newMockApp.getAddress(), rewardReceiver, 80, 75),
+          .applyApp(
+            await newMockApp.getAddress(),
+            rewardReceiver,
+            80,
+            75,
+            VALID_DESCRIPTION,
+          ),
       )
         .to.emit(engagementRewards, "AppApplied")
         .withArgs(
@@ -174,7 +184,13 @@ describe("EngagementRewards", function () {
       await expect(
         engagementRewards
           .connect(appOwner)
-          .applyApp(await newMockApp.getAddress(), rewardReceiver, 80, 75),
+          .applyApp(
+            await newMockApp.getAddress(),
+            rewardReceiver,
+            80,
+            75,
+            VALID_DESCRIPTION,
+          ),
       )
         .to.emit(engagementRewards, "AppApplied")
         .withArgs(
@@ -193,6 +209,52 @@ describe("EngagementRewards", function () {
         engagementRewards,
         "AccessControlUnauthorizedAccount",
       );
+    });
+
+    it("Should not allow app registration with description shorter than 50 characters", async function () {
+      const { engagementRewards, appOwner, rewardReceiver } =
+        await loadFixture(deployFixture);
+
+      const newMockApp = await (
+        await deployContract("MockApp", [await engagementRewards.getAddress()])
+      ).waitForDeployment();
+
+      const shortDescription = "Too short";
+
+      await expect(
+        engagementRewards
+          .connect(appOwner)
+          .applyApp(
+            await newMockApp.getAddress(),
+            rewardReceiver.address,
+            80,
+            75,
+            shortDescription,
+          ),
+      ).to.be.revertedWith("Invalid description");
+    });
+
+    it("Should not allow app registration with description longer than 512 characters", async function () {
+      const { engagementRewards, appOwner, rewardReceiver } =
+        await loadFixture(deployFixture);
+
+      const newMockApp = await (
+        await deployContract("MockApp", [await engagementRewards.getAddress()])
+      ).waitForDeployment();
+
+      const longDescription = "a".repeat(513);
+
+      await expect(
+        engagementRewards
+          .connect(appOwner)
+          .applyApp(
+            await newMockApp.getAddress(),
+            rewardReceiver.address,
+            80,
+            75,
+            longDescription,
+          ),
+      ).to.be.revertedWith("Invalid description");
     });
   });
 
@@ -219,10 +281,44 @@ describe("EngagementRewards", function () {
       const userInviterReward = (REWARD_AMOUNT * BigInt(80)) / BigInt(100); // 80% goes to user+inviter
       const userReward = (userInviterReward * BigInt(75)) / BigInt(100); // 75% of user+inviter reward goes to user
       const inviterReward = userInviterReward - userReward; // Remaining goes to inviter
+
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
       expect(
-        await mockApp.connect(user).claimReward.staticCall(inviter.address),
+        await mockApp
+          .connect(user)
+          .claimReward.staticCall(inviter.address, nonce, signature),
       ).to.be.true;
-      await expect(mockApp.connect(user).claimReward(inviter.address))
+
+      await expect(
+        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
+      )
         .to.emit(engagementRewards, "RewardClaimed")
         .withArgs(
           await mockApp.getAddress(),
@@ -232,6 +328,7 @@ describe("EngagementRewards", function () {
           userReward,
           inviterReward,
         );
+
       expect(await rewardToken.balanceOf(rewardReceiver.address)).to.equal(
         initialRewardReceiverBalance + appReward,
       );
@@ -244,11 +341,48 @@ describe("EngagementRewards", function () {
     });
 
     it("Should not allow claiming twice within cooldown period", async function () {
-      const { mockApp, user, inviter } = await loadFixture(deployFixture);
+      const { mockApp, user, inviter, engagementRewards } =
+        await loadFixture(deployFixture);
 
-      await mockApp.connect(user).claimReward(inviter.address);
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await mockApp
+        .connect(user)
+        .claimReward(inviter.address, nonce, signature);
+
+      message.nonce = 2n;
+      const signature2 = await user.signTypedData(domain, types, message);
+
       expect(
-        await mockApp.connect(user).claimReward.staticCall(inviter.address),
+        await mockApp
+          .connect(user)
+          .claimReward.staticCall(inviter.address, 2n, signature2),
       ).to.be.false;
     });
 
@@ -256,27 +390,92 @@ describe("EngagementRewards", function () {
       const { mockApp, user, inviter, engagementRewards } =
         await loadFixture(deployFixture);
 
-      await mockApp.connect(user).claimReward(inviter.address);
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await mockApp
+        .connect(user)
+        .claimReward(inviter.address, nonce, signature);
       await time.increase(CLAIM_COOLDOWN);
+
       expect(
-        await mockApp.connect(user).claimReward.staticCall(inviter.address),
-      ).to.true;
-      await expect(mockApp.connect(user).claimReward(inviter.address)).to.emit(
-        engagementRewards,
-        "RewardClaimed",
-      );
+        await mockApp
+          .connect(user)
+          .claimReward.staticCall(inviter.address, nonce, "0x"),
+      ).to.be.true;
+
+      await expect(
+        mockApp.connect(user).claimReward(inviter.address, nonce, "0x"),
+      ).to.emit(engagementRewards, "RewardClaimed");
     });
 
     it("Should not allow claiming for expired app", async function () {
       const { mockApp, user, inviter, engagementRewards } =
         await loadFixture(deployFixture);
 
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
       await time.increase(APP_EXPIRATION + BigInt(1));
+
       expect(
-        await mockApp.connect(user).claimReward.staticCall(inviter.address),
-      ).to.false;
-      expect(
-        await mockApp.connect(user).claimReward(inviter.address),
+        await mockApp
+          .connect(user)
+          .claimReward.staticCall(inviter.address, nonce, signature),
+      ).to.be.false;
+
+      await expect(
+        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
       ).to.not.emit(engagementRewards, "RewardClaimed");
     });
 
@@ -289,7 +488,37 @@ describe("EngagementRewards", function () {
       const userReward = (userInviterReward * BigInt(75)) / BigInt(100); // 75% of user+inviter reward goes to user
       const inviterReward = userInviterReward - userReward; // Remaining goes to inviter
 
-      await mockApp.connect(user).claimReward(inviter.address);
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await mockApp
+        .connect(user)
+        .claimReward(inviter.address, nonce, signature);
 
       const appStats = await engagementRewards.appsStats(
         await mockApp.getAddress(),
@@ -298,6 +527,75 @@ describe("EngagementRewards", function () {
       expect(appStats.totalAppRewards).to.equal(appReward);
       expect(appStats.totalUserRewards).to.equal(userReward);
       expect(appStats.totalInviterRewards).to.equal(inviterReward);
+    });
+
+    it("Should not allow claiming if user is not registered", async function () {
+      const { mockApp, user, inviter, engagementRewards } =
+        await loadFixture(deployFixture);
+
+      expect(
+        await mockApp
+          .connect(user)
+          .claimReward.staticCall(inviter.address, 0, "0x"),
+      ).to.be.false;
+    });
+
+    it("Should allow claiming with signature and register user", async function () {
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
+
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+      const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
+
+      await expect(
+        engagementRewards.claimWithSignature(
+          await mockApp.getAddress(),
+          inviter.address,
+          nonce,
+          signature,
+        ),
+      )
+        .to.emit(engagementRewards, "RewardClaimed")
+        .withArgs(
+          await mockApp.getAddress(),
+          user.address,
+          inviter.address,
+          appReward,
+          (REWARD_AMOUNT * BigInt(60)) / BigInt(100),
+          (REWARD_AMOUNT * BigInt(20)) / BigInt(100),
+        );
+
+      const userInfo = await engagementRewards.userRegistrations(
+        await mockApp.getAddress(),
+        user.address,
+      );
+      expect(userInfo).to.be.true;
     });
   });
 
@@ -321,6 +619,7 @@ describe("EngagementRewards", function () {
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
           { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
         ],
       };
 
@@ -328,8 +627,8 @@ describe("EngagementRewards", function () {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
         nonce: nonce,
+        description: VALID_DESCRIPTION,
       };
-
       const signature = await user.signTypedData(domain, types, message);
       const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
@@ -371,6 +670,7 @@ describe("EngagementRewards", function () {
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
           { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
         ],
       };
 
@@ -378,6 +678,7 @@ describe("EngagementRewards", function () {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
         nonce: nonce,
+        description: VALID_DESCRIPTION,
       };
 
       const signature = await user.signTypedData(domain, types, message);
@@ -417,6 +718,7 @@ describe("EngagementRewards", function () {
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
           { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
         ],
       };
 
@@ -424,6 +726,7 @@ describe("EngagementRewards", function () {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
         nonce: nonce,
+        description: VALID_DESCRIPTION,
       };
 
       const signature = await user.signTypedData(domain, types, message);
@@ -548,12 +851,41 @@ describe("EngagementRewards", function () {
       const { engagementRewards, admin, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
       await engagementRewards.connect(admin).setRewardAmount(0);
       expect(
-        await mockApp.connect(user).claimReward.staticCall(inviter.address),
-      ).to.false;
+        await mockApp
+          .connect(user)
+          .claimReward.staticCall(inviter.address, nonce, signature),
+      ).to.be.false;
       await expect(
-        mockApp.connect(user).claimReward(inviter.address),
+        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
       ).to.not.emit(engagementRewards, "RewardClaimed");
     });
 
@@ -561,9 +893,40 @@ describe("EngagementRewards", function () {
       const { engagementRewards, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+      await mockApp
+        .connect(user)
+        .claimReward(inviter.address, nonce, signature);
+
       const claimCount = 5;
       for (let i = 0; i < claimCount; i++) {
-        await mockApp.connect(user).claimReward(inviter.address);
+        await mockApp.connect(user).claimReward(inviter.address, 0, "0x");
         await time.increase(CLAIM_COOLDOWN);
       }
 
@@ -587,21 +950,59 @@ describe("EngagementRewards", function () {
       await engagementRewards.connect(admin).setMaxRewardsPerApp(lowMaxRewards);
       identityContract.setWhitelistedRoot(inviter.address, inviter.address);
       identityContract.setWhitelistedRoot(admin.address, admin.address);
+      const nonce = 1n;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
 
-      await expect(mockApp.connect(user).claimReward(inviter.address)).to.emit(
-        engagementRewards,
-        "RewardClaimed",
-      );
-      await expect(mockApp.connect(inviter).claimReward(ZeroAddress)).to.emit(
-        engagementRewards,
-        "RewardClaimed",
-      );
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
 
-      expect(
-        await mockApp.connect(admin).claimReward.staticCall(inviter.address),
-      ).to.false;
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        nonce: nonce,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
       await expect(
-        mockApp.connect(admin).claimReward(inviter.address),
+        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
+      ).to.emit(engagementRewards, "RewardClaimed");
+
+      message.inviter = ZeroAddress;
+      const inviterSignature = await inviter.signTypedData(
+        domain,
+        types,
+        message,
+      );
+
+      await expect(
+        mockApp
+          .connect(inviter)
+          .claimReward(ZeroAddress, nonce, inviterSignature),
+      ).to.emit(engagementRewards, "RewardClaimed");
+
+      const adminSignature = await admin.signTypedData(domain, types, message);
+      expect(
+        await mockApp
+          .connect(admin)
+          .claimReward.staticCall(ZeroAddress, nonce, adminSignature),
+      ).to.be.false;
+      await expect(
+        mockApp.connect(admin).claimReward(ZeroAddress, nonce, adminSignature),
       ).to.not.emit(engagementRewards, "RewardClaimed");
     });
   });

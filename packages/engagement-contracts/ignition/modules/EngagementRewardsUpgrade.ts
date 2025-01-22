@@ -5,7 +5,7 @@ import ProxyModule from "./EngagementRewards";
 export default buildModule("EngagementRewardsUpgrade", (m) => {
   const { proxy } = m.useModule(ProxyModule);
 
-  const newimpl = m.contract("EngagementRewards");
+  const newimpl = m.contract("EngagementRewards", []);
 
   const existingProxy = m.contractAt("EngagementRewards", proxy, {
     id: "deployed",
