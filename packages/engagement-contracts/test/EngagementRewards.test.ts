@@ -6,6 +6,11 @@ import { parseEther, ZeroAddress } from "ethers";
 
 const { deployContract } = ethers;
 
+async function getValidBlockNumber(provider: any) {
+  const currentBlock = await provider.getBlockNumber();
+  return currentBlock + 5; // Valid for 5 blocks in the future
+}
+
 describe("EngagementRewards", function () {
   const ADMIN_ROLE =
     "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775";
@@ -282,7 +287,7 @@ describe("EngagementRewards", function () {
       const userReward = (userInviterReward * BigInt(75)) / BigInt(100); // 75% of user+inviter reward goes to user
       const inviterReward = userInviterReward - userReward; // Remaining goes to inviter
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -296,7 +301,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -304,7 +309,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -313,11 +318,13 @@ describe("EngagementRewards", function () {
       expect(
         await mockApp
           .connect(user)
-          .claimReward.staticCall(inviter.address, nonce, signature),
+          .claimReward.staticCall(inviter.address, validUntilBlock, signature),
       ).to.be.true;
 
       await expect(
-        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
+        mockApp
+          .connect(user)
+          .claimReward(inviter.address, validUntilBlock, signature),
       )
         .to.emit(engagementRewards, "RewardClaimed")
         .withArgs(
@@ -344,7 +351,7 @@ describe("EngagementRewards", function () {
       const { mockApp, user, inviter, engagementRewards } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -358,7 +365,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -366,7 +373,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -374,15 +381,20 @@ describe("EngagementRewards", function () {
 
       await mockApp
         .connect(user)
-        .claimReward(inviter.address, nonce, signature);
+        .claimReward(inviter.address, validUntilBlock, signature);
 
-      message.nonce = 2n;
+      const newValidUntilBlock = await getValidBlockNumber(ethers.provider);
+      message.validUntilBlock = newValidUntilBlock;
       const signature2 = await user.signTypedData(domain, types, message);
 
       expect(
         await mockApp
           .connect(user)
-          .claimReward.staticCall(inviter.address, 2n, signature2),
+          .claimReward.staticCall(
+            inviter.address,
+            newValidUntilBlock,
+            signature2,
+          ),
       ).to.be.false;
     });
 
@@ -390,7 +402,7 @@ describe("EngagementRewards", function () {
       const { mockApp, user, inviter, engagementRewards } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -404,7 +416,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -412,7 +424,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -420,17 +432,20 @@ describe("EngagementRewards", function () {
 
       await mockApp
         .connect(user)
-        .claimReward(inviter.address, nonce, signature);
+        .claimReward(inviter.address, validUntilBlock, signature);
       await time.increase(CLAIM_COOLDOWN);
 
+      const newValidUntilBlock = await getValidBlockNumber(ethers.provider);
       expect(
         await mockApp
           .connect(user)
-          .claimReward.staticCall(inviter.address, nonce, "0x"),
+          .claimReward.staticCall(inviter.address, newValidUntilBlock, "0x"),
       ).to.be.true;
 
       await expect(
-        mockApp.connect(user).claimReward(inviter.address, nonce, "0x"),
+        mockApp
+          .connect(user)
+          .claimReward(inviter.address, newValidUntilBlock, "0x"),
       ).to.emit(engagementRewards, "RewardClaimed");
     });
 
@@ -438,7 +453,7 @@ describe("EngagementRewards", function () {
       const { mockApp, user, inviter, engagementRewards } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -452,7 +467,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -460,7 +475,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -471,11 +486,13 @@ describe("EngagementRewards", function () {
       expect(
         await mockApp
           .connect(user)
-          .claimReward.staticCall(inviter.address, nonce, signature),
+          .claimReward.staticCall(inviter.address, validUntilBlock, signature),
       ).to.be.false;
 
       await expect(
-        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
+        mockApp
+          .connect(user)
+          .claimReward(inviter.address, validUntilBlock, signature),
       ).to.not.emit(engagementRewards, "RewardClaimed");
     });
 
@@ -488,7 +505,7 @@ describe("EngagementRewards", function () {
       const userReward = (userInviterReward * BigInt(75)) / BigInt(100); // 75% of user+inviter reward goes to user
       const inviterReward = userInviterReward - userReward; // Remaining goes to inviter
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -502,7 +519,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -510,7 +527,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -518,7 +535,7 @@ describe("EngagementRewards", function () {
 
       await mockApp
         .connect(user)
-        .claimReward(inviter.address, nonce, signature);
+        .claimReward(inviter.address, validUntilBlock, signature);
 
       const appStats = await engagementRewards.appsStats(
         await mockApp.getAddress(),
@@ -533,10 +550,12 @@ describe("EngagementRewards", function () {
       const { mockApp, user, inviter, engagementRewards } =
         await loadFixture(deployFixture);
 
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+
       expect(
         await mockApp
           .connect(user)
-          .claimReward.staticCall(inviter.address, 0, "0x"),
+          .claimReward.staticCall(inviter.address, validUntilBlock, "0x"),
       ).to.be.false;
     });
 
@@ -544,7 +563,7 @@ describe("EngagementRewards", function () {
       const { engagementRewards, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -558,7 +577,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -566,7 +585,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -577,7 +596,7 @@ describe("EngagementRewards", function () {
         engagementRewards.claimWithSignature(
           await mockApp.getAddress(),
           inviter.address,
-          nonce,
+          validUntilBlock,
           signature,
         ),
       )
@@ -604,7 +623,7 @@ describe("EngagementRewards", function () {
       const { engagementRewards, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -618,7 +637,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -626,7 +645,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
       const signature = await user.signTypedData(domain, types, message);
@@ -636,7 +655,7 @@ describe("EngagementRewards", function () {
         engagementRewards.claimWithSignature(
           await mockApp.getAddress(),
           inviter.address,
-          nonce,
+          validUntilBlock,
           signature,
         ),
       )
@@ -651,59 +670,11 @@ describe("EngagementRewards", function () {
         );
     });
 
-    it("Should not allow using the same signature twice", async function () {
-      const { engagementRewards, mockApp, user, inviter } =
-        await loadFixture(deployFixture);
-
-      const nonce = 1n;
-      const chainId = (await ethers.provider.getNetwork()).chainId;
-
-      const domain = {
-        name: "EngagementRewards",
-        version: "1.0",
-        chainId: chainId,
-        verifyingContract: await engagementRewards.getAddress(),
-      };
-
-      const types = {
-        Claim: [
-          { name: "app", type: "address" },
-          { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
-          { name: "description", type: "string" },
-        ],
-      };
-
-      const message = {
-        app: await mockApp.getAddress(),
-        inviter: inviter.address,
-        nonce: nonce,
-        description: VALID_DESCRIPTION,
-      };
-
-      const signature = await user.signTypedData(domain, types, message);
-
-      await engagementRewards.claimWithSignature(
-        await mockApp.getAddress(),
-        inviter.address,
-        nonce,
-        signature,
-      );
-      await expect(
-        engagementRewards.claimWithSignature(
-          await mockApp.getAddress(),
-          inviter.address,
-          nonce,
-          signature,
-        ),
-      ).to.be.revertedWith("Signature already used");
-    });
-
     it("Should update AppStats correctly when rewards are claimed with signature", async function () {
       const { engagementRewards, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -717,7 +688,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -725,7 +696,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -735,7 +706,7 @@ describe("EngagementRewards", function () {
       await engagementRewards.claimWithSignature(
         await mockApp.getAddress(),
         inviter.address,
-        nonce,
+        validUntilBlock,
         signature,
       );
 
@@ -750,6 +721,87 @@ describe("EngagementRewards", function () {
       expect(appStats.totalInviterRewards).to.equal(
         (REWARD_AMOUNT * BigInt(20)) / BigInt(100),
       );
+    });
+
+    it("Should not allow claiming with expired block number", async function () {
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
+      const currentBlock = await ethers.provider.getBlockNumber();
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: (await ethers.provider.getNetwork()).chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: currentBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await expect(
+        engagementRewards.claimWithSignature(
+          await mockApp.getAddress(),
+          inviter.address,
+          currentBlock,
+          signature,
+        ),
+      ).to.be.revertedWith("Signature expired");
+    });
+
+    it("Should not allow claiming with block number too far in future", async function () {
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
+      const currentBlock = await ethers.provider.getBlockNumber();
+      const farFutureBlock = currentBlock + 55;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: (await ethers.provider.getNetwork()).chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: farFutureBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await expect(
+        engagementRewards.claimWithSignature(
+          await mockApp.getAddress(),
+          inviter.address,
+          farFutureBlock,
+          signature,
+        ),
+      ).to.be.revertedWith("ValidUntilBlock too far in future");
     });
   });
 
@@ -851,7 +903,7 @@ describe("EngagementRewards", function () {
       const { engagementRewards, admin, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -865,7 +917,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -873,7 +925,7 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
@@ -882,10 +934,12 @@ describe("EngagementRewards", function () {
       expect(
         await mockApp
           .connect(user)
-          .claimReward.staticCall(inviter.address, nonce, signature),
+          .claimReward.staticCall(inviter.address, validUntilBlock, signature),
       ).to.be.false;
       await expect(
-        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
+        mockApp
+          .connect(user)
+          .claimReward(inviter.address, validUntilBlock, signature),
       ).to.not.emit(engagementRewards, "RewardClaimed");
     });
 
@@ -893,7 +947,7 @@ describe("EngagementRewards", function () {
       const { engagementRewards, mockApp, user, inviter } =
         await loadFixture(deployFixture);
 
-      const nonce = 1n;
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -907,7 +961,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -915,18 +969,20 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
       const signature = await user.signTypedData(domain, types, message);
       await mockApp
         .connect(user)
-        .claimReward(inviter.address, nonce, signature);
+        .claimReward(inviter.address, validUntilBlock, signature);
 
       const claimCount = 5;
       for (let i = 0; i < claimCount; i++) {
-        await mockApp.connect(user).claimReward(inviter.address, 0, "0x");
+        await mockApp
+          .connect(user)
+          .claimReward(inviter.address, validUntilBlock, "0x");
         await time.increase(CLAIM_COOLDOWN);
       }
 
@@ -950,7 +1006,8 @@ describe("EngagementRewards", function () {
       await engagementRewards.connect(admin).setMaxRewardsPerApp(lowMaxRewards);
       identityContract.setWhitelistedRoot(inviter.address, inviter.address);
       identityContract.setWhitelistedRoot(admin.address, admin.address);
-      const nonce = 1n;
+      //because we do multiple txs add some more blocks so signatures stay valid
+      const validUntilBlock = (await getValidBlockNumber(ethers.provider)) + 5;
       const chainId = (await ethers.provider.getNetwork()).chainId;
 
       const domain = {
@@ -964,7 +1021,7 @@ describe("EngagementRewards", function () {
         Claim: [
           { name: "app", type: "address" },
           { name: "inviter", type: "address" },
-          { name: "nonce", type: "uint256" },
+          { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
       };
@@ -972,14 +1029,16 @@ describe("EngagementRewards", function () {
       const message = {
         app: await mockApp.getAddress(),
         inviter: inviter.address,
-        nonce: nonce,
+        validUntilBlock: validUntilBlock,
         description: VALID_DESCRIPTION,
       };
 
       const signature = await user.signTypedData(domain, types, message);
 
       await expect(
-        mockApp.connect(user).claimReward(inviter.address, nonce, signature),
+        mockApp
+          .connect(user)
+          .claimReward(inviter.address, validUntilBlock, signature),
       ).to.emit(engagementRewards, "RewardClaimed");
 
       message.inviter = ZeroAddress;
@@ -992,17 +1051,19 @@ describe("EngagementRewards", function () {
       await expect(
         mockApp
           .connect(inviter)
-          .claimReward(ZeroAddress, nonce, inviterSignature),
+          .claimReward(ZeroAddress, validUntilBlock, inviterSignature),
       ).to.emit(engagementRewards, "RewardClaimed");
 
       const adminSignature = await admin.signTypedData(domain, types, message);
       expect(
         await mockApp
           .connect(admin)
-          .claimReward.staticCall(ZeroAddress, nonce, adminSignature),
+          .claimReward.staticCall(ZeroAddress, validUntilBlock, adminSignature),
       ).to.be.false;
       await expect(
-        mockApp.connect(admin).claimReward(ZeroAddress, nonce, adminSignature),
+        mockApp
+          .connect(admin)
+          .claimReward(ZeroAddress, validUntilBlock, adminSignature),
       ).to.not.emit(engagementRewards, "RewardClaimed");
     });
   });

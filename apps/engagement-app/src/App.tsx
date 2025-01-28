@@ -4,11 +4,14 @@ import ApplyForm from "./components/ApplyForm"
 import ApproveForm from "./components/ApproveForm"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/toaster"
+import PendingAppsPage from "./components/PendingApps"
+import ClaimForm from "./components/ClaimForm"
+import RegisteredAppsPage from "./components/RegisteredApps"
+import AppDetailsPage from "./components/AppDetails"
 
 const App: React.FC = () => {
-
   return (
-    <Router>
+    <Router>      
       <div className="container mx-auto p-4">
         <nav className="flex justify-between items-center mb-4">
           <ul className="flex space-x-4">
@@ -27,6 +30,22 @@ const App: React.FC = () => {
                 Approve
               </Link>
             </li>
+            <li>
+              <Link to="/claim" className="text-blue-500 hover:text-blue-700">
+                Claim Reward
+              </Link>
+            </li>
+            <li>
+              <Link to="/pending" className="text-blue-500 hover:text-blue-700">
+                Pending Apps
+              </Link>
+            </li>
+            <li>
+              <Link to="/registered" className="text-blue-500 hover:text-blue-700">
+                Registered Apps
+              </Link>
+            </li>
+
           </ul>
           <div className="flex items-center gap-4">
             <appkit-button />
@@ -49,7 +68,11 @@ const App: React.FC = () => {
             }
           />
           <Route path="/apply" element={<ApplyForm />} />
-          <Route path="/approve" element={<ApproveForm />} />
+          <Route path="/approve/:appAddress" element={<ApproveForm />} />
+          <Route path="/pending" element={<PendingAppsPage />} />
+          <Route path="/claim" element={<ClaimForm />} />
+          <Route path="/registered" element={<RegisteredAppsPage />} />
+          <Route path="/app/:appAddress" element={<AppDetailsPage />} />
         </Routes>
         <Toaster />
       </div>

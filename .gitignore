@@ -37,3 +37,4 @@ yarn-error.log*
 .DS_Store
 *.pem
 .yarn/install-state.gz
+apps/engagement-app/tsconfig.tsbuildinfo

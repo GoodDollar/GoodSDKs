@@ -1,6 +1,6 @@
 import React from 'react'
 import  {useEngagementRewards} from '@GoodSDKs/engagement-sdk'
-
+import { useParams } from "react-router-dom";
 import { useAccount } from 'wagmi'
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -18,21 +18,23 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { zeroAddress } from 'viem'
+
+import env from '@/env'
 
 const formSchema = z.object({
   app: z.string().startsWith("0x", { message: "Must be a valid Ethereum address" }),
 })
 
 const ApproveForm: React.FC = () => {
+  const { appAddress } = useParams<{ appAddress: string }>();
   const { isConnected } = useAccount()
   const { toast } = useToast()
-  const engagementRewards =  useEngagementRewards(zeroAddress) //{} as any  // Replace with actual contract address
+  const engagementRewards =  useEngagementRewards(env.rewardsContract) //{} as any  // Replace with actual contract address
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      app: "",
+      app: appAddress || "",
     },
   })
 
@@ -47,16 +49,16 @@ const ApproveForm: React.FC = () => {
     }
 
     try {
-      const tx = await engagementRewards.approve(values.app as `0x${string}`)
-      
+      const receiptP = engagementRewards?.approve(values.app as `0x${string}`)
       toast({
         title: "Approval Submitted",
         description: "Your approval is being processed...",
       })
+      const receipt = await receiptP
+     
       
-      const receipt = await tx.wait()
       
-      if (receipt.status === 1) {
+      if (receipt?.status === "success") {
         toast({
           title: "Approval Successful",
           description: "The application has been approved successfully!",

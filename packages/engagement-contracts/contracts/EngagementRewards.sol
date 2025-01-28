@@ -60,7 +60,6 @@ contract EngagementRewards is
     }
     mapping(address => AppInfo) public registeredApps;
     mapping(address => mapping(address => uint256)) public lastClaimTimestamp;
-    mapping(bytes32 => bool) public usedSignatures;
     mapping(address => AppStats) public appsStats;
     mapping(address => mapping(address => UserInfo)) public userRegistrations;
 
@@ -202,24 +201,25 @@ contract EngagementRewards is
     function claimWithSignature(
         address app,
         address inviter,
-        uint256 nonce,
+        uint256 validUntilBlock,
         bytes memory signature
     ) public returns (bool) {
+        require(
+            validUntilBlock <= block.number + 50,
+            "ValidUntilBlock too far in future"
+        );
+
         string memory description = registeredApps[app].description;
         bytes32 structHash = keccak256(
             abi.encode(
                 CLAIM_TYPEHASH,
                 app,
                 inviter,
-                nonce,
+                validUntilBlock,
                 keccak256(bytes(description))
             )
         );
         bytes32 hash = _hashTypedDataV4(structHash);
-        bytes32 sigHash = keccak256(signature);
-        require(!usedSignatures[sigHash], "Signature already used");
-        usedSignatures[sigHash] = true;
-
         address signer = hash.recover(signature);
 
         require(

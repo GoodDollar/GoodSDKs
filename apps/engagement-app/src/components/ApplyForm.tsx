@@ -1,6 +1,7 @@
 import React from 'react'
-import {useEngagementRewards} from '@GoodSDKs/engagement-sdk'
-import { useAccount } from 'wagmi'
+import {useEngagementRewards} from '@goodsdks/engagement-sdk'
+import { useAccount,useConfig } from 'wagmi'
+import { waitForTransactionReceipt } from '@wagmi/core'
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,27 +18,30 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { zeroAddress } from 'viem'
+import env from '@/env'
 
 const formSchema = z.object({
   app: z.string().startsWith("0x", { message: "Must be a valid Ethereum address" }),
   rewardReceiver: z.string().startsWith("0x", { message: "Must be a valid Ethereum address" }),
   userInviterPercentage: z.number().min(0).max(100),
   userPercentage: z.number().min(0).max(100),
+  description: z.string().min(50).max(512, { message: "Description must be up to 512 characters and longer than 50" }),
 })
 
 const ApplyForm: React.FC = () => {
   const { isConnected } = useAccount()
+  const wagmiConfig = useConfig()
   const { toast } = useToast()
-  const engagementRewards = useEngagementRewards(zeroAddress)  // Replace with actual contract address
+  const engagementRewards = useEngagementRewards(env.rewardsContract)  // Replace with actual contract address
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       app: "",
       rewardReceiver: "",
-      userInviterPercentage: 0,
-      userPercentage: 0,
+      userInviterPercentage: 50,
+      userPercentage: 25,
+      description: "",
     },
   })
 
@@ -52,21 +56,23 @@ const ApplyForm: React.FC = () => {
     }
 
     try {
-      const tx = await engagementRewards.applyApp(
+      
+
+      const txHash =  await engagementRewards?.applyApp(
         values.app as `0x${string}`,
         values.rewardReceiver as `0x${string}`,
         values.userInviterPercentage,
-        values.userPercentage
+        values.userPercentage,
+        values.description
       )
-      
       toast({
         title: "Application Submitted",
         description: "Your application is being processed...",
       })
+      if(!txHash) return
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
       
-      const receipt = await tx.wait()
-      
-      if (receipt.status === 1) {
+      if (receipt?.status === "success") {
         toast({
           title: "Application Successful",
           description: "Your application has been submitted successfully!",
@@ -169,6 +175,22 @@ const ApplyForm: React.FC = () => {
                   </FormControl>
                   <FormDescription>
                     Percentage of user+inviter rewards allocated to users (0-100)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter a short description..." {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    A short description and terms of your app (up to 512 characters)
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
