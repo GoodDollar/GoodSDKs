@@ -7,6 +7,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 // import "hardhat/console.sol";
 
@@ -18,7 +19,8 @@ contract EngagementRewards is
     Initializable,
     AccessControlUpgradeable,
     EIP712Upgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    ReentrancyGuardUpgradeable
 {
     using ECDSA for bytes32;
 
@@ -97,6 +99,14 @@ contract EngagementRewards is
         uint256 _maxRewardsPerApp,
         uint256 _rewardAmount
     ) public initializer {
+        require(
+            address(_rewardToken) != address(0),
+            "Zero address not allowed"
+        );
+        require(
+            address(_identityContract) != address(0),
+            "Zero address not allowed"
+        );
         __AccessControl_init();
         __EIP712_init("EngagementRewards", "1.0");
         __UUPSUpgradeable_init();
@@ -117,6 +127,11 @@ contract EngagementRewards is
         uint256 userPercentage,
         string memory description
     ) external {
+        require(address(app) != address(0), "Zero address not allowed");
+        require(
+            address(rewardReceiver) != address(0),
+            "Zero address not allowed"
+        );
         require(
             userAndInviterPercentage <= 100,
             "Invalid userAndInviterPercentage"
@@ -165,6 +180,10 @@ contract EngagementRewards is
         uint256 userAndInviterPercentage,
         uint256 userPercentage
     ) external {
+        require(
+            address(rewardReceiver) != address(0),
+            "Zero address not allowed"
+        );
         require(registeredApps[app].isRegistered, "App not registered");
         require(msg.sender == registeredApps[app].owner, "Not app owner");
         require(
@@ -187,15 +206,7 @@ contract EngagementRewards is
     ) public returns (bool) {
         if (nonce > 0 && signature.length > 0)
             return claimWithSignature(msg.sender, inviter, nonce, signature);
-        else return claim(inviter);
-    }
-
-    function claim(address inviter) public returns (bool) {
-        address app = msg.sender;
-        address user = identityContract.getWhitelistedRoot(tx.origin);
-        if (user == address(0)) return false;
-
-        return _claim(app, user, inviter);
+        else return _claim(msg.sender, tx.origin, inviter);
     }
 
     function claimWithSignature(
@@ -222,11 +233,6 @@ contract EngagementRewards is
         bytes32 hash = _hashTypedDataV4(structHash);
         address signer = hash.recover(signature);
 
-        require(
-            identityContract.getWhitelistedRoot(signer) != address(0),
-            "Signer not whitelisted"
-        );
-
         if (!userRegistrations[app][signer].isRegistered) {
             userRegistrations[app][signer].isRegistered = true;
         }
@@ -236,12 +242,15 @@ contract EngagementRewards is
 
     function _claim(
         address app,
-        address user,
+        address sender,
         address inviter
-    ) internal returns (bool) {
+    ) internal nonReentrant returns (bool) {
+        address user = identityContract.getWhitelistedRoot(sender);
+        if (user == address(0)) return false;
         if (!userRegistrations[app][user].isRegistered) return false;
         if (!canClaim(app, user)) return false;
         if (rewardAmount == 0) return false;
+        if (rewardToken.balanceOf(address(this)) < rewardAmount) return false;
 
         AppInfo storage appInfo = registeredApps[app];
         if (!appInfo.isRegistered || !appInfo.isApproved) return false;
@@ -257,9 +266,10 @@ contract EngagementRewards is
             100;
         uint256 inviterAmount = userAndInviterAmount - userAmount;
 
-        uint256 appAmount = inviter != address(0)
-            ? rewardAmount - userAndInviterAmount
-            : rewardAmount - userAndInviterAmount + inviterAmount;
+        uint256 appAmount = rewardAmount - userAndInviterAmount;
+        if (inviter == address(0)) {
+            appAmount += inviterAmount; // Re-allocate inviter's share to the app
+        }
 
         AppStats storage appStat = appsStats[app];
         appStat.numberOfRewards += 1;
@@ -269,7 +279,7 @@ contract EngagementRewards is
 
         if (appAmount > 0)
             rewardToken.transfer(appInfo.rewardReceiver, appAmount);
-        if (userAmount > 0) rewardToken.transfer(user, userAmount);
+        if (userAmount > 0) rewardToken.transfer(sender, userAmount);
         if (inviter != address(0) && inviterAmount > 0) {
             rewardToken.transfer(inviter, inviterAmount);
         }
