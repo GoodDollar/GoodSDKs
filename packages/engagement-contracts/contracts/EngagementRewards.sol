@@ -27,7 +27,7 @@ contract EngagementRewards is
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 private constant CLAIM_TYPEHASH =
         keccak256(
-            "Claim(address app,address inviter,uint256 nonce,string description)"
+            "Claim(address app,address inviter,uint256 validUntilBlock,string description)"
         );
 
     IERC20 public rewardToken;
@@ -199,28 +199,71 @@ contract EngagementRewards is
         emit AppSettingsUpdated(app, userAndInviterPercentage, userPercentage);
     }
 
-    function claimAndRegister(
+    function appClaim(
         address inviter,
-        uint256 nonce,
+        uint256 validUntilBlock,
         bytes memory signature
     ) public returns (bool) {
-        if (nonce > 0 && signature.length > 0)
-            return claimWithSignature(msg.sender, inviter, nonce, signature);
-        else return _claim(msg.sender, tx.origin, inviter);
+        return
+            _claim(
+                msg.sender,
+                inviter,
+                validUntilBlock,
+                signature,
+                0,
+                0,
+                false
+            );
     }
 
-    function claimWithSignature(
+    function appClaim(
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature,
+        uint256 userAndInviterPercentage,
+        uint256 userPercentage
+    ) public returns (bool) {
+        require(
+            userAndInviterPercentage <= 100,
+            "Invalid userAndInviterPercentage"
+        );
+        require(userPercentage <= 100, "Invalid userPercentage");
+
+        return
+            _claim(
+                msg.sender,
+                inviter,
+                validUntilBlock,
+                signature,
+                userAndInviterPercentage,
+                userPercentage,
+                true
+            );
+    }
+
+    function eoaClaim(
         address app,
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature
     ) public returns (bool) {
+        return _claim(app, inviter, validUntilBlock, signature, 0, 0, false);
+    }
+
+    function _validateSignature(
+        address app,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) internal returns (address) {
         require(
             validUntilBlock <= block.number + 50,
             "ValidUntilBlock too far in future"
         );
+        require(validUntilBlock >= block.number, "Signature expired");
 
         string memory description = registeredApps[app].description;
+
         bytes32 structHash = keccak256(
             abi.encode(
                 CLAIM_TYPEHASH,
@@ -232,38 +275,66 @@ contract EngagementRewards is
         );
         bytes32 hash = _hashTypedDataV4(structHash);
         address signer = hash.recover(signature);
-
         if (!userRegistrations[app][signer].isRegistered) {
             userRegistrations[app][signer].isRegistered = true;
         }
 
-        return _claim(app, signer, inviter);
+        return signer;
     }
 
     function _claim(
         address app,
-        address sender,
-        address inviter
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory signature,
+        uint256 userAndInviterPercentage,
+        uint256 userPercentage,
+        bool overridePercentages
     ) internal nonReentrant returns (bool) {
+        address sender = tx.origin;
+        if (validUntilBlock > 0 && signature.length > 0) {
+            sender = _validateSignature(
+                app,
+                inviter,
+                validUntilBlock,
+                signature
+            );
+        }
         address user = identityContract.getWhitelistedRoot(sender);
-        if (user == address(0)) return false;
-        if (!userRegistrations[app][user].isRegistered) return false;
         if (!canClaim(app, user)) return false;
-        if (rewardAmount == 0) return false;
-        if (rewardToken.balanceOf(address(this)) < rewardAmount) return false;
 
         AppInfo storage appInfo = registeredApps[app];
         if (!appInfo.isRegistered || !appInfo.isApproved) return false;
         if (appInfo.registeredAt + APP_EXPIRATION < block.timestamp)
             return false;
 
-        bool isAppWithinLimit = updateClaimInfo(app, user);
-        if (isAppWithinLimit == false) return false;
+        if (updateClaimInfo(app, user) == false) return false;
 
+        _sendReward(
+            app,
+            appInfo.rewardReceiver,
+            sender,
+            inviter,
+            overridePercentages
+                ? userAndInviterPercentage
+                : appInfo.userAndInviterPercentage,
+            overridePercentages ? userPercentage : appInfo.userPercentage
+        );
+
+        return true;
+    }
+
+    function _sendReward(
+        address app,
+        address rewardReceiver,
+        address user,
+        address inviter,
+        uint256 userAndInviterPercentage,
+        uint256 userPercentage
+    ) internal {
         uint256 userAndInviterAmount = (rewardAmount *
-            appInfo.userAndInviterPercentage) / 100;
-        uint256 userAmount = (userAndInviterAmount * appInfo.userPercentage) /
-            100;
+            (userAndInviterPercentage)) / 100;
+        uint256 userAmount = (userAndInviterAmount * userPercentage) / 100;
         uint256 inviterAmount = userAndInviterAmount - userAmount;
 
         uint256 appAmount = rewardAmount - userAndInviterAmount;
@@ -277,9 +348,8 @@ contract EngagementRewards is
         appStat.totalInviterRewards += inviterAmount;
         appStat.totalUserRewards += userAmount;
 
-        if (appAmount > 0)
-            rewardToken.transfer(appInfo.rewardReceiver, appAmount);
-        if (userAmount > 0) rewardToken.transfer(sender, userAmount);
+        if (appAmount > 0) rewardToken.transfer(rewardReceiver, appAmount);
+        if (userAmount > 0) rewardToken.transfer(user, userAmount);
         if (inviter != address(0) && inviterAmount > 0) {
             rewardToken.transfer(inviter, inviterAmount);
         }
@@ -292,12 +362,25 @@ contract EngagementRewards is
             userAmount,
             inviterAmount
         );
-        return true;
     }
 
-    function canClaim(address app, address user) internal view returns (bool) {
+    function canClaim(address app, address user) public view returns (bool) {
         uint256 lastClaim = lastClaimTimestamp[app][user];
-        return block.timestamp >= lastClaim + CLAIM_COOLDOWN;
+        require(
+            block.timestamp >= lastClaim + CLAIM_COOLDOWN,
+            "Claim cooldown not reached"
+        );
+        require(user != address(0), "Invalid user address");
+        require(
+            userRegistrations[app][user].isRegistered,
+            "User not registered for app"
+        );
+        require(rewardAmount > 0, "Reward amount must be greater than zero");
+        require(
+            rewardToken.balanceOf(address(this)) >= rewardAmount,
+            "Insufficient reward token balance"
+        );
+        return true;
     }
 
     function updateClaimInfo(

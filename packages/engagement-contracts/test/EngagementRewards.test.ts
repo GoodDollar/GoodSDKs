@@ -593,12 +593,14 @@ describe("EngagementRewards", function () {
       const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
       await expect(
-        engagementRewards.claimWithSignature(
-          await mockApp.getAddress(),
-          inviter.address,
-          validUntilBlock,
-          signature,
-        ),
+        engagementRewards
+          .connect(user)
+          .eoaClaim(
+            await mockApp.getAddress(),
+            inviter.address,
+            validUntilBlock,
+            signature,
+          ),
       )
         .to.emit(engagementRewards, "RewardClaimed")
         .withArgs(
@@ -652,7 +654,7 @@ describe("EngagementRewards", function () {
       const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
       await expect(
-        engagementRewards.claimWithSignature(
+        engagementRewards.eoaClaim(
           await mockApp.getAddress(),
           inviter.address,
           validUntilBlock,
@@ -703,7 +705,7 @@ describe("EngagementRewards", function () {
       const signature = await user.signTypedData(domain, types, message);
       const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
-      await engagementRewards.claimWithSignature(
+      await engagementRewards.eoaClaim(
         await mockApp.getAddress(),
         inviter.address,
         validUntilBlock,
@@ -726,7 +728,7 @@ describe("EngagementRewards", function () {
     it("Should not allow claiming with expired block number", async function () {
       const { engagementRewards, mockApp, user, inviter } =
         await loadFixture(deployFixture);
-      const currentBlock = await ethers.provider.getBlockNumber();
+      const currentBlock = (await ethers.provider.getBlockNumber()) - 1;
 
       const domain = {
         name: "EngagementRewards",
@@ -754,7 +756,7 @@ describe("EngagementRewards", function () {
       const signature = await user.signTypedData(domain, types, message);
 
       await expect(
-        engagementRewards.claimWithSignature(
+        engagementRewards.eoaClaim(
           await mockApp.getAddress(),
           inviter.address,
           currentBlock,
@@ -795,7 +797,7 @@ describe("EngagementRewards", function () {
       const signature = await user.signTypedData(domain, types, message);
 
       await expect(
-        engagementRewards.claimWithSignature(
+        engagementRewards.eoaClaim(
           await mockApp.getAddress(),
           inviter.address,
           farFutureBlock,
@@ -1065,6 +1067,97 @@ describe("EngagementRewards", function () {
           .connect(admin)
           .claimReward(ZeroAddress, validUntilBlock, adminSignature),
       ).to.not.emit(engagementRewards, "RewardClaimed");
+    });
+  });
+
+  describe("App Claims", function () {
+    it("Should allow app to claim with custom percentages", async function () {
+      const { mockApp, user, inviter, engagementRewards, rewardToken } =
+        await loadFixture(deployFixture);
+
+      const customUserAndInviterPercentage = 90;
+      const customUserPercentage = 80;
+
+      const validUntilBlock = (await getValidBlockNumber(ethers.provider)) + 5;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await mockApp
+        .connect(user)
+        .claimRewardWithOverride(
+          inviter.address,
+          validUntilBlock,
+          signature,
+          customUserAndInviterPercentage,
+          customUserPercentage,
+        );
+
+      const appStats = await engagementRewards.appsStats(
+        await mockApp.getAddress(),
+      );
+      const expectedUserInviterAmount =
+        (REWARD_AMOUNT * BigInt(customUserAndInviterPercentage)) / 100n;
+      const expectedUserAmount =
+        (expectedUserInviterAmount * BigInt(customUserPercentage)) / 100n;
+      const expectedInviterAmount =
+        expectedUserInviterAmount - expectedUserAmount;
+
+      expect(appStats.totalUserRewards).to.equal(expectedUserAmount);
+      expect(appStats.totalInviterRewards).to.equal(expectedInviterAmount);
+    });
+
+    it("Should not allow invalid custom percentages", async function () {
+      const { mockApp, user, inviter } = await loadFixture(deployFixture);
+
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+
+      await expect(
+        mockApp
+          .connect(user)
+          .claimRewardWithOverride(
+            inviter.address,
+            validUntilBlock,
+            "0x",
+            101,
+            80,
+          ),
+      ).to.be.revertedWith("Invalid userAndInviterPercentage");
+
+      await expect(
+        mockApp
+          .connect(user)
+          .claimRewardWithOverride(
+            inviter.address,
+            validUntilBlock,
+            "0x",
+            90,
+            101,
+          ),
+      ).to.be.revertedWith("Invalid userPercentage");
     });
   });
 });

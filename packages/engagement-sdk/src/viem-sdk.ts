@@ -8,6 +8,9 @@ const engagementRewardsABI = parseAbi([
   "function claimWithSignature(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
   "function updateAppSettings(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage) external",
   "function registeredApps(address) external view returns (bool isRegistered, bool isApproved, address owner, address rewardReceiver, uint256 registeredAt, uint256 lastResetAt, uint256 totalRewardsClaimed, uint256 userInviterPercentage, uint256 userPercentage)",
+  "function appClaim(address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
+  "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint256 userAndInviterPercentage, uint256 userPercentage) external returns (bool)",
+  "function eoaClaim(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
 ]);
 
 export class EngagementRewardsSDK {
@@ -128,4 +131,26 @@ export class EngagementRewardsSDK {
       args: [app],
     });
   }
+
+  async eoaClaim(
+    app: Address,
+    inviter: Address,
+    nonce: bigint,
+    signature: `0x${string}`,
+  ) {
+    const [account] = await this.walletClient.getAddresses();
+    const { request } = await this.publicClient.simulateContract({
+      account,
+      address: this.contractAddress,
+      abi: engagementRewardsABI,
+      functionName: "eoaClaim",
+      args: [app, inviter, nonce, signature],
+    });
+    return waitForTransactionReceipt(this.publicClient, {
+      hash: await this.walletClient.writeContract(request),
+    });
+  }
+
+  //todo add method to prepare signature
+  //modify applyapp with all new fields
 }
