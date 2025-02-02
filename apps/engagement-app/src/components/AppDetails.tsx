@@ -1,21 +1,13 @@
 import React, { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
 import { useAccount } from "wagmi"
-import { useEngagementRewards } from "@GoodSDKs/engagement-sdk"
+import { useEngagementRewards, type RewardEvent } from "@GoodSDKs/engagement-sdk"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { formatEther } from "viem"
 import { Loader2 } from "lucide-react"
 import env from "@/env"
 
-type RewardEvent = {
-  timestamp: number
-  user: string
-  inviter: string
-  appReward: bigint
-  userAmount: bigint
-  inviterAmount: bigint
-}
 
 const AppDetailsPage: React.FC = () => {
   const { appAddress } = useParams<{ appAddress: string }>()
@@ -36,7 +28,7 @@ const AppDetailsPage: React.FC = () => {
       if (!engagementRewards || !appAddress) return
       const [rewardsData, eventsData] = await Promise.all([
         engagementRewards.getAppRewards(appAddress as `0x${string}`),
-        engagementRewards.getAppRewardEvents(appAddress as `0x${string}`, 50)
+        engagementRewards.getAppRewardEvents(appAddress as `0x${string}`)
       ])
       setRewards(rewardsData)
       setEvents(eventsData)
@@ -124,7 +116,7 @@ const AppDetailsPage: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Time</TableHead>
+                <TableHead>Block</TableHead>
                 <TableHead>User</TableHead>
                 <TableHead>Inviter</TableHead>
                 <TableHead>App Reward</TableHead>
@@ -136,7 +128,7 @@ const AppDetailsPage: React.FC = () => {
               {events.map((event, index) => (
                 <TableRow key={index}>
                   <TableCell>
-                    {new Date(event.timestamp * 1000).toLocaleString()}
+                    event.block
                   </TableCell>
                   <TableCell>{event.user}</TableCell>
                   <TableCell>{event.inviter}</TableCell>

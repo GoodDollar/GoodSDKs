@@ -1,10 +1,10 @@
 import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json";
-import prod from "@goodsdks/engagement-contracts/ignition/deployments/chain-42220/deployed_addresses.json";
-
+// import prod from "@goodsdks/engagement-contracts/ignition/deployments/chain-42220/deployed_addresses.json";
+const prod = {} as typeof devdeployments;
 export default {
-  devRewards: devdeployments["EngagementRewards#ERC1967Proxy"],
-  prodRewards: prod["EngagementRewards#ERC1967Proxy"],
+  devRewards: devdeployments["EngagementRewardsUpgrade#EngagementRewards"],
+  prodRewards: prod?.["EngagementRewardsUpgrade#EngagementRewards"],
   rewardsContract: (import.meta.env.DEV
-    ? devdeployments["EngagementRewards#ERC1967Proxy"]
-    : prod["EngagementRewards#ERC1967Proxy"]) as `0x${string}`,
+    ? devdeployments["EngagementRewardsUpgrade#EngagementRewards"]
+    : prod["EngagementRewardsUpgrade#EngagementRewards"]) as `0x${string}`,
 };

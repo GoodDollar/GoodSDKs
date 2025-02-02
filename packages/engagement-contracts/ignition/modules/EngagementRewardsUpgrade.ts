@@ -1,17 +1,14 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
-import { parseEther } from "ethers";
+import EngagementRewards from "./EngagementRewards";
 import hre from "hardhat";
-import ProxyModule from "./EngagementRewards";
 export default buildModule("EngagementRewardsUpgrade", (m) => {
-  const { proxy } = m.useModule(ProxyModule);
+  const param = process.env.PROXY_ADDRESS;
 
-  const newimpl = m.contract("EngagementRewards", []);
+  const newimpl = m.useModule(EngagementRewards).implementation;
 
-  const existingProxy = m.contractAt("EngagementRewards", proxy, {
-    id: "deployed",
-  });
+  const existingProxy = m.contractAt("EngagementRewards", param as string);
 
   m.call(existingProxy, "upgradeToAndCall", [newimpl, "0x"]);
 
-  return { proxy };
+  return { existingProxy };
 });

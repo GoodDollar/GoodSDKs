@@ -1,17 +1,50 @@
-import { Address, PublicClient, WalletClient, parseAbi } from "viem";
+import {
+  Address,
+  PublicClient,
+  WalletClient,
+  parseAbi,
+  type SimulateContractParameters,
+} from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 
+const BLOCKS_AGO = BigInt(100000);
+const WAIT_DELAY = 2000; // 1 second delay
+
 const engagementRewardsABI = parseAbi([
-  "function applyApp(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage) external",
+  "function applyApp(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage, string description, string url, string email) external",
   "function approve(address app) external",
-  "function claim(address inviter) external returns (bool)",
-  "function claimWithSignature(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
   "function updateAppSettings(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage) external",
-  "function registeredApps(address) external view returns (bool isRegistered, bool isApproved, address owner, address rewardReceiver, uint256 registeredAt, uint256 lastResetAt, uint256 totalRewardsClaimed, uint256 userInviterPercentage, uint256 userPercentage)",
+  "function registeredApps(address) external view returns (bool isRegistered, bool isApproved, address owner, address rewardReceiver, uint256 registeredAt, uint256 lastResetAt, uint256 totalRewardsClaimed, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
+  "function appsStats(address) external view returns (uint256 numberOfRewards, uint256 totalAppRewards, uint256 totalUserRewards, uint256 totalInviterRewards)",
   "function appClaim(address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
   "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint256 userAndInviterPercentage, uint256 userPercentage) external returns (bool)",
   "function eoaClaim(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
+  "event AppApplied(address indexed app, address indexed owner, address rewardReceiver, uint256 userAndInviterPercentage, uint256 userPercentage)",
+  "event AppApproved(address indexed app)",
+  "event AppSettingsUpdated(address indexed app, uint256 userAndInviterPercentage, uint256 userPercentage)",
+  "event RewardClaimed(address indexed app, address indexed user, address indexed inviter, uint256 appReward, uint256 userAmount, uint256 inviterAmount)",
+  "event RewardAmountUpdated(uint256 newAmount)",
 ]);
+
+export interface AppInfo {
+  description: string;
+  url: string;
+  email: string;
+  rewardReceiver: Address;
+  userInviterPercentage: number;
+  userPercentage: number;
+}
+
+export interface RewardEvent {
+  tx: `0x${string}`;
+  block: bigint;
+  timestamp?: number; // Optional as we might not always have block timestamp
+  user: `0x${string}`; // Changed from optional to required as per contract event
+  inviter: `0x${string}`; // Changed from optional to required as per contract event
+  appReward: bigint; // Changed from optional to required as per contract event
+  userAmount: bigint; // Changed from optional to required as per contract event
+  inviterAmount: bigint; // Changed from optional to required as per contract event
+}
 
 export class EngagementRewardsSDK {
   private publicClient: PublicClient;
@@ -28,75 +61,62 @@ export class EngagementRewardsSDK {
     this.contractAddress = contractAddress;
   }
 
+  private async submitAndWait(
+    simulateParams: SimulateContractParameters,
+    onHash?: (hash: `0x${string}`) => void,
+  ) {
+    const [account] = await this.walletClient.getAddresses();
+    const { request } = await this.publicClient.simulateContract({
+      account,
+      ...simulateParams,
+    });
+
+    const hash = await this.walletClient.writeContract(request);
+    if (onHash) onHash(hash);
+
+    // Add delay before waiting for receipt
+    await new Promise((resolve) => setTimeout(resolve, WAIT_DELAY));
+
+    return waitForTransactionReceipt(this.publicClient, {
+      pollingInterval: 5000,
+      hash,
+    });
+  }
+
   async applyApp(
     app: Address,
-    rewardReceiver: Address,
-    userInviterPercentage: number,
-    userPercentage: number,
+    appInfo: AppInfo,
+    onHash?: (hash: `0x${string}`) => void,
   ) {
-    const [account] = await this.walletClient.getAddresses();
-    const { request } = await this.publicClient.simulateContract({
-      account,
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      functionName: "applyApp",
-      args: [
-        app,
-        rewardReceiver,
-        BigInt(userInviterPercentage),
-        BigInt(userPercentage),
-      ],
-    });
-    return waitForTransactionReceipt(this.publicClient, {
-      hash: await this.walletClient.writeContract(request),
-    });
+    return this.submitAndWait(
+      {
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        functionName: "applyApp",
+        args: [
+          app,
+          appInfo.rewardReceiver,
+          BigInt(appInfo.userInviterPercentage),
+          BigInt(appInfo.userPercentage),
+          appInfo.description,
+          appInfo.url,
+          appInfo.email,
+        ],
+      },
+      onHash,
+    );
   }
 
-  async approve(app: Address) {
-    const [account] = await this.walletClient.getAddresses();
-    const { request } = await this.publicClient.simulateContract({
-      account,
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      functionName: "approve",
-      args: [app],
-    });
-    return waitForTransactionReceipt(this.publicClient, {
-      hash: await this.walletClient.writeContract(request),
-    });
-  }
-
-  async claim(inviter: Address) {
-    const [account] = await this.walletClient.getAddresses();
-    const { request } = await this.publicClient.simulateContract({
-      account,
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      functionName: "claim",
-      args: [inviter],
-    });
-    return waitForTransactionReceipt(this.publicClient, {
-      hash: await this.walletClient.writeContract(request),
-    });
-  }
-
-  async claimWithSignature(
-    app: Address,
-    inviter: Address,
-    nonce: bigint,
-    signature: `0x${string}`,
-  ) {
-    const [account] = await this.walletClient.getAddresses();
-    const { request } = await this.publicClient.simulateContract({
-      account,
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      functionName: "claimWithSignature",
-      args: [app, inviter, nonce, signature],
-    });
-    return waitForTransactionReceipt(this.publicClient, {
-      hash: await this.walletClient.writeContract(request),
-    });
+  async approve(app: Address, onHash?: (hash: `0x${string}`) => void) {
+    return this.submitAndWait(
+      {
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        functionName: "approve",
+        args: [app],
+      },
+      onHash,
+    );
   }
 
   async updateAppSettings(
@@ -104,23 +124,22 @@ export class EngagementRewardsSDK {
     rewardReceiver: Address,
     userInviterPercentage: number,
     userPercentage: number,
+    onHash?: (hash: `0x${string}`) => void,
   ) {
-    const [account] = await this.walletClient.getAddresses();
-    const { request } = await this.publicClient.simulateContract({
-      account,
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      functionName: "updateAppSettings",
-      args: [
-        app,
-        rewardReceiver,
-        BigInt(userInviterPercentage),
-        BigInt(userPercentage),
-      ],
-    });
-    return waitForTransactionReceipt(this.publicClient, {
-      hash: await this.walletClient.writeContract(request),
-    });
+    return this.submitAndWait(
+      {
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        functionName: "updateAppSettings",
+        args: [
+          app,
+          rewardReceiver,
+          BigInt(userInviterPercentage),
+          BigInt(userPercentage),
+        ],
+      },
+      onHash,
+    );
   }
 
   async getAppInfo(app: Address) {
@@ -137,20 +156,159 @@ export class EngagementRewardsSDK {
     inviter: Address,
     nonce: bigint,
     signature: `0x${string}`,
+    onHash?: (hash: `0x${string}`) => void,
   ) {
+    return this.submitAndWait(
+      {
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        functionName: "eoaClaim",
+        args: [app, inviter, nonce, signature],
+      },
+      onHash,
+    );
+  }
+
+  async prepareClaimSignature(
+    app: Address,
+    inviter: Address,
+    validUntilBlock: bigint,
+    description: string,
+  ) {
+    const domain = {
+      name: "EngagementRewards",
+      version: "1.0",
+      chainId: await this.publicClient.getChainId(),
+      verifyingContract: this.contractAddress,
+    };
+
+    const types = {
+      Claim: [
+        { name: "app", type: "address" },
+        { name: "inviter", type: "address" },
+        { name: "validUntilBlock", type: "uint256" },
+        { name: "description", type: "string" },
+      ],
+    };
+
+    const message = {
+      app,
+      inviter,
+      validUntilBlock,
+      description,
+    };
+
+    return { domain, types, message };
+  }
+
+  async signClaim(
+    app: Address,
+    inviter: Address,
+    validUntilBlock: bigint,
+    description: string,
+  ): Promise<`0x${string}`> {
     const [account] = await this.walletClient.getAddresses();
-    const { request } = await this.publicClient.simulateContract({
+    if (!account) throw new Error("No account available");
+
+    const { domain, types, message } = await this.prepareClaimSignature(
+      app,
+      inviter,
+      validUntilBlock,
+      description,
+    );
+
+    return this.walletClient.signTypedData({
       account,
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      functionName: "eoaClaim",
-      args: [app, inviter, nonce, signature],
-    });
-    return waitForTransactionReceipt(this.publicClient, {
-      hash: await this.walletClient.writeContract(request),
+      domain,
+      types,
+      primaryType: "Claim",
+      message,
     });
   }
 
-  //todo add method to prepare signature
-  //modify applyapp with all new fields
+  async getPendingApps() {
+    const curBlock = await this.publicClient.getBlockNumber();
+    const [applyEvents, approvedEvents] = await Promise.all([
+      this.publicClient.getContractEvents({
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        eventName: "AppApplied",
+        fromBlock: curBlock - BigInt(BLOCKS_AGO),
+      }),
+      await this.publicClient.getContractEvents({
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        eventName: "AppApproved",
+        fromBlock: curBlock - BigInt(BLOCKS_AGO),
+      }),
+    ]);
+
+    const approvedApps = new Set<string>();
+    approvedEvents
+      .map((_) => _.args.app)
+      .filter((_) => _ !== undefined)
+      .forEach((app) => {
+        approvedApps.add(app.toLowerCase());
+      });
+
+    return applyEvents
+      .map((_) => _.args.app?.toLowerCase())
+      .filter((_) => _ !== undefined)
+      .filter((app) => !approvedApps.has(app));
+  }
+
+  async getRegisteredApps() {
+    const curBlock = await this.publicClient.getBlockNumber();
+    const approvedEvents = await this.publicClient.getContractEvents({
+      address: this.contractAddress,
+      abi: engagementRewardsABI,
+      eventName: "AppApproved",
+      fromBlock: curBlock - BigInt(BLOCKS_AGO),
+    });
+
+    return approvedEvents.map((_) => _.args.app).filter((_) => _ !== undefined);
+  }
+
+  async getAppRewards(app: Address) {
+    const stats = await this.publicClient.readContract({
+      address: this.contractAddress,
+      abi: engagementRewardsABI,
+      functionName: "appsStats",
+      args: [app],
+    });
+
+    return {
+      totalRewards: stats[1] + stats[2] + stats[3], // totalAppRewards + totalUserRewards + totalInviterRewards
+      appRewards: stats[1], // totalAppRewards
+      userRewards: stats[2], // totalUserRewards
+      inviterRewards: stats[3], // totalInviterRewards
+      rewardEventCount: Number(stats[0]), // numberOfRewards
+    };
+  }
+
+  async getAppRewardEvents(app: Address): Promise<RewardEvent[]> {
+    const curBlock = await this.publicClient.getBlockNumber();
+
+    const rewardEvents = await this.publicClient.getContractEvents({
+      address: this.contractAddress,
+      abi: engagementRewardsABI,
+      eventName: "RewardClaimed",
+      args: { app },
+      fromBlock: curBlock - BigInt(BLOCKS_AGO),
+    });
+
+    return rewardEvents.map((log) => ({
+      tx: log.transactionHash,
+      block: log.blockNumber,
+      user: log.args.user as `0x${string}`,
+      inviter: log.args.inviter as `0x${string}`,
+      appReward: log.args.appReward as bigint,
+      userAmount: log.args.userAmount as bigint,
+      inviterAmount: log.args.inviterAmount as bigint,
+    }));
+  }
+
+  async getCurrentBlockNumber() {
+    return this.publicClient.getBlockNumber();
+  }
 }

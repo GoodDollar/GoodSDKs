@@ -10,26 +10,22 @@ import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import env from "@/env"
 import { zeroAddress } from "viem"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog"
+import { useSigningModal } from "@/hooks/useSigningModal"
+import { SigningModal } from "./SigningModal"
+
 
 const ClaimForm: React.FC = () => {
   const { isConnected, chainId } = useAccount()
   const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
   const { toast } = useToast()
   const { signTypedDataAsync } = useSignTypedData()
+  const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } = useSigningModal();
 
   const [app, setApp] = useState("")
   const [inviter, setInviter] = useState("")
   const nonce = Date.now()
   const [registeredApps, setRegisteredApps] = useState<string[]>([])
   const [appDescription, setAppDescription] = useState("")
-  const [showSigningModal, setShowSigningModal] = useState(false)
 
   useEffect(() => {
     if (!engagementRewards || registeredApps.length > 0) return
@@ -43,36 +39,36 @@ const ClaimForm: React.FC = () => {
     if (isConnected) {
       fetchRegisteredApps()
     }
-  }, [isConnected, engagementRewards, registeredApps.length])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, registeredApps.length])
 
 
   const handleAppChange = async (value: string) => {
     if (!engagementRewards) return
     setApp(value)
     const appInfo = await engagementRewards.getAppInfo(value as `0x${string}`)
-    setAppDescription(appInfo[9])
+    if(appInfo) setAppDescription(appInfo[3])
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!engagementRewards) return;
     if (!isConnected) {
       toast({
         title: "Error",
         description: "Please connect your wallet first.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    try {
-      setShowSigningModal(true) // Show modal before signing
+    await wrapWithSigningModal(async () => {
       const domain = {
         name: "EngagementRewards",
         version: "1.0",
-        chainId: chainId, // Replace with the correct chain ID
-        verifyingContract: env.rewardsContract, // Replace with the actual contract address
-      }
+        chainId: chainId,
+        verifyingContract: env.rewardsContract,
+      };
 
       const types = {
         Claim: [
@@ -81,7 +77,7 @@ const ClaimForm: React.FC = () => {
           { name: "validUntilBlock", type: "uint256" },
           { name: "description", type: "string" },
         ],
-      }
+      };
 
       const currentBlock = await engagementRewards.getCurrentBlockNumber();
 
@@ -90,29 +86,31 @@ const ClaimForm: React.FC = () => {
         inviter: inviter || zeroAddress,
         validUntilBlock: currentBlock,
         description: appDescription,
-      }
+      };
 
-      const signature = await signTypedDataAsync({ domain, types, message, primaryType: "Claim" })
-      setShowSigningModal(false) // Hide modal after signing
+      const signature = await signTypedDataAsync({
+        domain,
+        types,
+        message,
+        primaryType: "Claim",
+      });
 
-      await engagementRewards.claimWithSignature(app as `0x${string}`, message.inviter as `0x${string}`, currentBlock, signature)
+      const receipt = await engagementRewards.eoaClaim(
+        app as `0x${string}`,
+        message.inviter as `0x${string}`,
+        currentBlock,
+        signature,
+        (hash) => {
+          toast({
+            title: "Transaction Submitted",
+            description: `Transaction hash: ${hash}`,
+          });
+        }
+      );
 
-
-      toast({
-        title: "Success",
-        description: "Claim submitted successfully!",
-      })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      setShowSigningModal(false) // Hide modal if there's an error
-      console.error("Error claiming:", error)
-      toast({
-        title: "Error",
-        description: `Failed to submit claim. Please try again.<br>${error.message}`,
-        variant: "destructive",
-      })
-    }
-  }
+      return receipt;
+    }, "Claim submitted successfully!");
+  };
 
   if (!isConnected) {
     return (
@@ -173,17 +171,10 @@ const ClaimForm: React.FC = () => {
           </form>
         </CardContent>
       </Card>
-      <Dialog open={showSigningModal} onOpenChange={setShowSigningModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign Message</DialogTitle>
-            <DialogDescription>
-              Please sign the message in your wallet to proceed with the claim.
-              This signature is required to verify your identity and complete the claim process.
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
+      <SigningModal 
+        open={isSigningModalOpen} 
+        onOpenChange={setIsSigningModalOpen}
+      />
     </>
   )
 }

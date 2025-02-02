@@ -1,6 +1,4 @@
 {
-  "EngagementRewards#EngagementRewards": "0x0012Ceb9669d0e735d2ab8f2Ce8BE6de2145ad30",
-  "EngagementRewardsUpgrade#EngagementRewards": "0x6fA40DDf7a0159Ceb908D72996e2F0D296845Bd9",
-  "EngagementRewards#ERC1967Proxy": "0x9b602e09B60FcC3882C127D79E8512180fE3178C",
-  "EngagementRewardsUpgrade#deployed": "0x9b602e09B60FcC3882C127D79E8512180fE3178C"
+  "EngagementRewards#EngagementRewards": "0x8a6A71a1103EFB8eb8076aB9468C17831fAc36c5",
+  "EngagementRewardsUpgrade#EngagementRewards": "0xFC27b8a66a9824A20EF50cEeFef1870f1A142079"
 }

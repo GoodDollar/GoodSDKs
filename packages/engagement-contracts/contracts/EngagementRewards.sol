@@ -50,6 +50,8 @@ contract EngagementRewards is
         uint256 userAndInviterPercentage;
         uint256 userPercentage;
         string description;
+        string url;
+        string email;
     }
     struct AppStats {
         uint256 numberOfRewards;
@@ -58,7 +60,7 @@ contract EngagementRewards is
         uint256 totalInviterRewards;
     }
     struct UserInfo {
-        bool isRegistered;
+        uint256 isRegistered;
     }
     mapping(address => AppInfo) public registeredApps;
     mapping(address => mapping(address => uint256)) public lastClaimTimestamp;
@@ -125,7 +127,9 @@ contract EngagementRewards is
         address rewardReceiver,
         uint256 userAndInviterPercentage,
         uint256 userPercentage,
-        string memory description
+        string memory description,
+        string memory url,
+        string memory email
     ) external {
         require(address(app) != address(0), "Zero address not allowed");
         require(
@@ -137,24 +141,51 @@ contract EngagementRewards is
             "Invalid userAndInviterPercentage"
         );
         require(userPercentage <= 100, "Invalid userPercentage");
-        require(!registeredApps[app].isRegistered, "App already registered");
         require(
             bytes(description).length <= 512 && bytes(description).length >= 50,
             "Invalid description"
         );
+        require(
+            bytes(url).length > 0 && bytes(url).length <= 255,
+            "Invalid URL"
+        );
+        require(
+            bytes(email).length > 0 && bytes(email).length <= 255,
+            "Invalid email"
+        );
 
-        registeredApps[app] = AppInfo({
-            isRegistered: true,
-            isApproved: false,
-            owner: msg.sender,
-            rewardReceiver: rewardReceiver,
-            registeredAt: block.timestamp,
-            lastResetAt: block.timestamp,
-            totalRewardsClaimed: 0,
-            userAndInviterPercentage: userAndInviterPercentage,
-            userPercentage: userPercentage,
-            description: description
-        });
+        AppInfo storage existingApp = registeredApps[app];
+
+        // If app was previously registered, ensure only owner can re-register
+        if (existingApp.owner != address(0)) {
+            require(msg.sender == existingApp.owner, "Not app owner");
+
+            // Update only the fields that should be modified during re-registration
+            existingApp.isApproved = false; // Reset approval on re-registration
+            existingApp.rewardReceiver = rewardReceiver;
+            existingApp.userAndInviterPercentage = userAndInviterPercentage;
+            existingApp.userPercentage = userPercentage;
+            existingApp.description = description;
+            existingApp.url = url;
+            existingApp.email = email;
+            existingApp.registeredAt = block.timestamp;
+        } else {
+            // New registration
+            registeredApps[app] = AppInfo({
+                isRegistered: true,
+                isApproved: false,
+                owner: msg.sender,
+                rewardReceiver: rewardReceiver,
+                registeredAt: block.timestamp,
+                lastResetAt: block.timestamp,
+                totalRewardsClaimed: 0,
+                userAndInviterPercentage: userAndInviterPercentage,
+                userPercentage: userPercentage,
+                description: description,
+                url: url,
+                email: email
+            });
+        }
 
         emit AppApplied(
             app,
@@ -275,9 +306,7 @@ contract EngagementRewards is
         );
         bytes32 hash = _hashTypedDataV4(structHash);
         address signer = hash.recover(signature);
-        if (!userRegistrations[app][signer].isRegistered) {
-            userRegistrations[app][signer].isRegistered = true;
-        }
+        userRegistrations[app][signer].isRegistered = block.timestamp;
 
         return signer;
     }
@@ -372,7 +401,8 @@ contract EngagementRewards is
         );
         require(user != address(0), "Invalid user address");
         require(
-            userRegistrations[app][user].isRegistered,
+            userRegistrations[app][user].isRegistered >=
+                registeredApps[app].registeredAt,
             "User not registered for app"
         );
         require(rewardAmount > 0, "Reward amount must be greater than zero");
