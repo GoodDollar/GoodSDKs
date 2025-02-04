@@ -72,7 +72,10 @@ contract EngagementRewards is
         address indexed owner,
         address rewardReceiver,
         uint256 userAndInviterPercentage,
-        uint256 userPercentage
+        uint256 userPercentage,
+        string description,
+        string url,
+        string email
     );
     event AppApproved(address indexed app);
     event AppSettingsUpdated(
@@ -192,7 +195,10 @@ contract EngagementRewards is
             msg.sender,
             rewardReceiver,
             userAndInviterPercentage,
-            userPercentage
+            userPercentage,
+            description,
+            url,
+            email
         );
     }
 

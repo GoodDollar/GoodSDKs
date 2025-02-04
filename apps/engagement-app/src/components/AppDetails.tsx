@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { formatEther } from "viem"
 import { Loader2 } from "lucide-react"
 import env from "@/env"
-
+import { TruncatedAddress } from "./ui/TruncatedAddress"
 
 const AppDetailsPage: React.FC = () => {
   const { appAddress } = useParams<{ appAddress: string }>()
@@ -38,7 +38,7 @@ const AppDetailsPage: React.FC = () => {
     if (isConnected) {
       fetchData()
     }
-  }, [isConnected, engagementRewards, appAddress])
+  }, [isConnected, appAddress, !!engagementRewards])
 
   if (!isConnected) {
     return (
@@ -127,11 +127,13 @@ const AppDetailsPage: React.FC = () => {
             <TableBody>
               {events.map((event, index) => (
                 <TableRow key={index}>
+                  <TableCell>{event.block.toString()}</TableCell>
                   <TableCell>
-                    event.block
+                    <TruncatedAddress address={event.user} />
                   </TableCell>
-                  <TableCell>{event.user}</TableCell>
-                  <TableCell>{event.inviter}</TableCell>
+                  <TableCell>
+                    <TruncatedAddress address={event.inviter} />
+                  </TableCell>
                   <TableCell>{formatEther(event.appReward)} G$</TableCell>
                   <TableCell>{formatEther(event.userAmount)} G$</TableCell>
                   <TableCell>{formatEther(event.inviterAmount)} G$</TableCell>

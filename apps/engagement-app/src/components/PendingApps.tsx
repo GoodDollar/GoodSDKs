@@ -7,6 +7,7 @@ import { Button } from "./ui/button"
 import env from "@/env"
 import { useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
+import { TruncatedAddress } from "./ui/TruncatedAddress"
 
 const PendingAppsPage: React.FC = () => {
   const { isConnected } = useAccount()
@@ -22,6 +23,8 @@ const PendingAppsPage: React.FC = () => {
       userAndInviterPercentage: number
       userPercentage: number
       description: string
+      url: string
+      email: string
     }>
   >([])
 
@@ -31,6 +34,7 @@ const PendingAppsPage: React.FC = () => {
     const fetchPendingApps = async () => {
         if(!engagementRewards) return
         const apps = await engagementRewards.getPendingApps()
+        console.log({apps})
         const appDetails = await Promise.all(
           apps.map(async (app) => {
             const info = await engagementRewards.getAppInfo(app as `0x${string}`)
@@ -41,6 +45,8 @@ const PendingAppsPage: React.FC = () => {
               userAndInviterPercentage: Number(info[7]),
               userPercentage: Number(info[8]),
               description: info[9],
+              url: info[10],
+              email: info[11],
             }
           }),
         )
@@ -51,7 +57,7 @@ const PendingAppsPage: React.FC = () => {
     if (isConnected) {
       fetchPendingApps()
     }
-  }, [isConnected, engagementRewards])
+  }, [isConnected, !!engagementRewards])
 
 
 
@@ -102,18 +108,30 @@ const PendingAppsPage: React.FC = () => {
               <TableHead>User & Inviter %</TableHead>
               <TableHead>User %</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Website</TableHead>
+              <TableHead>Contact</TableHead>
               <TableHead>Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pendingApps.map((app) => (
               <TableRow key={app.address}>
-                <TableCell>{app.address}</TableCell>
-                <TableCell>{app.owner}</TableCell>
-                <TableCell>{app.rewardReceiver}</TableCell>
+                <TableCell><TruncatedAddress address={app.address} /></TableCell>
+                <TableCell><TruncatedAddress address={app.owner} /></TableCell>
+                <TableCell><TruncatedAddress address={app.rewardReceiver} /></TableCell>
                 <TableCell>{app.userAndInviterPercentage}%</TableCell>
                 <TableCell>{app.userPercentage}%</TableCell>
                 <TableCell>{app.description}</TableCell>
+                <TableCell>
+                  <a href={app.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                    {app.url}
+                  </a>
+                </TableCell>
+                <TableCell>
+                  <a href={`mailto:${app.email}`} className="hover:underline">
+                    {app.email}
+                  </a>
+                </TableCell>
                 <TableCell>
                   <Button onClick={() => handleApprove(app.address)}>Approve</Button>
                 </TableCell>

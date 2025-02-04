@@ -22,6 +22,7 @@ import { zeroAddress } from 'viem'
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { useSigningModal } from "@/hooks/useSigningModal"
 import { SigningModal } from "./SigningModal"
+import { useParams } from 'react-router-dom'
 
 const formSchema = z.object({
   app: z.string().startsWith("0x", { message: "Must be a valid Ethereum address" }),
@@ -34,6 +35,7 @@ const formSchema = z.object({
 })
 
 const ApplyForm: React.FC = () => {
+  const { appAddress } = useParams<{ appAddress: string }>()
   const { isConnected } = useAccount()
   const { toast } = useToast()
   const engagementRewards = useEngagementRewards(env.rewardsContract)  // Replace with actual contract address
@@ -43,7 +45,7 @@ const ApplyForm: React.FC = () => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      app: "",
+      app: appAddress,
       rewardReceiver: "",
       userInviterPercentage: 50,
       userPercentage: 25,

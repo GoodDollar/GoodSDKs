@@ -8,6 +8,7 @@ import PendingAppsPage from "./components/PendingApps"
 import ClaimForm from "./components/ClaimForm"
 import RegisteredAppsPage from "./components/RegisteredApps"
 import AppDetailsPage from "./components/AppDetails"
+import { UpdateAppSettingsForm } from "./components/UpdateAppSettingsForm"
 
 const App: React.FC = () => {
   return (
@@ -68,11 +69,13 @@ const App: React.FC = () => {
             }
           />
           <Route path="/apply" element={<ApplyForm />} />
+          <Route path="/apply/:appAddress" element={<ApplyForm />} />
           <Route path="/approve/:appAddress" element={<ApproveForm />} />
           <Route path="/pending" element={<PendingAppsPage />} />
           <Route path="/claim" element={<ClaimForm />} />
           <Route path="/registered" element={<RegisteredAppsPage />} />
           <Route path="/app/:appAddress" element={<AppDetailsPage />} />
+          <Route path="/app/:appAddress/settings" element={<UpdateAppSettingsForm />} />
         </Routes>
         <Toaster />
       </div>

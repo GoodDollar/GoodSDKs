@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/form"
 import { useSigningModal } from "@/hooks/useSigningModal"
 import { SigningModal } from "./SigningModal"
+import { useParams } from 'react-router-dom'
 
 const formSchema = z.object({
   rewardReceiver: z.string().startsWith("0x"),
@@ -28,7 +29,9 @@ const formSchema = z.object({
   userPercentage: z.number().min(0).max(100),
 });
 
-export const UpdateAppSettingsForm: React.FC<{ app: string }> = ({ app }) => {
+export const UpdateAppSettingsForm: React.FC = () => {
+  const { appAddress:app } = useParams<{ appAddress: string }>()
+
   const engagementRewards = useEngagementRewards(env.rewardsContract);
   const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
@@ -48,8 +51,7 @@ export const UpdateAppSettingsForm: React.FC<{ app: string }> = ({ app }) => {
       }
     };
     loadAppSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app]);
+  }, [app, engagementRewards !==null]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     await wrapWithSigningModal(

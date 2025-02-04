@@ -8,8 +8,12 @@ import {
 import { waitForTransactionReceipt } from "viem/actions";
 
 const BLOCKS_AGO = BigInt(100000);
-const WAIT_DELAY = 2000; // 1 second delay
+const WAIT_DELAY = 5000; // 1 second delay
 
+//TODO:
+// create guide how to integrate claiming with/without signature
+// allow update app details screen with all the details
+//
 const engagementRewardsABI = parseAbi([
   "function applyApp(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage, string description, string url, string email) external",
   "function approve(address app) external",
@@ -19,7 +23,7 @@ const engagementRewardsABI = parseAbi([
   "function appClaim(address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
   "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint256 userAndInviterPercentage, uint256 userPercentage) external returns (bool)",
   "function eoaClaim(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
-  "event AppApplied(address indexed app, address indexed owner, address rewardReceiver, uint256 userAndInviterPercentage, uint256 userPercentage)",
+  "event AppApplied(address indexed app, address indexed owner, address rewardReceiver, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
   "event AppApproved(address indexed app)",
   "event AppSettingsUpdated(address indexed app, uint256 userAndInviterPercentage, uint256 userPercentage)",
   "event RewardClaimed(address indexed app, address indexed user, address indexed inviter, uint256 appReward, uint256 userAmount, uint256 inviterAmount)",
@@ -44,6 +48,17 @@ export interface RewardEvent {
   appReward: bigint; // Changed from optional to required as per contract event
   userAmount: bigint; // Changed from optional to required as per contract event
   inviterAmount: bigint; // Changed from optional to required as per contract event
+}
+
+export interface AppEvent {
+  owner: Address;
+  rewardReceiver: Address;
+  userAndInviterPercentage: number;
+  userPercentage: number;
+  description: string;
+  url: string;
+  email: string;
+  block: bigint;
 }
 
 export class EngagementRewardsSDK {
@@ -78,7 +93,6 @@ export class EngagementRewardsSDK {
     await new Promise((resolve) => setTimeout(resolve, WAIT_DELAY));
 
     return waitForTransactionReceipt(this.publicClient, {
-      pollingInterval: 5000,
       hash,
     });
   }
@@ -305,6 +319,28 @@ export class EngagementRewardsSDK {
       appReward: log.args.appReward as bigint,
       userAmount: log.args.userAmount as bigint,
       inviterAmount: log.args.inviterAmount as bigint,
+    }));
+  }
+
+  async getAppHistory(app: Address): Promise<AppEvent[]> {
+    const curBlock = await this.publicClient.getBlockNumber();
+    const events = await this.publicClient.getContractEvents({
+      address: this.contractAddress,
+      abi: engagementRewardsABI,
+      eventName: "AppApplied",
+      args: { app },
+      fromBlock: curBlock - BigInt(BLOCKS_AGO),
+    });
+
+    return events.map((log) => ({
+      owner: log.args.owner as Address,
+      rewardReceiver: log.args.rewardReceiver as Address,
+      userAndInviterPercentage: Number(log.args.userAndInviterPercentage),
+      userPercentage: Number(log.args.userPercentage),
+      description: log.args.description as string,
+      url: log.args.url as string,
+      email: log.args.email as string,
+      block: log.blockNumber,
     }));
   }
 

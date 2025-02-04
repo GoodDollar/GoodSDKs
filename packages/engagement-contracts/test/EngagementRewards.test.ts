@@ -56,6 +56,8 @@ describe("EngagementRewards", function () {
         80,
         75,
         VALID_DESCRIPTION,
+        "https://example.com",
+        "contact@example.com",
       );
     // Admin approves the app
     await engagementRewards.connect(admin).approve(await mockApp.getAddress());
@@ -108,34 +110,50 @@ describe("EngagementRewards", function () {
         await deployContract("MockApp", [await engagementRewards.getAddress()])
       ).waitForDeployment();
 
+      const appInfo = {
+        rewardReceiver: rewardReceiver.address,
+        userInviterPercentage: 80,
+        userPercentage: 75,
+        description: VALID_DESCRIPTION,
+        url: "https://example.com",
+        email: "contact@example.com",
+      };
+
       await expect(
         engagementRewards
           .connect(appOwner)
           .applyApp(
             await newMockApp.getAddress(),
-            rewardReceiver.address,
-            80,
-            75,
-            VALID_DESCRIPTION,
+            appInfo.rewardReceiver,
+            appInfo.userInviterPercentage,
+            appInfo.userPercentage,
+            appInfo.description,
+            appInfo.url,
+            appInfo.email,
           ),
       )
         .to.emit(engagementRewards, "AppApplied")
         .withArgs(
           await newMockApp.getAddress(),
           appOwner.address,
-          rewardReceiver.address,
-          80,
-          75,
+          appInfo.rewardReceiver,
+          appInfo.userInviterPercentage,
+          appInfo.userPercentage,
+          appInfo.description,
+          appInfo.url,
+          appInfo.email,
         );
 
-      const appInfo = await engagementRewards.registeredApps(
+      const info = await engagementRewards.registeredApps(
         await newMockApp.getAddress(),
       );
-      expect(appInfo.isRegistered).to.be.true;
-      expect(appInfo.isApproved).to.be.false;
-      expect(appInfo.owner).to.equal(appOwner.address);
-      expect(appInfo.rewardReceiver).to.equal(rewardReceiver.address);
-      expect(appInfo.description).to.equal(VALID_DESCRIPTION);
+      expect(info.isRegistered).to.be.true;
+      expect(info.isApproved).to.be.false;
+      expect(info.owner).to.equal(appOwner.address);
+      expect(info.rewardReceiver).to.equal(appInfo.rewardReceiver);
+      expect(info.description).to.equal(appInfo.description);
+      expect(info.url).to.equal(appInfo.url);
+      expect(info.email).to.equal(appInfo.email);
     });
 
     it("Should allow admin to approve an app", async function () {
@@ -146,24 +164,38 @@ describe("EngagementRewards", function () {
         await deployContract("MockApp", [await engagementRewards.getAddress()])
       ).waitForDeployment();
 
+      const appInfo = {
+        rewardReceiver: rewardReceiver.address,
+        userInviterPercentage: 80,
+        userPercentage: 75,
+        description: VALID_DESCRIPTION,
+        url: "https://example.com",
+        email: "contact@example.com",
+      };
+
       await expect(
         engagementRewards
           .connect(appOwner)
           .applyApp(
             await newMockApp.getAddress(),
-            rewardReceiver,
-            80,
-            75,
-            VALID_DESCRIPTION,
+            appInfo.rewardReceiver,
+            appInfo.userInviterPercentage,
+            appInfo.userPercentage,
+            appInfo.description,
+            appInfo.url,
+            appInfo.email,
           ),
       )
         .to.emit(engagementRewards, "AppApplied")
         .withArgs(
           await newMockApp.getAddress(),
           appOwner.address,
-          rewardReceiver.address,
-          80,
-          75,
+          appInfo.rewardReceiver,
+          appInfo.userInviterPercentage,
+          appInfo.userPercentage,
+          appInfo.description,
+          appInfo.url,
+          appInfo.email,
         );
 
       await expect(
@@ -172,10 +204,10 @@ describe("EngagementRewards", function () {
         .to.emit(engagementRewards, "AppApproved")
         .withArgs(await newMockApp.getAddress());
 
-      const appInfo = await engagementRewards.registeredApps(
+      const info = await engagementRewards.registeredApps(
         await newMockApp.getAddress(),
       );
-      expect(appInfo.isApproved).to.be.true;
+      expect(info.isApproved).to.be.true;
     });
 
     it("Should not allow non-admin to approve an app", async function () {
@@ -186,24 +218,38 @@ describe("EngagementRewards", function () {
         await deployContract("MockApp", [await engagementRewards.getAddress()])
       ).waitForDeployment();
 
+      const appInfo = {
+        rewardReceiver: rewardReceiver.address,
+        userInviterPercentage: 80,
+        userPercentage: 75,
+        description: VALID_DESCRIPTION,
+        url: "https://example.com",
+        email: "contact@example.com",
+      };
+
       await expect(
         engagementRewards
           .connect(appOwner)
           .applyApp(
             await newMockApp.getAddress(),
-            rewardReceiver,
-            80,
-            75,
-            VALID_DESCRIPTION,
+            appInfo.rewardReceiver,
+            appInfo.userInviterPercentage,
+            appInfo.userPercentage,
+            appInfo.description,
+            appInfo.url,
+            appInfo.email,
           ),
       )
         .to.emit(engagementRewards, "AppApplied")
         .withArgs(
           await newMockApp.getAddress(),
           appOwner.address,
-          rewardReceiver.address,
-          80,
-          75,
+          appInfo.rewardReceiver,
+          appInfo.userInviterPercentage,
+          appInfo.userPercentage,
+          appInfo.description,
+          appInfo.url,
+          appInfo.email,
         );
 
       await expect(
@@ -235,6 +281,8 @@ describe("EngagementRewards", function () {
             80,
             75,
             shortDescription,
+            "https://example.com",
+            "contact@example.com",
           ),
       ).to.be.revertedWith("Invalid description");
     });
@@ -258,6 +306,8 @@ describe("EngagementRewards", function () {
             80,
             75,
             longDescription,
+            "https://example.com",
+            "contact@example.com",
           ),
       ).to.be.revertedWith("Invalid description");
     });
@@ -616,7 +666,7 @@ describe("EngagementRewards", function () {
         await mockApp.getAddress(),
         user.address,
       );
-      expect(userInfo).to.be.true;
+      expect(userInfo).to.be.gt(0);
     });
   });
 
