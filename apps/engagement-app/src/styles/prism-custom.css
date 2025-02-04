@@ -1,0 +1,16 @@
+pre {
+  background-color: rgb(24 24 27) !important;
+  color: #fff !important;
+}
+
+code {
+  color: #fff !important;
+  text-shadow: none !important;
+}
+
+.token.comment { color: #888 !important; }
+.token.string { color: #a5d6ff !important; }
+.token.number { color: #ff9580 !important; }
+.token.keyword { color: #ff7b72 !important; }
+.token.function { color: #d2a8ff !important; }
+.token.boolean { color: #ff7b72 !important; }

@@ -34,7 +34,6 @@ const PendingAppsPage: React.FC = () => {
     const fetchPendingApps = async () => {
         if(!engagementRewards) return
         const apps = await engagementRewards.getPendingApps()
-        console.log({apps})
         const appDetails = await Promise.all(
           apps.map(async (app) => {
             const info = await engagementRewards.getAppInfo(app as `0x${string}`)

@@ -17,6 +17,7 @@ const WAIT_DELAY = 5000; // 1 second delay
 const engagementRewardsABI = parseAbi([
   "function applyApp(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage, string description, string url, string email) external",
   "function approve(address app) external",
+  "function canClaim(address app, address user) external view returns(bool)",
   "function updateAppSettings(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage) external",
   "function registeredApps(address) external view returns (bool isRegistered, bool isApproved, address owner, address rewardReceiver, uint256 registeredAt, uint256 lastResetAt, uint256 totalRewardsClaimed, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
   "function appsStats(address) external view returns (uint256 numberOfRewards, uint256 totalAppRewards, uint256 totalUserRewards, uint256 totalInviterRewards)",
@@ -346,5 +347,19 @@ export class EngagementRewardsSDK {
 
   async getCurrentBlockNumber() {
     return this.publicClient.getBlockNumber();
+  }
+
+  async canClaim(app: Address, user: Address) {
+    try {
+      await this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        functionName: "canClaim",
+        args: [app, user],
+      });
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 }
