@@ -69,10 +69,9 @@ const Navigation = () => {
           {/* Desktop menu */}
           <ul className="hidden md:flex md:space-x-1">
             <NavItem to="/apply">Apply</NavItem>
-            <NavItem to="/approve">Approve</NavItem>
-            <NavItem to="/claim">Claim</NavItem>
             <NavItem to="/pending">Pending</NavItem>
             <NavItem to="/registered">Registered</NavItem>
+            <NavItem to="/claim">Claim Demo</NavItem>
             <NavItem to="/guide">Integration Guide</NavItem>
           </ul>
 
@@ -108,6 +107,113 @@ const Navigation = () => {
   );
 };
 
+const LandingPage = () => {
+  return (
+    <div className="max-w-4xl mx-auto mt-8 space-y-8">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold tracking-tight">
+          Boost User Engagement with Web3 Rewards
+        </h1>
+        <p className="text-xl text-muted-foreground">
+          Transform your dApp's growth through blockchain-powered incentives
+        </p>
+      </div>
+
+      <div className="grid gap-8 md:grid-cols-2 mt-12">
+        <div className="space-y-4">
+          <h2 className="text-2xl font-semibold">Why Choose Engagement Rewards?</h2>
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <div className="mt-1 bg-primary/10 p-1 rounded">💎</div>
+              <div>
+                <span className="font-medium">Token Rewards</span>
+                <p className="text-muted-foreground">Incentivize users with G$ tokens for meaningful interactions</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="mt-1 bg-primary/10 p-1 rounded">🤝</div>
+              <div>
+                <span className="font-medium">Referral System</span>
+                <p className="text-muted-foreground">Built-in referral tracking to amplify your organic growth</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="mt-1 bg-primary/10 p-1 rounded">⚡</div>
+              <div>
+                <span className="font-medium">Easy Integration</span>
+                <p className="text-muted-foreground">Simple SDK and documentation to get started in minutes</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="mt-1 bg-primary/10 p-1 rounded">🔐</div>
+              <div>
+                <span className="font-medium">Secure & Transparent</span>
+                <p className="text-muted-foreground">Open source smart contracts with verifiable reward distribution</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-2xl font-semibold">How It Works</h2>
+          <div className="space-y-4">
+            <div className="rounded-lg border p-4">
+              <h3 className="font-medium">1. Apply</h3>
+              <p className="text-sm text-muted-foreground">Register your dApp and customize reward distribution between your app, users, and referrers</p>
+            </div>
+            <div className="rounded-lg border p-4">
+              <h3 className="font-medium">2. Integrate</h3>
+              <p className="text-sm text-muted-foreground">Add our SDK to your application with just a few lines of code</p>
+            </div>
+            <div className="rounded-lg border p-4">
+              <h3 className="font-medium">3. Grow</h3>
+              <p className="text-sm text-muted-foreground">Watch your user base expand as engagement increases through incentivized actions</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-4 mt-8">
+        <div className="flex gap-4">
+          <Button asChild size="lg">
+            <Link to="/apply">Apply Now</Link>
+          </Button>
+          <Button asChild variant="outline" size="lg">
+            <Link to="/guide">View Documentation</Link>
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Already registered? <Link to="/registered" className="underline">View your apps</Link>
+        </p>
+      </div>
+
+      <div className="mt-16 border-t pt-8">
+        <h2 className="text-2xl font-semibold text-center mb-6">Reward Distribution Example</h2>
+        <div className="max-w-md mx-auto bg-card rounded-lg border p-6">
+          <p className="text-sm text-muted-foreground mb-4">For each successful engagement:</p>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span>Your dApp receives</span>
+              <span className="font-medium">20%</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Engaging user receives</span>
+              <span className="font-medium">60%</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Referrer receives</span>
+              <span className="font-medium">20%</span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            * Percentages can be customized during registration
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const App: React.FC = () => {
   return (
     <Router>      
@@ -115,20 +221,7 @@ const App: React.FC = () => {
         <Navigation />
         <div className="container mx-auto p-4 pt-20">
           <Routes>
-            <Route
-              path="/"
-              element={
-                <div className="max-w-2xl mx-auto mt-8">
-                  <h1 className="text-3xl font-bold mb-4">Welcome to Engagement Rewards</h1>
-                  <p className="text-gray-600 mb-4">
-                    Connect your wallet to start managing your app's engagement rewards.
-                  </p>
-                  <Button asChild>
-                    <Link to="/apply">Apply for Rewards</Link>
-                  </Button>
-                </div>
-              }
-            />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/apply" element={<ApplyForm />} />
             <Route path="/apply/:appAddress" element={<ApplyForm />} />
             <Route path="/approve/:appAddress" element={<ApproveForm />} />
