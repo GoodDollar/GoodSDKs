@@ -44,14 +44,14 @@ export const UpdateAppSettingsForm: React.FC = () => {
       const appInfo = await engagementRewards?.getAppInfo(app as `0x${string}`);
       if (appInfo) {
         form.reset({
-            rewardReceiver: appInfo[3], // array index for rewardReceiver
-            userInviterPercentage: Number(appInfo[7]), // array index for userAndInviterPercentage
-            userPercentage: Number(appInfo[8]), // array index for userPercentage
+            rewardReceiver: appInfo[1], // array index for rewardReceiver
+            userInviterPercentage: Number(appInfo[5]), // array index for userAndInviterPercentage
+            userPercentage: Number(appInfo[6]), // array index for userPercentage
         });
       }
     };
     loadAppSettings();
-  }, [app, engagementRewards !==null]);
+  }, [app, !!engagementRewards]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     await wrapWithSigningModal(

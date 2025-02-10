@@ -666,7 +666,7 @@ describe("EngagementRewards", function () {
         await mockApp.getAddress(),
         user.address,
       );
-      expect(userInfo).to.be.gt(0);
+      expect(userInfo.isRegistered).to.be.gt(0);
     });
   });
 

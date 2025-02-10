@@ -27,6 +27,7 @@ export function useSigningModal() {
         description: `Transaction failed: ${(error as Error).message}`,
         variant: "destructive",
       });
+      return;
     }
   };
 

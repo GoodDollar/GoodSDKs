@@ -55,10 +55,10 @@ const ApproveForm: React.FC = () => {
       // Get current details from contract
       const info = await engagementRewards.getAppInfo(appAddress as `0x${string}`);
       setCurrentDetails({
-        owner: info[2],
-        rewardReceiver: info[3],
-        userAndInviterPercentage: Number(info[7]),
-        userPercentage: Number(info[8]),
+        owner: info[0],
+        rewardReceiver: info[1],
+        userAndInviterPercentage: Number(info[5]),
+        userPercentage: Number(info[6]),
         description: info[9],
         url: info[10],
         email: info[11]

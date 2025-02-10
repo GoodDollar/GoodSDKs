@@ -15,7 +15,7 @@ export const checkSourceVerification = async (
       `https://sourcify.dev/server/check-all-by-addresses?chainIds=${chainId}&addresses=${address}`,
     ).then((_) => _.json());
     console.log({ response });
-    return response.find((_) => _.status !== "false");
+    return response.find((_: { status: string }) => _.status !== "false");
   } catch (error) {
     console.error("Error checking sourcify:", error);
     return false;

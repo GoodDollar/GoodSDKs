@@ -96,7 +96,7 @@ const ApplyForm: React.FC = () => {
 
       // Check if app exists
       const appInfo = await engagementRewards?.getAppInfo(appValue as `0x${string}`);
-      if (appInfo?.[2] !== zeroAddress) {
+      if (appInfo?.[0] !== zeroAddress) {
         setIsReapplying(true);
       }
 
@@ -136,7 +136,7 @@ const ApplyForm: React.FC = () => {
           values.app as `0x${string}`,
           {
             rewardReceiver: values.rewardReceiver as `0x${string}`,
-            userInviterPercentage: values.userInviterPercentage,
+            userAndInviterPercentage: values.userInviterPercentage,
             userPercentage: values.userPercentage,
             description: values.description,
             url: values.url,

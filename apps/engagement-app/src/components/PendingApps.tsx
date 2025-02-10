@@ -20,45 +20,51 @@ const PendingAppsPage: React.FC = () => {
       address: string
       owner: string
       rewardReceiver: string
+      totalRewardsClaimed: bigint
+      registeredAt: number
+      lastResetAt: number
       userAndInviterPercentage: number
       userPercentage: number
+      isRegistered: boolean
+      isApproved: boolean
       description: string
       url: string
       email: string
     }>
   >([])
 
-
-
   useEffect(() => {
     const fetchPendingApps = async () => {
-        if(!engagementRewards) return
-        const apps = await engagementRewards.getPendingApps()
-        const appDetails = await Promise.all(
-          apps.map(async (app) => {
-            const info = await engagementRewards.getAppInfo(app as `0x${string}`)
-            return {
-              address: app,
-              owner: info[2],
-              rewardReceiver: info[3],
-              userAndInviterPercentage: Number(info[7]),
-              userPercentage: Number(info[8]),
-              description: info[9],
-              url: info[10],
-              email: info[11],
-            }
-          }),
-        )
-        setPendingApps(appDetails)
-        setLoading(false)
+      if(!engagementRewards) return
+      const apps = await engagementRewards.getPendingApps()
+      const appDetails = await Promise.all(
+        apps.map(async (app) => {
+          const info = await engagementRewards.getAppInfo(app as `0x${string}`)
+          return {
+            address: app,
+            owner: info[0], // Updated index
+            rewardReceiver: info[1], // Updated index
+            totalRewardsClaimed: info[2],
+            registeredAt: Number(info[3]),
+            lastResetAt: Number(info[4]),
+            userAndInviterPercentage: Number(info[5]),
+            userPercentage: Number(info[6]),
+            isRegistered: info[7],
+            isApproved: info[8],
+            description: info[9],
+            url: info[10],
+            email: info[11]
+          }
+        }),
+      )
+      setPendingApps(appDetails)
+      setLoading(false)
     }
     
     if (isConnected) {
       fetchPendingApps()
     }
   }, [isConnected, !!engagementRewards])
-
-
 
   const handleApprove = async (app: string) => {
     navigate(`/approve/${app}`)

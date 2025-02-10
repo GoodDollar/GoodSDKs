@@ -15,14 +15,14 @@ const WAIT_DELAY = 5000; // 1 second delay
 // allow update app details screen with all the details
 //
 const engagementRewardsABI = parseAbi([
-  "function applyApp(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage, string description, string url, string email) external",
+  "function applyApp(address app, address rewardReceiver, uint8 userInviterPercentage, uint8 userPercentage, string description, string url, string email) external",
   "function approve(address app) external",
   "function canClaim(address app, address user) external view returns(bool)",
-  "function updateAppSettings(address app, address rewardReceiver, uint256 userInviterPercentage, uint256 userPercentage) external",
-  "function registeredApps(address) external view returns (bool isRegistered, bool isApproved, address owner, address rewardReceiver, uint256 registeredAt, uint256 lastResetAt, uint256 totalRewardsClaimed, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
-  "function appsStats(address) external view returns (uint256 numberOfRewards, uint256 totalAppRewards, uint256 totalUserRewards, uint256 totalInviterRewards)",
+  "function updateAppSettings(address app, address rewardReceiver, uint8 userInviterPercentage, uint8 userPercentage) external",
+  "function registeredApps(address) external view returns (address owner, address rewardReceiver, uint96 totalRewardsClaimed, uint32 registeredAt, uint32 lastResetAt, uint8 userAndInviterPercentage, uint8 userPercentage, bool isRegistered, bool isApproved, string description, string url, string email)",
+  "function appsStats(address) external view returns (uint96 numberOfRewards, uint96 totalAppRewards, uint96 totalUserRewards, uint96 totalInviterRewards)",
   "function appClaim(address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
-  "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint256 userAndInviterPercentage, uint256 userPercentage) external returns (bool)",
+  "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint8 userAndInviterPercentage, uint8 userPercentage) external returns (bool)",
   "function eoaClaim(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
   "event AppApplied(address indexed app, address indexed owner, address rewardReceiver, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
   "event AppApproved(address indexed app)",
@@ -32,12 +32,12 @@ const engagementRewardsABI = parseAbi([
 ]);
 
 export interface AppInfo {
+  rewardReceiver: Address;
+  userAndInviterPercentage: number;
+  userPercentage: number;
   description: string;
   url: string;
   email: string;
-  rewardReceiver: Address;
-  userInviterPercentage: number;
-  userPercentage: number;
 }
 
 export interface RewardEvent {
@@ -111,7 +111,7 @@ export class EngagementRewardsSDK {
         args: [
           app,
           appInfo.rewardReceiver,
-          BigInt(appInfo.userInviterPercentage),
+          BigInt(appInfo.userAndInviterPercentage),
           BigInt(appInfo.userPercentage),
           appInfo.description,
           appInfo.url,

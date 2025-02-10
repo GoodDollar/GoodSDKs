@@ -36,34 +36,38 @@ contract EngagementRewards is
     uint256 public constant CLAIM_COOLDOWN = 180 days;
     uint256 public constant APP_EXPIRATION = 365 days;
 
-    uint256 public maxRewardsPerApp;
-    uint256 public rewardAmount;
+    uint96 public maxRewardsPerApp;
+    uint96 public rewardAmount;
 
     struct AppInfo {
-        bool isRegistered;
-        bool isApproved;
-        address owner;
-        address rewardReceiver;
-        uint256 registeredAt;
-        uint256 lastResetAt;
-        uint256 totalRewardsClaimed;
-        uint256 userAndInviterPercentage;
-        uint256 userPercentage;
+        address owner; // 20 bytes
+        address rewardReceiver; // 20 bytes
+        uint96 totalRewardsClaimed; // 12 bytes
+        uint32 registeredAt; // 4 bytes
+        uint32 lastResetAt; // 4 bytes
+        uint8 userAndInviterPercentage; // 1 byte
+        uint8 userPercentage; // 1 byte
+        bool isRegistered; // 1 byte
+        bool isApproved; // 1 byte
+        // Following strings each use their own slot
         string description;
         string url;
         string email;
     }
+
     struct AppStats {
-        uint256 numberOfRewards;
-        uint256 totalAppRewards;
-        uint256 totalUserRewards;
-        uint256 totalInviterRewards;
+        uint96 numberOfRewards; // 12 bytes
+        uint96 totalAppRewards; // 12 bytes
+        uint96 totalUserRewards; // 12 bytes
+        uint96 totalInviterRewards; // 12 bytes
     }
+
     struct UserInfo {
-        uint256 isRegistered;
+        uint32 isRegistered; // 4 bytes
+        uint32 lastClaimTimestamp; // 4 bytes
     }
+
     mapping(address => AppInfo) public registeredApps;
-    mapping(address => mapping(address => uint256)) public lastClaimTimestamp;
     mapping(address => AppStats) public appsStats;
     mapping(address => mapping(address => UserInfo)) public userRegistrations;
 
@@ -118,8 +122,8 @@ contract EngagementRewards is
 
         rewardToken = _rewardToken;
         identityContract = _identityContract;
-        maxRewardsPerApp = _maxRewardsPerApp;
-        rewardAmount = _rewardAmount;
+        maxRewardsPerApp = uint96(_maxRewardsPerApp);
+        rewardAmount = uint96(_rewardAmount);
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
@@ -166,12 +170,14 @@ contract EngagementRewards is
             // Update only the fields that should be modified during re-registration
             existingApp.isApproved = false; // Reset approval on re-registration
             existingApp.rewardReceiver = rewardReceiver;
-            existingApp.userAndInviterPercentage = userAndInviterPercentage;
-            existingApp.userPercentage = userPercentage;
+            existingApp.userAndInviterPercentage = uint8(
+                userAndInviterPercentage
+            );
+            existingApp.userPercentage = uint8(userPercentage);
             existingApp.description = description;
             existingApp.url = url;
             existingApp.email = email;
-            existingApp.registeredAt = block.timestamp;
+            existingApp.registeredAt = uint32(block.timestamp);
         } else {
             // New registration
             registeredApps[app] = AppInfo({
@@ -179,11 +185,11 @@ contract EngagementRewards is
                 isApproved: false,
                 owner: msg.sender,
                 rewardReceiver: rewardReceiver,
-                registeredAt: block.timestamp,
-                lastResetAt: block.timestamp,
+                registeredAt: uint32(block.timestamp),
+                lastResetAt: uint32(block.timestamp),
                 totalRewardsClaimed: 0,
-                userAndInviterPercentage: userAndInviterPercentage,
-                userPercentage: userPercentage,
+                userAndInviterPercentage: uint8(userAndInviterPercentage),
+                userPercentage: uint8(userPercentage),
                 description: description,
                 url: url,
                 email: email
@@ -214,8 +220,8 @@ contract EngagementRewards is
     function updateAppSettings(
         address app,
         address rewardReceiver,
-        uint256 userAndInviterPercentage,
-        uint256 userPercentage
+        uint8 userAndInviterPercentage,
+        uint8 userPercentage
     ) external {
         require(
             address(rewardReceiver) != address(0),
@@ -312,7 +318,7 @@ contract EngagementRewards is
         );
         bytes32 hash = _hashTypedDataV4(structHash);
         address signer = hash.recover(signature);
-        userRegistrations[app][signer].isRegistered = block.timestamp;
+        userRegistrations[app][signer].isRegistered = uint32(block.timestamp);
 
         return signer;
     }
@@ -351,9 +357,9 @@ contract EngagementRewards is
             sender,
             inviter,
             overridePercentages
-                ? userAndInviterPercentage
+                ? uint8(userAndInviterPercentage)
                 : appInfo.userAndInviterPercentage,
-            overridePercentages ? userPercentage : appInfo.userPercentage
+            overridePercentages ? uint8(userPercentage) : appInfo.userPercentage
         );
 
         return true;
@@ -364,8 +370,8 @@ contract EngagementRewards is
         address rewardReceiver,
         address user,
         address inviter,
-        uint256 userAndInviterPercentage,
-        uint256 userPercentage
+        uint8 userAndInviterPercentage,
+        uint8 userPercentage
     ) internal {
         uint256 userAndInviterAmount = (rewardAmount *
             (userAndInviterPercentage)) / 100;
@@ -379,9 +385,9 @@ contract EngagementRewards is
 
         AppStats storage appStat = appsStats[app];
         appStat.numberOfRewards += 1;
-        appStat.totalAppRewards += appAmount;
-        appStat.totalInviterRewards += inviterAmount;
-        appStat.totalUserRewards += userAmount;
+        appStat.totalAppRewards += uint96(appAmount);
+        appStat.totalInviterRewards += uint96(inviterAmount);
+        appStat.totalUserRewards += uint96(userAmount);
 
         if (appAmount > 0) rewardToken.transfer(rewardReceiver, appAmount);
         if (userAmount > 0) rewardToken.transfer(user, userAmount);
@@ -400,7 +406,7 @@ contract EngagementRewards is
     }
 
     function canClaim(address app, address user) public view returns (bool) {
-        uint256 lastClaim = lastClaimTimestamp[app][user];
+        uint32 lastClaim = userRegistrations[app][user].lastClaimTimestamp;
         require(
             block.timestamp >= lastClaim + CLAIM_COOLDOWN,
             "Claim cooldown not reached"
@@ -423,13 +429,15 @@ contract EngagementRewards is
         address app,
         address user
     ) internal returns (bool) {
-        lastClaimTimestamp[app][user] = block.timestamp;
+        userRegistrations[app][user].lastClaimTimestamp = uint32(
+            block.timestamp
+        );
 
         AppInfo storage appInfo = registeredApps[app];
 
         if (block.timestamp >= appInfo.lastResetAt + CLAIM_COOLDOWN) {
             appInfo.totalRewardsClaimed = 0;
-            appInfo.lastResetAt = block.timestamp;
+            appInfo.lastResetAt = uint32(block.timestamp);
         }
 
         if (appInfo.totalRewardsClaimed + rewardAmount > maxRewardsPerApp)
@@ -442,13 +450,13 @@ contract EngagementRewards is
     function setMaxRewardsPerApp(
         uint256 _maxRewardsPerApp
     ) external onlyRole(ADMIN_ROLE) {
-        maxRewardsPerApp = _maxRewardsPerApp;
+        maxRewardsPerApp = uint96(_maxRewardsPerApp);
     }
 
     function setRewardAmount(
         uint256 _rewardAmount
     ) external onlyRole(ADMIN_ROLE) {
-        rewardAmount = _rewardAmount;
+        rewardAmount = uint96(_rewardAmount);
         emit RewardAmountUpdated(_rewardAmount);
     }
 

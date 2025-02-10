@@ -40,14 +40,14 @@ const ClaimForm: React.FC = () => {
       fetchRegisteredApps()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, registeredApps.length])
+  }, [isConnected, registeredApps.length, !!engagementRewards])
 
 
   const handleAppChange = async (value: string) => {
     if (!engagementRewards) return
     setApp(value)
-    const appInfo = await engagementRewards.getAppInfo(value as `0x${string}`)
-    if(appInfo) setAppDescription(appInfo[3])
+    const appInfo = await engagementRewards.getAppInfo(value as `0x${string}`)    
+    if(appInfo) setAppDescription(appInfo[9])
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
