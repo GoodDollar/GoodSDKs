@@ -35,7 +35,7 @@ contract EngagementRewards is
 
     uint256 public constant CLAIM_COOLDOWN = 180 days;
     uint256 public constant APP_EXPIRATION = 365 days;
-    uint8 public constant REWARDS_PER_USER = 3; // Max number of apps user can claim from per period
+    uint8 public maxAppsPerUser;
 
     uint96 public maxRewardsPerApp;
     uint96 public rewardAmount;
@@ -103,6 +103,7 @@ contract EngagementRewards is
         uint256 inviterAmount
     );
     event RewardAmountUpdated(uint256 newAmount);
+    event MaxAppsPerUserUpdated(uint8 newAmount); // Add new event
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -131,7 +132,7 @@ contract EngagementRewards is
         identityContract = _identityContract;
         maxRewardsPerApp = uint96(_maxRewardsPerApp);
         rewardAmount = uint96(_rewardAmount);
-
+        maxAppsPerUser = 3;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
     }
@@ -431,7 +432,7 @@ contract EngagementRewards is
 
         // Check if user hasn't exceeded max apps per period
         require(
-            userGlobal.periodClaims < REWARDS_PER_USER ||
+            userGlobal.periodClaims < maxAppsPerUser ||
                 block.timestamp >=
                 userGlobal.lastClaimTimestamp + CLAIM_COOLDOWN,
             "Max apps per period reached"
@@ -490,6 +491,14 @@ contract EngagementRewards is
     ) external onlyRole(ADMIN_ROLE) {
         rewardAmount = uint96(_rewardAmount);
         emit RewardAmountUpdated(_rewardAmount);
+    }
+
+    function setMaxAppsPerUser(
+        uint8 _maxAppsPerUser
+    ) external onlyRole(ADMIN_ROLE) {
+        require(_maxAppsPerUser > 0, "Rewards per user must be greater than 0");
+        maxAppsPerUser = _maxAppsPerUser;
+        emit MaxAppsPerUserUpdated(_maxAppsPerUser);
     }
 
     function getUserPeriodStats(

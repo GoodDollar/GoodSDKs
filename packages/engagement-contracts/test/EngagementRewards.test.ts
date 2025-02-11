@@ -724,7 +724,7 @@ describe("EngagementRewards", function () {
       };
 
       // Successfully claim from REWARDS_PER_USER apps
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         const app = additionalApps[i];
         const message = {
           app: await app.getAddress(),
@@ -737,7 +737,7 @@ describe("EngagementRewards", function () {
         await expect(
           app
             .connect(user)
-            .claimReward(inviter.address, validUntilBlock, signature),
+            .claimRewardWithReason(inviter.address, validUntilBlock, signature),
         ).to.emit(engagementRewards, "RewardClaimed");
       }
 
@@ -971,7 +971,6 @@ describe("EngagementRewards", function () {
 
       const signature = await user.signTypedData(domain, types, message);
 
-      console.log("user: ", user.address);
       await expect(
         unregisteredApp
           .connect(user)
@@ -1324,6 +1323,156 @@ describe("EngagementRewards", function () {
         engagementRewards,
         "AccessControlUnauthorizedAccount",
       );
+    });
+
+    it("Should allow admin to set rewards per user", async function () {
+      const { engagementRewards, admin } = await loadFixture(deployFixture);
+
+      const newmaxAppsPerUser = 5;
+      await expect(
+        engagementRewards.connect(admin).setMaxAppsPerUser(newmaxAppsPerUser),
+      )
+        .to.emit(engagementRewards, "MaxAppsPerUserUpdated")
+        .withArgs(newmaxAppsPerUser);
+      expect(await engagementRewards.maxAppsPerUser()).to.equal(
+        newmaxAppsPerUser,
+      );
+    });
+
+    it("Should not allow setting rewards per user to zero", async function () {
+      const { engagementRewards, admin } = await loadFixture(deployFixture);
+
+      await expect(
+        engagementRewards.connect(admin).setMaxAppsPerUser(0),
+      ).to.be.revertedWith("Rewards per user must be greater than 0");
+    });
+
+    it("Should not allow non-admin to set rewards per user", async function () {
+      const { engagementRewards, nonAdmin } = await loadFixture(deployFixture);
+
+      await expect(
+        engagementRewards.connect(nonAdmin).setMaxAppsPerUser(5),
+      ).to.be.revertedWithCustomError(
+        engagementRewards,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("Should allow more claims after increasing rewards per user limit", async function () {
+      const {
+        engagementRewards,
+        mockApp,
+        user,
+        inviter,
+        admin,
+        rewardReceiver,
+      } = await loadFixture(deployFixture);
+
+      // Deploy additional test apps
+      const additionalApps = await Promise.all(
+        Array(6)
+          .fill(0)
+          .map(async () => {
+            const app = await deployContract("MockApp", [
+              await engagementRewards.getAddress(),
+            ]);
+            await engagementRewards.applyApp(
+              await app.getAddress(),
+              rewardReceiver.address,
+              80,
+              75,
+              VALID_DESCRIPTION,
+              "https://example.com",
+              "contact@example.com",
+            );
+            await engagementRewards
+              .connect(admin)
+              .approve(await app.getAddress());
+            return app;
+          }),
+      );
+
+      const validUntilBlock = (await getValidBlockNumber(ethers.provider)) + 10;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      // Claim from default max number of apps (3)
+      for (let i = 0; i < 3; i++) {
+        const app = additionalApps[i];
+        const message = {
+          app: await app.getAddress(),
+          inviter: inviter.address,
+          validUntilBlock: validUntilBlock,
+          description: VALID_DESCRIPTION,
+        };
+        const signature = await user.signTypedData(domain, types, message);
+        await app
+          .connect(user)
+          .claimReward(inviter.address, validUntilBlock, signature);
+      }
+
+      // Try to claim from one more app - should fail
+      const message = {
+        app: await additionalApps[3].getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+      let signature = await user.signTypedData(domain, types, message);
+
+      await expect(
+        additionalApps[3]
+          .connect(user)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature),
+      ).to.be.revertedWith("Max apps per period reached");
+
+      // Increase rewards per user limit
+      await engagementRewards.connect(admin).setMaxAppsPerUser(5);
+
+      message.app = await additionalApps[3].getAddress();
+      signature = await user.signTypedData(domain, types, message);
+
+      // Should now be able to claim from more apps
+      await additionalApps[3]
+        .connect(user)
+        .claimRewardWithReason(inviter.address, validUntilBlock, signature);
+
+      message.app = await additionalApps[4].getAddress();
+      signature = await user.signTypedData(domain, types, message);
+
+      await additionalApps[4]
+        .connect(user)
+        .claimRewardWithReason(inviter.address, validUntilBlock, signature);
+
+      // Should still fail on 6th app
+      const message6 = {
+        app: await additionalApps[5].getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+      const signature6 = await user.signTypedData(domain, types, message6);
+
+      await expect(
+        additionalApps[5]
+          .connect(user)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature6),
+      ).to.be.revertedWith("Max apps per period reached");
     });
   });
 
