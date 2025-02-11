@@ -21,8 +21,16 @@ describe("EngagementRewards", function () {
   const VALID_DESCRIPTION =
     "Valid Description for an app is longer than 50 chars";
   async function deployFixture() {
-    const [owner, admin, appOwner, user, nonAdmin, inviter, rewardReceiver] =
-      await ethers.getSigners();
+    const [
+      owner,
+      admin,
+      appOwner,
+      user,
+      nonAdmin,
+      inviter,
+      rewardReceiver,
+      nonContractApp,
+    ] = await ethers.getSigners();
 
     const rewardToken = (await deployContract("MockERC20", [
       "RewardToken",
@@ -59,8 +67,23 @@ describe("EngagementRewards", function () {
         "https://example.com",
         "contact@example.com",
       );
+
+    // Apply for app registration with rewardReceiver and description
+    await engagementRewards
+      .connect(appOwner)
+      .applyApp(
+        nonContractApp.address,
+        rewardReceiver.address,
+        80,
+        75,
+        VALID_DESCRIPTION,
+        "https://example.com",
+        "contact@example.com",
+      );
+
     // Admin approves the app
     await engagementRewards.connect(admin).approve(await mockApp.getAddress());
+    await engagementRewards.connect(admin).approve(nonContractApp.address);
 
     await identityContract.setWhitelistedRoot(user.address, user.address);
     await rewardToken.transfer(
@@ -80,6 +103,7 @@ describe("EngagementRewards", function () {
       nonAdmin,
       inviter,
       rewardReceiver,
+      nonContractApp,
     };
   }
 
@@ -437,15 +461,15 @@ describe("EngagementRewards", function () {
       message.validUntilBlock = newValidUntilBlock;
       const signature2 = await user.signTypedData(domain, types, message);
 
-      expect(
-        await mockApp
+      await expect(
+        mockApp
           .connect(user)
-          .claimReward.staticCall(
+          .claimRewardWithReason(
             inviter.address,
             newValidUntilBlock,
             signature2,
           ),
-      ).to.be.false;
+      ).to.be.revertedWith("Claim cooldown not reached");
     });
 
     it("Should allow claiming after cooldown period", async function () {
@@ -610,7 +634,7 @@ describe("EngagementRewards", function () {
     });
 
     it("Should allow claiming with signature and register user", async function () {
-      const { engagementRewards, mockApp, user, inviter } =
+      const { engagementRewards, mockApp, user, inviter, appOwner } =
         await loadFixture(deployFixture);
 
       const validUntilBlock = await getValidBlockNumber(ethers.provider);
@@ -642,14 +666,43 @@ describe("EngagementRewards", function () {
       const signature = await user.signTypedData(domain, types, message);
       const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
+      // Get app signature
+      const appDomain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const appTypes = {
+        AppClaim: [
+          { name: "app", type: "address" },
+          { name: "user", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+        ],
+      };
+
+      const appMessage = {
+        app: await mockApp.getAddress(),
+        user: user.address,
+        validUntilBlock: validUntilBlock,
+      };
+
+      const appSignature = await appOwner.signTypedData(
+        appDomain,
+        appTypes,
+        appMessage,
+      );
+
       await expect(
         engagementRewards
           .connect(user)
-          .eoaClaim(
+          .nonContractAppClaim(
             await mockApp.getAddress(),
             inviter.address,
             validUntilBlock,
             signature,
+            appSignature,
           ),
       )
         .to.emit(engagementRewards, "RewardClaimed")
@@ -1089,6 +1142,167 @@ describe("EngagementRewards", function () {
           .claimRewardWithReason(inviter.address, validUntilBlock, signature2),
       ).to.emit(engagementRewards, "RewardClaimed");
     });
+
+    it("Should allow claiming with both user and app signatures", async function () {
+      const { engagementRewards, user, inviter, nonContractApp } =
+        await loadFixture(deployFixture);
+
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      // Get user signature
+      const userDomain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const userTypes = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const userMessage = {
+        app: nonContractApp.address,
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const userSignature = await user.signTypedData(
+        userDomain,
+        userTypes,
+        userMessage,
+      );
+
+      // Get app signature
+      const appDomain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const appTypes = {
+        AppClaim: [
+          { name: "app", type: "address" },
+          { name: "user", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+        ],
+      };
+
+      const appMessage = {
+        app: nonContractApp.address,
+        user: user.address,
+        validUntilBlock: validUntilBlock,
+      };
+
+      const appSignature = await nonContractApp.signTypedData(
+        appDomain,
+        appTypes,
+        appMessage,
+      );
+
+      await expect(
+        engagementRewards
+          .connect(user)
+          .nonContractAppClaim(
+            nonContractApp.address,
+            inviter.address,
+            validUntilBlock,
+            userSignature,
+            appSignature,
+          ),
+      ).to.emit(engagementRewards, "RewardClaimed");
+    });
+
+    it("Should not allow claiming with invalid app signature", async function () {
+      const {
+        engagementRewards,
+        user,
+        inviter,
+        nonAdmin,
+        nonContractApp: mockApp,
+      } = await loadFixture(deployFixture);
+
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      // Get user signature
+      const userDomain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const userTypes = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const userMessage = {
+        app: mockApp.address,
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const userSignature = await user.signTypedData(
+        userDomain,
+        userTypes,
+        userMessage,
+      );
+
+      // Get invalid app signature from non-owner
+      const appDomain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const appTypes = {
+        AppClaim: [
+          { name: "app", type: "address" },
+          { name: "user", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+        ],
+      };
+
+      const appMessage = {
+        app: mockApp.address,
+        user: user.address,
+        validUntilBlock: validUntilBlock,
+      };
+
+      const invalidAppSignature = await nonAdmin.signTypedData(
+        appDomain,
+        appTypes,
+        appMessage,
+      );
+
+      await expect(
+        engagementRewards
+          .connect(user)
+          .nonContractAppClaim(
+            mockApp.address,
+            inviter.address,
+            validUntilBlock,
+            userSignature,
+            invalidAppSignature,
+          ),
+      ).to.be.revertedWith("Invalid app signature");
+    });
   });
 
   describe("Claim with Signature", function () {
@@ -1125,12 +1339,15 @@ describe("EngagementRewards", function () {
       const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
       await expect(
-        engagementRewards.eoaClaim(
-          await mockApp.getAddress(),
-          inviter.address,
-          validUntilBlock,
-          signature,
-        ),
+        engagementRewards
+          .connect(user)
+          .nonContractAppClaim(
+            await mockApp.getAddress(),
+            inviter.address,
+            validUntilBlock,
+            signature,
+            "0x",
+          ),
       )
         .to.emit(engagementRewards, "RewardClaimed")
         .withArgs(
@@ -1176,12 +1393,15 @@ describe("EngagementRewards", function () {
       const signature = await user.signTypedData(domain, types, message);
       const appReward = (REWARD_AMOUNT * BigInt(20)) / BigInt(100); // 20% goes to app
 
-      await engagementRewards.eoaClaim(
-        await mockApp.getAddress(),
-        inviter.address,
-        validUntilBlock,
-        signature,
-      );
+      await engagementRewards
+        .connect(user)
+        .nonContractAppClaim(
+          await mockApp.getAddress(),
+          inviter.address,
+          validUntilBlock,
+          signature,
+          "0x",
+        );
 
       const appStats = await engagementRewards.appsStats(
         await mockApp.getAddress(),
@@ -1227,11 +1447,12 @@ describe("EngagementRewards", function () {
       const signature = await user.signTypedData(domain, types, message);
 
       await expect(
-        engagementRewards.eoaClaim(
+        engagementRewards.nonContractAppClaim(
           await mockApp.getAddress(),
           inviter.address,
           currentBlock,
           signature,
+          "0x",
         ),
       ).to.be.revertedWith("Signature expired");
     });
@@ -1268,11 +1489,12 @@ describe("EngagementRewards", function () {
       const signature = await user.signTypedData(domain, types, message);
 
       await expect(
-        engagementRewards.eoaClaim(
+        engagementRewards.nonContractAppClaim(
           await mockApp.getAddress(),
           inviter.address,
           farFutureBlock,
           signature,
+          "0x",
         ),
       ).to.be.revertedWith("ValidUntilBlock too far in future");
     });

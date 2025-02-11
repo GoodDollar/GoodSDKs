@@ -24,6 +24,7 @@ const engagementRewardsABI = parseAbi([
   "function appClaim(address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
   "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint8 userAndInviterPercentage, uint8 userPercentage) external returns (bool)",
   "function eoaClaim(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
+  "function nonContractAppClaim(address app, address inviter, uint256 nonce, bytes memory userSignature, bytes memory appSignature) external returns (bool)",
   "event AppApplied(address indexed app, address indexed owner, address rewardReceiver, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
   "event AppApproved(address indexed app)",
   "event AppSettingsUpdated(address indexed app, uint256 userAndInviterPercentage, uint256 userPercentage)",
@@ -166,19 +167,20 @@ export class EngagementRewardsSDK {
     });
   }
 
-  async eoaClaim(
+  async nonContractAppClaim(
     app: Address,
     inviter: Address,
     nonce: bigint,
-    signature: `0x${string}`,
+    userSignature: `0x${string}`,
+    appSignature: `0x${string}`,
     onHash?: (hash: `0x${string}`) => void,
   ) {
     return this.submitAndWait(
       {
         address: this.contractAddress,
         abi: engagementRewardsABI,
-        functionName: "eoaClaim",
-        args: [app, inviter, nonce, signature],
+        functionName: "nonContractAppClaim",
+        args: [app, inviter, nonce, userSignature, appSignature],
       },
       onHash,
     );
@@ -239,6 +241,36 @@ export class EngagementRewardsSDK {
       primaryType: "Claim",
       message,
     });
+  }
+
+  // Add new method to prepare app signature
+  async prepareAppSignature(
+    app: Address,
+    user: Address,
+    validUntilBlock: bigint,
+  ) {
+    const domain = {
+      name: "EngagementRewards",
+      version: "1.0",
+      chainId: await this.publicClient.getChainId(),
+      verifyingContract: this.contractAddress,
+    };
+
+    const types = {
+      AppClaim: [
+        { name: "app", type: "address" },
+        { name: "user", type: "address" },
+        { name: "validUntilBlock", type: "uint256" },
+      ],
+    };
+
+    const message = {
+      app,
+      user,
+      validUntilBlock,
+    };
+
+    return { domain, types, message };
   }
 
   async getPendingApps() {

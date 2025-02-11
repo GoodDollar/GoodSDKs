@@ -15,7 +15,7 @@ import { SigningModal } from "./SigningModal"
 
 
 const ClaimForm: React.FC = () => {
-  const { isConnected, chainId } = useAccount()
+  const { isConnected, chainId, address } = useAccount()
   const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
   const { toast } = useToast()
   const { signTypedDataAsync } = useSignTypedData()
@@ -62,7 +62,11 @@ const ClaimForm: React.FC = () => {
       return;
     }
 
-    await wrapWithSigningModal(async () => {
+    await wrapWithSigningModal(async () => {      
+      const currentBlock = await engagementRewards.getCurrentBlockNumber();
+      const validUntilBlock = currentBlock + 10n;
+
+      // Get user signature
       const domain = {
         name: "EngagementRewards",
         version: "1.0",
@@ -79,28 +83,44 @@ const ClaimForm: React.FC = () => {
         ],
       };
 
-      const currentBlock = await engagementRewards.getCurrentBlockNumber();
-
       const message = {
         app: app,
         inviter: inviter || zeroAddress,
-        validUntilBlock: currentBlock,
+        validUntilBlock: validUntilBlock,
         description: appDescription,
       };
 
-      const signature = await signTypedDataAsync({
+      const userSignature = await signTypedDataAsync({
         domain,
         types,
         message,
         primaryType: "Claim",
       });
 
-      const receipt = await engagementRewards.eoaClaim(
+      // Get app signature
+      const { domain: appDomain, types: appTypes, message: appMessage } = 
+        await engagementRewards.prepareAppSignature(
+          app as `0x${string}`,
+          address as `0x${string}`,
+          validUntilBlock
+        );
+
+      // For demo purposes we're using the connected wallet to sign
+      // In production the app owner should sign server-side
+      const appSignature = await signTypedDataAsync({
+        domain: appDomain,
+        types: appTypes,
+        message: appMessage,
+        primaryType: "AppClaim",
+      });
+
+      const receipt = await engagementRewards.nonContractAppClaim(
         app as `0x${string}`,
         message.inviter as `0x${string}`,
-        currentBlock,
-        signature,
-        (hash) => {
+        validUntilBlock,
+        userSignature,
+        appSignature,
+        (hash: string) => {
           toast({
             title: "Transaction Submitted",
             description: `Transaction hash: ${hash}`,

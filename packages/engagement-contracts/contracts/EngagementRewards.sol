@@ -3,11 +3,11 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 // import "hardhat/console.sol";
 
@@ -22,13 +22,13 @@ contract EngagementRewards is
     UUPSUpgradeable,
     ReentrancyGuardUpgradeable
 {
-    using ECDSA for bytes32;
-
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 private constant CLAIM_TYPEHASH =
         keccak256(
             "Claim(address app,address inviter,uint256 validUntilBlock,string description)"
         );
+    bytes32 private constant APP_CLAIM_TYPEHASH =
+        keccak256("AppClaim(address app,address user,uint256 validUntilBlock)");
 
     IERC20 public rewardToken;
     IIdentity public identityContract;
@@ -251,12 +251,14 @@ contract EngagementRewards is
     }
 
     function appClaim(
+        address user,
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature
     ) public returns (bool) {
         return
             _claim(
+                user,
                 msg.sender,
                 inviter,
                 validUntilBlock,
@@ -268,6 +270,7 @@ contract EngagementRewards is
     }
 
     function appClaim(
+        address user,
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature,
@@ -282,6 +285,7 @@ contract EngagementRewards is
 
         return
             _claim(
+                user,
                 msg.sender,
                 inviter,
                 validUntilBlock,
@@ -292,21 +296,59 @@ contract EngagementRewards is
             );
     }
 
-    function eoaClaim(
+    function nonContractAppClaim(
         address app,
         address inviter,
         uint256 validUntilBlock,
-        bytes memory signature
+        bytes memory userSignature,
+        bytes memory appSignature
     ) public returns (bool) {
-        return _claim(app, inviter, validUntilBlock, signature, 0, 0, false);
+        // Validate app signature first
+        require(
+            _validateAppSignature(
+                app,
+                msg.sender,
+                validUntilBlock,
+                appSignature
+            ),
+            "Invalid app signature"
+        );
+
+        return
+            _claim(
+                msg.sender,
+                app,
+                inviter,
+                validUntilBlock,
+                userSignature,
+                0,
+                0,
+                false
+            );
+    }
+
+    function _validateAppSignature(
+        address app,
+        address user,
+        uint256 validUntilBlock,
+        bytes memory signature
+    ) internal view returns (bool) {
+        bytes32 structHash = keccak256(
+            abi.encode(APP_CLAIM_TYPEHASH, app, user, validUntilBlock)
+        );
+        bytes32 hash = _hashTypedDataV4(structHash);
+
+        // Change ECDSA recover to SignatureChecker
+        return SignatureChecker.isValidSignatureNow(app, hash, signature);
     }
 
     function _validateSignature(
+        address user,
         address app,
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature
-    ) internal returns (address) {
+    ) internal view {
         require(
             validUntilBlock <= block.number + 50,
             "ValidUntilBlock too far in future"
@@ -325,13 +367,16 @@ contract EngagementRewards is
             )
         );
         bytes32 hash = _hashTypedDataV4(structHash);
-        address signer = hash.recover(signature);
-        userRegistrations[app][signer].isRegistered = uint32(block.timestamp);
 
-        return signer;
+        // Change ECDSA recover to SignatureChecker
+        require(
+            SignatureChecker.isValidSignatureNow(user, hash, signature),
+            "Invalid user signature"
+        );
     }
 
     function _claim(
+        address sender,
         address app,
         address inviter,
         uint256 validUntilBlock,
@@ -340,16 +385,17 @@ contract EngagementRewards is
         uint256 userPercentage,
         bool overridePercentages
     ) internal nonReentrant returns (bool) {
-        address sender = tx.origin;
+        address user = identityContract.getWhitelistedRoot(sender);
         if (validUntilBlock > 0 && signature.length > 0) {
-            sender = _validateSignature(
+            _validateSignature(
+                sender,
                 app,
                 inviter,
                 validUntilBlock,
                 signature
             );
+            userRegistrations[app][user].isRegistered = uint32(block.timestamp);
         }
-        address user = identityContract.getWhitelistedRoot(sender);
         if (!canClaim(app, user)) return false;
 
         updateClaimInfo(app, user);
