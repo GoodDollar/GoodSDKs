@@ -137,17 +137,28 @@ const IntegrationGuide: React.FC = () => {
                   language="solidity" 
                   code={`interface IEngagementRewards {
     function appClaim(
+        address user,
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature
     ) external returns (bool);
 
     function appClaim(
+        address user,
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature,
         uint8 userAndInviterPercentage,
         uint8 userPercentage
+    ) external returns (bool);
+
+    // For non-contract apps that need to provide their signature
+    function nonContractAppClaim(
+        address app,
+        address inviter,
+        uint256 validUntilBlock,
+        bytes memory userSignature,
+        bytes memory appSignature
     ) external returns (bool);
 }`} 
                 />
@@ -172,7 +183,7 @@ contract GameApp {
         engagementRewards = IEngagementRewards(_engagementRewards);
     }
 
-    // Example 1: Simple reward claim after winning a game
+    // Example 1: Direct claim from contract
     function winGame(
         uint256 score,
         uint8 difficulty,
@@ -185,12 +196,13 @@ contract GameApp {
         
         // Try to claim reward but don't block game progress
         try engagementRewards.appClaim(
+            msg.sender,
             inviter,
             validUntilBlock,
             signature
         ) returns (bool success) {
             if (!success) {
-                emit RewardClaimFailed("Basic claim returned false");
+                emit RewardClaimFailed("Claim returned false");
             }
         } catch Error(string memory reason) {
             emit RewardClaimFailed(reason);
@@ -204,19 +216,19 @@ contract GameApp {
 
     // Example 2: Advanced reward with custom amounts based on achievement
     function completeAchievement(
-        string calldata achievementId,
-        uint256[] calldata proof,
         address inviter,
+        string calldata achievementId,
         uint256 validUntilBlock,
         bytes memory signature
     ) external {
-        require(_verifyAchievement(achievementId, proof), "Invalid achievement");
+        require(_verifyAchievement(achievementId), "Invalid achievement");
         
         // Calculate rewards based on player stats (returns uint8)
         uint8 userInviterShare = calculateUserInviterShare(msg.sender);
         uint8 userShare = calculateUserShare(msg.sender);
 
         try engagementRewards.appClaim(
+            msg.sender,
             inviter,
             validUntilBlock,
             signature,
@@ -224,7 +236,7 @@ contract GameApp {
             userShare
         ) returns (bool success) {
             if (!success) {
-                emit RewardClaimFailed("Achievement claim returned false");
+                emit RewardClaimFailed("Achievement claim failed");
             }
         } catch Error(string memory reason) {
             emit RewardClaimFailed(reason);
@@ -253,7 +265,7 @@ contract GameApp {
         return true;
     }
 
-    function _verifyAchievement(string calldata id, uint256[] calldata proof) internal pure returns (bool) {
+    function _verifyAchievement(string calldata id) internal pure returns (bool) {
         // Your achievement verification logic
         return true;
     }
@@ -271,6 +283,70 @@ contract GameApp {
     event RewardClaimFailed(string reason);
 }`} 
                 />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Frontend Integration with Smart Contract App</h3>
+                <CodeBlock 
+                  language="typescript" 
+                  code={`// Example of frontend integration with GameApp contract
+import { useContractWrite } from 'wagmi'
+import { useEngagementRewards, DEV_REWARDS_CONTRACT, REWARDS_CONTRACT } from '@goodsdks/engagement-sdk'
+
+const GameComponent = () => {
+  const { data: gameApp } = useContract({
+    address: GAME_APP_ADDRESS,
+    abi: gameAppABI
+  })
+  const engagementRewards = useEngagementRewards(REWARDS_CONTRACT)
+
+  const handleWinGame = async (score: number, difficulty: number, inviter: string) => {
+    try {
+      // 1. Get current block for signature
+      const currentBlock = await engagementRewards.getCurrentBlockNumber()
+      const validUntilBlock = currentBlock + 10n // Valid for 10 blocks
+
+      // Generate signature for first-time users or after app re-apply
+      let signature = "0x"
+      if (!(await engagementRewards.isUserRegistered(GAME_APP_ADDRESS, userAddress))) {
+        signature = await engagementRewards.signClaim(
+          APP_ADDRESS,
+          INVITER_ADDRESS,
+          validUntilBlock
+        )
+      }
+
+      // 5. Generate game proof (implementation depends on your game)
+      const gameProof = await generateGameProof(score, difficulty)
+
+      // 6. Call the game contract
+      const tx = await gameApp.write.winGame([
+        score,
+        difficulty,
+        inviter,
+        validUntilBlock,
+        signature,
+        gameProof
+      ])
+
+      await tx.wait()
+      console.log('Game win and reward claim processed!')
+    } catch (error) {
+      console.error('Error processing game win:', error)
+    }
+  }`} 
+                />
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Smart Contract Integration Notes</h3>
+                <ul className="list-disc pl-6 space-y-2">
+                  <li>User signature is only needed for first-time registration with your app</li>
+                  <li>Subsequent claims can pass empty signature (0x)</li>
+                  <li>Your contract is responsible for validating game/achievement proofs</li>
+                  <li>Reward claiming should not block core game functionality</li>
+                  <li>Consider implementing fallback logic if reward claiming fails</li>
+                </ul>
               </div>
 
               <div className="space-y-4">
@@ -299,10 +375,10 @@ contract GameApp {
                 <h3 className="text-lg font-semibold mb-2">1. SDK Setup</h3>
                 <CodeBlock 
                   language="typescript" 
-                  code={`import { useEngagementRewards } from '@goodsdks/engagement-sdk'
+                  code={`import { useEngagementRewards,REWARDS_CONTRACT,DEV_REWARDS_CONTRACT } from '@goodsdks/engagement-sdk'
 
 const MyComponent = () => {
-  const engagementRewards = useEngagementRewards(REWARDS_CONTRACT_ADDRESS)
+  const engagementRewards = useEngagementRewards(REWARDS_CONTRACT)
   
   // SDK is ready when hook returns non-null
   if (!engagementRewards) return null
@@ -317,7 +393,7 @@ const MyComponent = () => {
                   code={`const handleClaim = async () => {
   try {
     // First check if user can claim
-    const isEligible = await engagementRewards.canClaim(APP_ADDRESS, userAddress)
+    const isEligible = await engagementRewards.canClaim(APP_ADDRESS, userAddress).catch(_ => false)
     if (!isEligible) {
       throw new Error("User not eligible to claim")
     }
@@ -332,60 +408,155 @@ const MyComponent = () => {
       signature = await engagementRewards.signClaim(
         APP_ADDRESS,
         INVITER_ADDRESS,
-        validUntilBlock,
-        "Initial registration claim"
+        validUntilBlock
       )
     }
 
-    // Submit claim with custom percentages
-    const userInviterPercentage = 80 // 80% for users+inviters
-    const userPercentage = 75 // 75% of user+inviter share goes to user
 
-    const receipt = await engagementRewards.eoaClaim(
+    // Get app signature from backend
+    const appSignature = await getAppSignature({
+      user: userAddress,
+      validUntilBlock: validUntilBlock.toString(),
+      inviter: INVITER_ADDRESS
+    })
+      
+    // Submit claim
+    const receipt = await engagementRewards.nonContractAppClaim(
       APP_ADDRESS,
       INVITER_ADDRESS,
       validUntilBlock,
-      signature,
-      userInviterPercentage,
-      userPercentage,
-      (hash) => console.log("Transaction submitted:", hash)
+      userSignature,
+      appSignature
+    )
+  } catch (error) {
+    console.error("Claim failed:", error)
+  }
+}`}/>
+
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">3. Get App Signature from Backend</h3>
+                <CodeBlock 
+                  language="typescript" 
+                  code={`// Example of getting app signature from backend
+const getAppSignature = async (params: {
+  user: string,
+  validUntilBlock: string,
+  inviter: string
+}) => {
+  try {
+    const response = await fetch('https://your-backend/api/sign-claim', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': \`Bearer \${YOUR_AUTH_TOKEN}\`
+      },
+      body: JSON.stringify(params)
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to get app signature')
+    }
+
+    const { signature } = await response.json()
+    return signature as \`0x\${string}\`
+  } catch (error) {
+    console.error('Error getting app signature:', error)
+    throw new Error('Failed to get app signature')
+  }
+}`}/>
+
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">4. Backend Implementation Example</h3>
+                <CodeBlock 
+                  language="typescript" 
+                  code={`// Example Node.js/Express backend endpoint
+import { ethers } from 'ethers'
+import { REWARDS_CONTRACT,DEV_REWARDS_CONTRACT } from '@goodsdks/engagement-sdk'
+
+import express from 'express'
+
+const router = express.Router()
+
+// App configuration should be in environment variables
+const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY!
+const APP_ADDRESS = process.env.APP_ADDRESS!
+const CHAIN_ID = Number(process.env.CHAIN_ID!)
+
+// Initialize wallet for signing
+const signer = new ethers.Wallet(APP_PRIVATE_KEY)
+
+router.post('/api/sign-claim', async (req, res) => {
+  try {
+    const { user, validUntilBlock, inviter } = req.body
+    if (!user || !validUntilBlock) {
+      return res.status(400).json({ error: 'Missing required parameters' })
+    }
+
+    // Validate user is authorized to request signature
+    if (!isAuthorized(req)) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // Prepare app signature parameters
+    const domain = {
+      name: "EngagementRewards",
+      version: "1.0",
+      chainId: CHAIN_ID,
+      verifyingContract: REWARDS_CONTRACT
+    }
+
+    const types = {
+      AppClaim: [
+        { name: "app", type: "address" },
+        { name: "user", type: "address" },
+        { name: "validUntilBlock", type: "uint256" }
+      ]
+    }
+
+    const message = {
+      app: APP_ADDRESS,
+      user,
+      validUntilBlock
+    }
+
+    // Sign the claim
+    const signature = await signer.signTypedData(
+      domain,
+      types,
+      message
     )
 
-    if (receipt?.status === "success") {
-      console.log("Claim successful")
-    }
+    // Log signature request for auditing
+    await logSignatureRequest({
+      app: APP_ADDRESS,
+      user,
+      inviter,
+      validUntilBlock,
+      signature
+    })
+
+    return res.json({ signature })
   } catch (error) {
-    if (error.message.includes("Claim cooldown not reached")) {
-      console.error("User must wait before claiming again")
-    } else if (error.message.includes("User not registered")) {
-      console.error("User is not whitelisted")
-    } else {
-      console.error("Claim failed:", error)
-    }
+    console.error('Error signing message:', error)
+    return res.status(500).json({ error: 'Failed to sign message' })
   }
-}`} 
-                />
+})`}/>
+
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Troubleshooting Checklist</h3>
+                <h3 className="text-lg font-semibold">Security Considerations</h3>
                 <ul className="list-disc pl-6 space-y-2">
-                  <li>User wallet is connected and has sufficient gas</li>
-                  <li>App is registered and approved</li>
-                  <li>User is whitelisted in Identity contract</li>
-                  <li>Cooldown period has elapsed since last claim</li>
-                  <li>App hasn't reached maximum rewards</li>
-                  <li>Signature hasn't expired (block number hasn't passed)</li>
-                  <li>Contract has sufficient reward tokens</li>
-                </ul>
-
-                <h3 className="text-lg font-semibold mt-6">Best Practices</h3>
-                <ul className="list-disc pl-6 space-y-2">
-                  <li>Always check if user can claim before requesting signature</li>
-                  <li>Implement proper error handling and user feedback</li>
-                  <li>Monitor transaction status and provide feedback</li>
-                  <li>Cache claim timestamps to avoid unnecessary transactions</li>
-                  <li>Keep validUntilBlock reasonable (5-10 blocks ahead)</li>
+                  <li>Never expose your app's private key in frontend code</li>
+                  <li>Implement proper authentication for signature requests</li>
+                  <li>Add rate limiting to prevent signature request abuse</li>
+                  <li>Validate all user inputs on the backend</li>
+                  <li>Keep logs of all signature requests for auditing</li>
+                  <li>Consider using a dedicated signing service/HSM for production</li>
                 </ul>
               </div>
             </CardContent>

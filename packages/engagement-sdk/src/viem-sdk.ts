@@ -7,6 +7,15 @@ import {
 } from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 
+import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json";
+// import prod from "@goodsdks/engagement-contracts/ignition/deployments/chain-42220/deployed_addresses.json";
+const prod = {} as typeof devdeployments;
+
+export const DEV_REWARDS_CONTRACT =
+  devdeployments["EngagementRewardsUpgrade#EngagementRewards"];
+export const REWARDS_CONTRACT =
+  prod?.["EngagementRewardsUpgrade#EngagementRewards"];
+
 const BLOCKS_AGO = BigInt(100000);
 const WAIT_DELAY = 5000; // 1 second delay
 
@@ -222,16 +231,16 @@ export class EngagementRewardsSDK {
     app: Address,
     inviter: Address,
     validUntilBlock: bigint,
-    description: string,
   ): Promise<`0x${string}`> {
     const [account] = await this.walletClient.getAddresses();
     if (!account) throw new Error("No account available");
 
+    const appInfo = await this.getAppInfo(app);
     const { domain, types, message } = await this.prepareClaimSignature(
       app,
       inviter,
       validUntilBlock,
-      description,
+      appInfo[9], // description,
     );
 
     return this.walletClient.signTypedData({

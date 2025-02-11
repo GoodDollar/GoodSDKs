@@ -185,12 +185,12 @@ const ApplyForm: React.FC = () => {
                 name="app"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>App Contract Address</FormLabel>
+                    <FormLabel>App Address</FormLabel>
                     <FormControl>
                       <Input placeholder="0x..." {...field} />
                     </FormControl>
                     <FormDescription>
-                      The contract address of your app or a unique address as id
+                      The contract address of your app or a backend wallet signer address
                     </FormDescription>
                     {verificationStatus.checked && !verificationStatus.isContract && (
                       <Alert variant="destructive">
