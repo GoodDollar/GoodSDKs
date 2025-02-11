@@ -35,6 +35,7 @@ contract EngagementRewards is
 
     uint256 public constant CLAIM_COOLDOWN = 180 days;
     uint256 public constant APP_EXPIRATION = 365 days;
+    uint8 public constant REWARDS_PER_USER = 3; // Max number of apps user can claim from per period
 
     uint96 public maxRewardsPerApp;
     uint96 public rewardAmount;
@@ -67,9 +68,15 @@ contract EngagementRewards is
         uint32 lastClaimTimestamp; // 4 bytes
     }
 
+    struct UserGlobalInfo {
+        uint8 periodClaims; // 2 bytes
+        uint32 lastClaimTimestamp; // 4 bytes
+    }
+
     mapping(address => AppInfo) public registeredApps;
     mapping(address => AppStats) public appsStats;
     mapping(address => mapping(address => UserInfo)) public userRegistrations;
+    mapping(address => UserGlobalInfo) public userPeriodClaims;
 
     event AppApplied(
         address indexed app,
@@ -344,12 +351,9 @@ contract EngagementRewards is
         address user = identityContract.getWhitelistedRoot(sender);
         if (!canClaim(app, user)) return false;
 
-        AppInfo storage appInfo = registeredApps[app];
-        if (!appInfo.isRegistered || !appInfo.isApproved) return false;
-        if (appInfo.registeredAt + APP_EXPIRATION < block.timestamp)
-            return false;
+        updateClaimInfo(app, user);
 
-        if (updateClaimInfo(app, user) == false) return false;
+        AppInfo storage appInfo = registeredApps[app];
 
         _sendReward(
             app,
@@ -422,29 +426,57 @@ contract EngagementRewards is
             rewardToken.balanceOf(address(this)) >= rewardAmount,
             "Insufficient reward token balance"
         );
+        AppInfo storage appInfo = registeredApps[app];
+        UserGlobalInfo storage userGlobal = userPeriodClaims[user];
+
+        // Check if user hasn't exceeded max apps per period
+        require(
+            userGlobal.periodClaims < REWARDS_PER_USER ||
+                block.timestamp >=
+                userGlobal.lastClaimTimestamp + CLAIM_COOLDOWN,
+            "Max apps per period reached"
+        );
+
+        require(
+            appInfo.isRegistered && appInfo.isApproved,
+            "App not approved or registered"
+        );
+
+        require(
+            appInfo.registeredAt + APP_EXPIRATION > block.timestamp,
+            "App registration expired"
+        );
+
+        require(
+            block.timestamp >= appInfo.lastResetAt + CLAIM_COOLDOWN ||
+                appInfo.totalRewardsClaimed + rewardAmount <= maxRewardsPerApp,
+            "App maxed rewards"
+        );
+
         return true;
     }
 
-    function updateClaimInfo(
-        address app,
-        address user
-    ) internal returns (bool) {
+    function updateClaimInfo(address app, address user) internal {
         userRegistrations[app][user].lastClaimTimestamp = uint32(
             block.timestamp
         );
 
         AppInfo storage appInfo = registeredApps[app];
+        UserGlobalInfo storage userGlobal = userPeriodClaims[user];
 
         if (block.timestamp >= appInfo.lastResetAt + CLAIM_COOLDOWN) {
             appInfo.totalRewardsClaimed = 0;
             appInfo.lastResetAt = uint32(block.timestamp);
         }
 
-        if (appInfo.totalRewardsClaimed + rewardAmount > maxRewardsPerApp)
-            return false;
+        // Reset period claims if cooldown has passed
+        if (block.timestamp >= userGlobal.lastClaimTimestamp + CLAIM_COOLDOWN) {
+            userGlobal.periodClaims = 0;
+            userGlobal.lastClaimTimestamp = uint32(block.timestamp);
+        }
 
+        userGlobal.periodClaims += 1;
         appInfo.totalRewardsClaimed += rewardAmount;
-        return true;
     }
 
     function setMaxRewardsPerApp(
@@ -458,6 +490,23 @@ contract EngagementRewards is
     ) external onlyRole(ADMIN_ROLE) {
         rewardAmount = uint96(_rewardAmount);
         emit RewardAmountUpdated(_rewardAmount);
+    }
+
+    function getUserPeriodStats(
+        address user
+    )
+        external
+        view
+        returns (uint8 appsClaimedThisPeriod, uint32 periodStartTimestamp)
+    {
+        UserGlobalInfo storage userGlobal = userPeriodClaims[user];
+
+        // If cooldown has passed, user is in a new period
+        if (block.timestamp >= userGlobal.lastClaimTimestamp + CLAIM_COOLDOWN) {
+            return (0, uint32(block.timestamp));
+        }
+
+        return (userGlobal.periodClaims, userGlobal.lastClaimTimestamp);
     }
 
     function getDomainSeparator() external view returns (bytes32) {

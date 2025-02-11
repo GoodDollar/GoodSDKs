@@ -668,6 +668,428 @@ describe("EngagementRewards", function () {
       );
       expect(userInfo.isRegistered).to.be.gt(0);
     });
+
+    it("Should not allow claiming from more than REWARDS_PER_USER apps in a period", async function () {
+      const {
+        engagementRewards,
+        mockApp,
+        user,
+        inviter,
+        rewardReceiver,
+        admin,
+      } = await loadFixture(deployFixture);
+
+      // Deploy additional test apps
+      const additionalApps = await Promise.all(
+        Array(5)
+          .fill(0)
+          .map(async () => {
+            const app = await deployContract("MockApp", [
+              await engagementRewards.getAddress(),
+            ]);
+            await engagementRewards.applyApp(
+              await app.getAddress(),
+              rewardReceiver.address,
+              80,
+              75,
+              VALID_DESCRIPTION,
+              "https://example.com",
+              "contact@example.com",
+            );
+            await engagementRewards
+              .connect(admin)
+              .approve(await app.getAddress());
+            return app;
+          }),
+      );
+
+      const validUntilBlock = (await getValidBlockNumber(ethers.provider)) + 10;
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      // Setup signature params
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      // Successfully claim from REWARDS_PER_USER apps
+      for (let i = 0; i < 5; i++) {
+        const app = additionalApps[i];
+        const message = {
+          app: await app.getAddress(),
+          inviter: inviter.address,
+          validUntilBlock: validUntilBlock,
+          description: VALID_DESCRIPTION,
+        };
+        const signature = await user.signTypedData(domain, types, message);
+
+        await expect(
+          app
+            .connect(user)
+            .claimReward(inviter.address, validUntilBlock, signature),
+        ).to.emit(engagementRewards, "RewardClaimed");
+      }
+
+      // Try to claim from one more app - should fail
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+      const signature = await user.signTypedData(domain, types, message);
+
+      await expect(
+        mockApp
+          .connect(user)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature),
+      ).to.be.revertedWith("Max apps per period reached");
+    });
+
+    it("Should reset apps per period count after cooldown", async function () {
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
+
+      // First claim
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await mockApp
+        .connect(user)
+        .claimRewardWithReason(inviter.address, validUntilBlock, signature);
+
+      // Check period stats
+      let stats = await engagementRewards.getUserPeriodStats(user.address);
+      expect(stats.appsClaimedThisPeriod).to.equal(1);
+
+      // Advance time past cooldown
+      await time.increase(CLAIM_COOLDOWN);
+
+      // Check period stats are reset
+      stats = await engagementRewards.getUserPeriodStats(user.address);
+      expect(stats.appsClaimedThisPeriod).to.equal(0);
+
+      // Should be able to claim again
+      const newValidUntilBlock = await getValidBlockNumber(ethers.provider);
+      const newMessage = { ...message, validUntilBlock: newValidUntilBlock };
+      const newSignature = await user.signTypedData(domain, types, newMessage);
+
+      await expect(
+        mockApp
+          .connect(user)
+          .claimReward(inviter.address, newValidUntilBlock, newSignature),
+      ).to.emit(engagementRewards, "RewardClaimed");
+
+      // Check period stats updated
+      stats = await engagementRewards.getUserPeriodStats(user.address);
+      expect(stats.appsClaimedThisPeriod).to.equal(1);
+    });
+
+    it("Should return correct period stats through getUserPeriodStats", async function () {
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
+
+      // Initial stats should be zero
+      let stats = await engagementRewards.getUserPeriodStats(user.address);
+      expect(stats.appsClaimedThisPeriod).to.equal(0);
+      expect(stats.periodStartTimestamp).to.be.gt(0);
+
+      // Make a claim
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+      const tx = await mockApp
+        .connect(user)
+        .claimReward(inviter.address, validUntilBlock, signature);
+
+      // Check updated stats
+      stats = await engagementRewards.getUserPeriodStats(user.address);
+      expect(stats.appsClaimedThisPeriod).to.equal(1);
+      expect(stats.periodStartTimestamp).to.gt(0);
+
+      // Advance time past cooldown and check reset
+      await time.increase(CLAIM_COOLDOWN);
+      stats = await engagementRewards.getUserPeriodStats(user.address);
+      expect(stats.appsClaimedThisPeriod).to.equal(0);
+    });
+
+    it("Should not allow claiming from unapproved app", async function () {
+      const {
+        engagementRewards,
+        mockApp,
+        user,
+        inviter,
+        appOwner,
+        rewardReceiver,
+      } = await loadFixture(deployFixture);
+
+      // Deploy new app but don't approve it
+      const unapprovedApp = await deployContract("MockApp", [
+        await engagementRewards.getAddress(),
+      ]);
+      await engagementRewards
+        .connect(appOwner)
+        .applyApp(
+          await unapprovedApp.getAddress(),
+          rewardReceiver.address,
+          80,
+          75,
+          VALID_DESCRIPTION,
+          "https://example.com",
+          "contact@example.com",
+        );
+
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await unapprovedApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      await expect(
+        unapprovedApp
+          .connect(user)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature),
+      ).to.be.revertedWith("App not approved or registered");
+    });
+
+    it("Should not allow claiming from unregistered app", async function () {
+      const { engagementRewards, user, inviter } =
+        await loadFixture(deployFixture);
+
+      // Deploy new app but don't register it
+      const unregisteredApp = await deployContract("MockApp", [
+        await engagementRewards.getAddress(),
+      ]);
+
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await unregisteredApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: "",
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      console.log("user: ", user.address);
+      await expect(
+        unregisteredApp
+          .connect(user)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature),
+      ).to.be.revertedWith("App not approved or registered");
+    });
+
+    it("Should not allow claiming if app registration has expired", async function () {
+      const { engagementRewards, mockApp, user, inviter } =
+        await loadFixture(deployFixture);
+
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      // Advance time past APP_EXPIRATION
+      await time.increase(APP_EXPIRATION + BigInt(1));
+
+      await expect(
+        mockApp
+          .connect(user)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature),
+      ).to.be.revertedWith("App registration expired");
+    });
+
+    it("Should not allow claiming when app has reached max rewards", async function () {
+      const {
+        engagementRewards,
+        mockApp,
+        user,
+        inviter,
+        admin,
+        nonAdmin,
+        identityContract,
+      } = await loadFixture(deployFixture);
+
+      // Set low max rewards to test the limit
+      const lowMaxRewards = REWARD_AMOUNT;
+      await engagementRewards.connect(admin).setMaxRewardsPerApp(lowMaxRewards);
+
+      await identityContract.setWhitelistedRoot(
+        nonAdmin.address,
+        nonAdmin.address,
+      );
+      const validUntilBlock = await getValidBlockNumber(ethers.provider);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+
+      const domain = {
+        name: "EngagementRewards",
+        version: "1.0",
+        chainId: chainId,
+        verifyingContract: await engagementRewards.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "app", type: "address" },
+          { name: "inviter", type: "address" },
+          { name: "validUntilBlock", type: "uint256" },
+          { name: "description", type: "string" },
+        ],
+      };
+
+      const message = {
+        app: await mockApp.getAddress(),
+        inviter: inviter.address,
+        validUntilBlock: validUntilBlock,
+        description: VALID_DESCRIPTION,
+      };
+
+      const signature = await user.signTypedData(domain, types, message);
+
+      const signature2 = await nonAdmin.signTypedData(domain, types, message);
+
+      // First claim should succeed
+      await mockApp
+        .connect(user)
+        .claimReward(inviter.address, validUntilBlock, signature);
+
+      // Second claim should fail due to max rewards reached
+      await expect(
+        mockApp
+          .connect(nonAdmin)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature2),
+      ).to.be.revertedWith("App maxed rewards");
+
+      // After cooldown period, should be able to claim again
+      await time.increase(CLAIM_COOLDOWN);
+      await expect(
+        mockApp
+          .connect(nonAdmin)
+          .claimRewardWithReason(inviter.address, validUntilBlock, signature2),
+      ).to.emit(engagementRewards, "RewardClaimed");
+    });
   });
 
   describe("Claim with Signature", function () {
