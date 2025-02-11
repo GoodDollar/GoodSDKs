@@ -71,9 +71,9 @@ const IntegrationGuide: React.FC = () => {
     }
   }, [])
 
-  const copyToClipboard = (code: string) => {
-    navigator.clipboard.writeText(code)
-  }
+  // const copyToClipboard = (code: string) => {
+  //   navigator.clipboard.writeText(code)
+  // }
 
   return (
     <div className="container mx-auto p-6 space-y-8">
@@ -146,8 +146,8 @@ const IntegrationGuide: React.FC = () => {
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature,
-        uint256 userAndInviterPercentage,
-        uint256 userPercentage
+        uint8 userAndInviterPercentage,
+        uint8 userPercentage
     ) external returns (bool);
 }`} 
                 />
@@ -212,9 +212,9 @@ contract GameApp {
     ) external {
         require(_verifyAchievement(achievementId, proof), "Invalid achievement");
         
-        // Calculate rewards based on player stats
-        uint256 userInviterShare = calculateUserInviterShare(msg.sender);
-        uint256 userShare = calculateUserShare(msg.sender);
+        // Calculate rewards based on player stats (returns uint8)
+        uint8 userInviterShare = calculateUserInviterShare(msg.sender);
+        uint8 userShare = calculateUserShare(msg.sender);
 
         try engagementRewards.appClaim(
             inviter,
@@ -237,14 +237,14 @@ contract GameApp {
     }
 
     // Internal reward calculation based on player stats
-    function calculateUserInviterShare(address player) internal view returns (uint256) {
+    function calculateUserInviterShare(address player) internal view returns (uint8) {
         uint256 level = playerLevel[player];
-        return 60 + (level * 30) / 100; // Base 60% + up to 30% based on level
+        return uint8(60 + (level * 30) / 100); // Base 60% + up to 30% based on level
     }
 
-    function calculateUserShare(address player) internal view returns (uint256) {
+    function calculateUserShare(address player) internal view returns (uint8) {
         uint256 wins = gamesWon[player];
-        return 70 + (wins * 20) / 100; // Base 70% + up to 20% based on wins
+        return uint8(70 + (wins * 20) / 100); // Base 70% + up to 20% based on wins
     }
 
     // Game logic (simplified for example)
@@ -337,12 +337,17 @@ const MyComponent = () => {
       )
     }
 
-    // Submit claim
+    // Submit claim with custom percentages
+    const userInviterPercentage = 80 // 80% for users+inviters
+    const userPercentage = 75 // 75% of user+inviter share goes to user
+
     const receipt = await engagementRewards.eoaClaim(
       APP_ADDRESS,
       INVITER_ADDRESS,
       validUntilBlock,
       signature,
+      userInviterPercentage,
+      userPercentage,
       (hash) => console.log("Transaction submitted:", hash)
     )
 
