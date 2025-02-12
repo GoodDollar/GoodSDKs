@@ -1,12 +1,9 @@
 name: preview
 on:
   push:
-
-on:
-  push:
     paths:
-      - 'apps/engagement-app/**'
-      - '.github/workflows/*engagement*.yml'
+      - "apps/engagement-app/**"
+      - ".github/workflows/*engagement*.yml"
     branches-ignore:
       - master
   pull_request:
@@ -14,8 +11,8 @@ on:
     branches:
       - master
     paths:
-      - 'apps/engagement-app/**'
-      - '.github/workflows/*engagement*.yml'
+      - "apps/engagement-app/**"
+      - ".github/workflows/*engagement*.yml"
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -44,4 +41,3 @@ jobs:
       - id: deploy
         run: echo "::set-output name=url::$(yarn vercel deploy --prebuilt --token=${{ secrets.VERCEL_DEPLOY_TOKEN }})"
         working-directory: apps/engagement-app
-
