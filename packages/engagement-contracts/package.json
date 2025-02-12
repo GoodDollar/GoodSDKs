@@ -6,7 +6,9 @@
     "dev": "echo 'Add dev script here'",
     "build": "hardhat compile",
     "test": "hardhat test",
-    "lint": "echo 'Add lint script here'"
+    "lint": "echo 'Add lint script here'",
+    "verify:dev": "yarn hardhat ignition verify development-celo --include-unrelated-contracts",
+    "verify": "yarn hardhat ignition verify production-celo --include-unrelated-contracts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",

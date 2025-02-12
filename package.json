@@ -19,5 +19,9 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "resolutions": {
+    "viem": "^2.22.10",
+    "wagmi": "^2.14.8"
+  }
 }
