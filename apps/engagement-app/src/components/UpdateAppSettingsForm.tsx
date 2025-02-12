@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { useEngagementRewards } from '@goodsdks/engagement-sdk'
+import { useEngagementRewards } from '@GoodSDKs/engagement-sdk'
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import {
@@ -61,7 +61,7 @@ export const UpdateAppSettingsForm: React.FC = () => {
           values.rewardReceiver as `0x${string}`,
           values.userInviterPercentage,
           values.userPercentage,
-          (hash) => {
+          (hash:string) => {
             toast({
               title: "Transaction Submitted",
               description: `Transaction hash: ${hash}`,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import {useEngagementRewards} from '@goodsdks/engagement-sdk'
+import {useEngagementRewards} from '@GoodSDKs/engagement-sdk'
 import { useAccount, usePublicClient } from 'wagmi'
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -142,7 +142,7 @@ const ApplyForm: React.FC = () => {
             url: values.url,
             email: values.email,
           },
-          (hash) => {
+          (hash:string) => {
             toast({
               title: "Transaction Submitted",
               description: `Transaction hash: ${hash}`,
