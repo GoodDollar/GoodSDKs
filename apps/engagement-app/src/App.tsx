@@ -217,9 +217,9 @@ const LandingPage = () => {
 const App: React.FC = () => {
   return (
     <Router>      
-      <div className="min-h-screen">
+      <div className="min-h-screen flex flex-col items-center">
         <Navigation />
-        <div className="container mx-auto p-4 pt-20">
+        <div className="container mx-auto p-4 pt-20 flex-grow flex flex-col items-center">
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/apply" element={<ApplyForm />} />

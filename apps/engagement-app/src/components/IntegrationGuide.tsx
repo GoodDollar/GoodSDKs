@@ -87,12 +87,12 @@ const IntegrationGuide: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <h3 className="text-lg font-semibold">Requirements</h3>
           <ul className="list-disc pl-6 space-y-2">
             <li>Your app/smart contract must be registered and approved in the EngagementRewards contract</li>
             <li>Users must have whitelisted status in the Identity contract</li>
             <li>Users can only claim rewards once per cooldown period (180 days)</li>
             <li>Apps have a maximum reward limit that resets every 180 days</li>
+            <li>Apps get rewards for users that didn't yet receive rewards from 3 other apps. This limit resets every 180 days. If your app is the 4th the user has used in the period your app will not get the reward.</li>
           </ul>
         </CardContent>
       </Card>
@@ -474,20 +474,37 @@ const getAppSignature = async (params: {
                 <CodeBlock 
                   language="typescript" 
                   code={`// Example Node.js/Express backend endpoint
-import { ethers } from 'ethers'
-import { REWARDS_CONTRACT,DEV_REWARDS_CONTRACT } from '@goodsdks/engagement-sdk'
-
+import { createWalletClient, http, parseEther, createPublicClient } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { celo } from 'viem/chains'
+import { EngagementRewardsSDK } from '@goodsdks/engagement-sdk'
 import express from 'express'
 
 const router = express.Router()
 
 // App configuration should be in environment variables
-const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY!
-const APP_ADDRESS = process.env.APP_ADDRESS!
-const CHAIN_ID = Number(process.env.CHAIN_ID!)
+const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY! as \`0x\${string}\`
+const APP_ADDRESS = process.env.APP_ADDRESS! as \`0x\${string}\`
+const REWARDS_CONTRACT = process.env.REWARDS_CONTRACT! as \`0x\${string}\`
 
-// Initialize wallet for signing
-const signer = new ethers.Wallet(APP_PRIVATE_KEY)
+// Initialize viem clients
+const account = privateKeyToAccount(APP_PRIVATE_KEY)
+const publicClient = createPublicClient({ 
+  chain: celo,
+  transport: http()
+})
+const walletClient = createWalletClient({ 
+  chain: celo,
+  transport: http(),
+  account
+})
+
+// Initialize SDK
+const engagementRewards = new EngagementRewardsSDK(
+  publicClient,
+  walletClient,
+  REWARDS_CONTRACT
+)
 
 router.post('/api/sign-claim', async (req, res) => {
   try {
@@ -501,34 +518,20 @@ router.post('/api/sign-claim', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    // Prepare app signature parameters
-    const domain = {
-      name: "EngagementRewards",
-      version: "1.0",
-      chainId: CHAIN_ID,
-      verifyingContract: REWARDS_CONTRACT
-    }
-
-    const types = {
-      AppClaim: [
-        { name: "app", type: "address" },
-        { name: "user", type: "address" },
-        { name: "validUntilBlock", type: "uint256" }
-      ]
-    }
-
-    const message = {
-      app: APP_ADDRESS,
-      user,
-      validUntilBlock
-    }
-
-    // Sign the claim
-    const signature = await signer.signTypedData(
-      domain,
-      types,
-      message
+    // Use SDK to prepare signature data
+    const { domain, types, message } = await engagementRewards.prepareAppSignature(
+      APP_ADDRESS,
+      user as \`0x\${string}\`,
+      BigInt(validUntilBlock)
     )
+
+    // Sign the prepared data
+    const signature = await walletClient.signTypedData({
+      domain,
+      types, 
+      primaryType: 'AppClaim',
+      message
+    })
 
     // Log signature request for auditing
     await logSignatureRequest({
@@ -544,7 +547,9 @@ router.post('/api/sign-claim', async (req, res) => {
     console.error('Error signing message:', error)
     return res.status(500).json({ error: 'Failed to sign message' })
   }
-})`}/>
+})
+// ...existing code...
+`}/>
 
               </div>
 
