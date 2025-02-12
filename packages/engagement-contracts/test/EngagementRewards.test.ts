@@ -47,6 +47,7 @@ describe("EngagementRewards", function () {
         MAX_REWARDS_PER_APP,
         REWARD_AMOUNT,
       ],
+      { constructorArgs: [false] },
     )) as EngagementRewards;
 
     await engagementRewards.grantRole(ADMIN_ROLE, admin.address);

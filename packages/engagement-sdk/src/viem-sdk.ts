@@ -12,9 +12,8 @@ import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/
 const prod = {} as typeof devdeployments;
 
 export const DEV_REWARDS_CONTRACT =
-  devdeployments["EngagementRewardsUpgrade#EngagementRewards"];
-export const REWARDS_CONTRACT =
-  prod?.["EngagementRewardsUpgrade#EngagementRewards"];
+  devdeployments["EngagementRewardsProxy#ERC1967Proxy"];
+export const REWARDS_CONTRACT = prod?.["EngagementRewardsProxy#ERC1967Proxy"];
 
 const BLOCKS_AGO = BigInt(100000);
 const WAIT_DELAY = 5000; // 1 second delay

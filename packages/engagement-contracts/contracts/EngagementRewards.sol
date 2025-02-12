@@ -22,12 +22,14 @@ contract EngagementRewards is
     UUPSUpgradeable,
     ReentrancyGuardUpgradeable
 {
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    bool public immutable IS_DEV_ENV;
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 private constant CLAIM_TYPEHASH =
+    bytes32 public constant CLAIM_TYPEHASH =
         keccak256(
             "Claim(address app,address inviter,uint256 validUntilBlock,string description)"
         );
-    bytes32 private constant APP_CLAIM_TYPEHASH =
+    bytes32 public constant APP_CLAIM_TYPEHASH =
         keccak256("AppClaim(address app,address user,uint256 validUntilBlock)");
 
     IERC20 public rewardToken;
@@ -105,8 +107,16 @@ contract EngagementRewards is
     event RewardAmountUpdated(uint256 newAmount);
     event MaxAppsPerUserUpdated(uint8 newAmount); // Add new event
 
+    modifier onlyRoleOrDev(bytes32 role) {
+        if (!hasRole(role, msg.sender) && !IS_DEV_ENV) {
+            revert AccessControlUnauthorizedAccount(msg.sender, role);
+        }
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
+    constructor(bool _isDevEnv) {
+        IS_DEV_ENV = _isDevEnv;
         _disableInitializers();
     }
 
@@ -216,7 +226,7 @@ contract EngagementRewards is
         );
     }
 
-    function approve(address app) external onlyRole(ADMIN_ROLE) {
+    function approve(address app) external onlyRoleOrDev(ADMIN_ROLE) {
         require(registeredApps[app].isRegistered, "App not registered");
         require(!registeredApps[app].isApproved, "App already approved");
 
