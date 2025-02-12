@@ -9,7 +9,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@GoodSDKs/engagement-app@workspace:apps/engagement-app"
   dependencies:
-    "@GoodSDKs/engagement-sdk": "npm:1.0.0"
+    "@GoodSDKs/engagement-sdk": "npm:*"
     "@eslint/js": "npm:^9.17.0"
     "@hookform/resolvers": "npm:^3.10.0"
     "@radix-ui/react-dialog": "npm:^1.1.5"
@@ -51,7 +51,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@GoodSDKs/engagement-sdk@npm:1.0.0, @GoodSDKs/engagement-sdk@workspace:packages/engagement-sdk":
+"@GoodSDKs/engagement-sdk@npm:*, @GoodSDKs/engagement-sdk@workspace:packages/engagement-sdk":
   version: 0.0.0-use.local
   resolution: "@GoodSDKs/engagement-sdk@workspace:packages/engagement-sdk"
   dependencies:
