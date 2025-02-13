@@ -4,7 +4,6 @@ on:
     paths:
       - "apps/engagement-app/**"
       - ".github/workflows/*engagement*.yml"
-    branches-ignore:
   pull_request:
     types: [opened, synchronize, edited, ready_for_review]
     branches:
