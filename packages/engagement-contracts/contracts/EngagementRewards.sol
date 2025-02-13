@@ -150,8 +150,8 @@ contract EngagementRewards is
     function applyApp(
         address app,
         address rewardReceiver,
-        uint256 userAndInviterPercentage,
-        uint256 userPercentage,
+        uint8 userAndInviterPercentage,
+        uint8 userPercentage,
         string memory description,
         string memory url,
         string memory email
@@ -284,8 +284,8 @@ contract EngagementRewards is
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature,
-        uint256 userAndInviterPercentage,
-        uint256 userPercentage
+        uint8 userAndInviterPercentage,
+        uint8 userPercentage
     ) public returns (bool) {
         require(
             userAndInviterPercentage <= 100,
@@ -391,8 +391,8 @@ contract EngagementRewards is
         address inviter,
         uint256 validUntilBlock,
         bytes memory signature,
-        uint256 userAndInviterPercentage,
-        uint256 userPercentage,
+        uint8 userAndInviterPercentage,
+        uint8 userPercentage,
         bool overridePercentages
     ) internal nonReentrant returns (bool) {
         address user = identityContract.getWhitelistedRoot(sender);
@@ -418,9 +418,9 @@ contract EngagementRewards is
             sender,
             inviter,
             overridePercentages
-                ? uint8(userAndInviterPercentage)
+                ? userAndInviterPercentage
                 : appInfo.userAndInviterPercentage,
-            overridePercentages ? uint8(userPercentage) : appInfo.userPercentage
+            overridePercentages ? userPercentage : appInfo.userPercentage
         );
 
         return true;
@@ -537,15 +537,15 @@ contract EngagementRewards is
     }
 
     function setMaxRewardsPerApp(
-        uint256 _maxRewardsPerApp
+        uint96 _maxRewardsPerApp
     ) external onlyRole(ADMIN_ROLE) {
-        maxRewardsPerApp = uint96(_maxRewardsPerApp);
+        maxRewardsPerApp = _maxRewardsPerApp;
     }
 
     function setRewardAmount(
-        uint256 _rewardAmount
+        uint96 _rewardAmount
     ) external onlyRole(ADMIN_ROLE) {
-        rewardAmount = uint96(_rewardAmount);
+        rewardAmount = _rewardAmount;
         emit RewardAmountUpdated(_rewardAmount);
     }
 

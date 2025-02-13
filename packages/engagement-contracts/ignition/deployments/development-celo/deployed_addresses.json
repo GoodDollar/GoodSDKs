@@ -1,4 +1,5 @@
 {
-  "EngagementRewards#EngagementRewards": "0x1913C8f3a612Fe82201dF04F319418AbF4EE0295",
-  "EngagementRewardsProxy#ERC1967Proxy": "0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465"
+  "EngagementRewards#EngagementRewards": "0x00abd8585Dc4c8D532F7A4B39B88Ea2Dda023714",
+  "EngagementRewardsProxy#ERC1967Proxy": "0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465",
+  "EngagementRewardsUpgrade#EngagementRewards": "0xb44fC3A592aDaA257AECe1Ae8956019EA53d0465"
 }

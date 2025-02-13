@@ -8,7 +8,7 @@ const deployArgs: { [key: string]: any } = {
     "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
     "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42",
     parseEther((100e6).toString()),
-    parseEther("5000"),
+    parseEther("1"),
   ],
   "production-celo": [
     "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475",

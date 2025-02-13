@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import {useEngagementRewards} from '@GoodSDKs/engagement-sdk'
+import { useEngagementRewards } from '@GoodSDKs/engagement-sdk'
 import { useAccount, usePublicClient } from 'wagmi'
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -45,11 +45,9 @@ const ApplyForm: React.FC = () => {
   const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } = useSigningModal();
   const publicClient = usePublicClient()
   const [verificationStatus, setVerificationStatus] = useState<{
-    isContract: boolean
     isVerified: boolean
     checked: boolean
   }>({
-    isContract: false,
     isVerified: false,
     checked: false
   })
@@ -57,12 +55,6 @@ const ApplyForm: React.FC = () => {
   const form = useForm<z.infer<typeof baseFormSchema>>({
     resolver: (values, context, options) => {
       const schema = baseFormSchema.refine(
-        () => !verificationStatus.checked || verificationStatus.isContract, 
-        {
-          path: ['app'],
-          message: "Address must be a smart contract"
-        }
-      ).refine(
         () => !verificationStatus.checked || verificationStatus.isVerified,
         {
           path: ['app'],
@@ -91,8 +83,7 @@ const ApplyForm: React.FC = () => {
     const handleAppChange = async () => {
       // Reset reapplying status
       setIsReapplying(false);
-      
-      if (!appValue || !appValue.startsWith('0x') || appValue.length !== 42) return;
+      if (!publicClient || !appValue || !appValue.startsWith('0x') || appValue.length !== 42) return;
 
       // Check if app exists
       const appInfo = await engagementRewards?.getAppInfo(appValue as `0x${string}`);
@@ -102,19 +93,15 @@ const ApplyForm: React.FC = () => {
 
       // Check contract verification
       const contractStatus = await isContract(publicClient as PublicClient, appValue)
-      let verifiedStatus = false
-
-      if (contractStatus && publicClient) {
+      let verifiedStatus = true
+      if (contractStatus) {
         const chainId = await publicClient.getChainId()
         verifiedStatus = await checkSourceVerification(appValue, chainId)
-        setVerificationStatus({
-          isContract: contractStatus,
-          isVerified: verifiedStatus,
-          checked: true
-        })
       }
-
-      
+      setVerificationStatus({
+        isVerified: verifiedStatus,
+        checked: true
+      })
     }
 
     handleAppChange();
@@ -142,14 +129,14 @@ const ApplyForm: React.FC = () => {
             url: values.url,
             email: values.email,
           },
-          (hash:string) => {
+          (hash: string) => {
             toast({
               title: "Transaction Submitted",
               description: `Transaction hash: ${hash}`,
             });
           }
         );
-        
+
         if (receipt?.status === "success") {
           form.reset();
         }
@@ -192,16 +179,7 @@ const ApplyForm: React.FC = () => {
                     <FormDescription>
                       The contract address of your app or a backend wallet signer address
                     </FormDescription>
-                    {verificationStatus.checked && !verificationStatus.isContract && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Invalid Contract</AlertTitle>
-                        <AlertDescription>
-                          The provided address is not a smart contract
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    {verificationStatus.checked && verificationStatus.isContract && !verificationStatus.isVerified && (
+                    {verificationStatus.checked && !verificationStatus.isVerified && (
                       <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertTitle>Unverified Contract</AlertTitle>
@@ -318,9 +296,9 @@ const ApplyForm: React.FC = () => {
                   </AlertDescription>
                 </Alert>
               )}
-              <Button 
-                type="submit" 
-                disabled={!verificationStatus.isContract || !verificationStatus.isVerified}
+              <Button
+                type="submit"
+                disabled={!verificationStatus.isVerified}
               >
                 Apply
               </Button>
@@ -328,9 +306,9 @@ const ApplyForm: React.FC = () => {
           </Form>
         </CardContent>
       </Card>
-      <SigningModal 
-        open={isSigningModalOpen} 
-        onOpenChange={setIsSigningModalOpen} 
+      <SigningModal
+        open={isSigningModalOpen}
+        onOpenChange={setIsSigningModalOpen}
       />
     </>
   )

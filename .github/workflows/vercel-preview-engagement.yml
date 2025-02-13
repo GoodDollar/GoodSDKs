@@ -34,8 +34,6 @@ jobs:
       #get env vars
       - run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
         working-directory: apps/engagement-app
-      # build the local mono-repo dependencies
-      - run: yarn build --filter=@GoodSDKs/engagement-app...
       - run: echo "$(node -v)"
       - run: vercel build --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
         working-directory: apps/engagement-app

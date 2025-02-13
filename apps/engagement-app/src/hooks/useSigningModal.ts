@@ -22,6 +22,7 @@ export function useSigningModal() {
       return result;
     } catch (error) {
       setIsSigningModalOpen(false);
+      console.error(error);
       toast({
         title: "Error",
         description: `Transaction failed: ${(error as Error).message}`,
