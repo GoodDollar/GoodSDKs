@@ -88,11 +88,21 @@ const IntegrationGuide: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <ul className="list-disc pl-6 space-y-2">
+            <li>Before applying make sure you smart contract is deployed and verified on sourcify.dev</li>
             <li>Your app/smart contract must be registered and approved in the EngagementRewards contract</li>
-            <li>Users must have whitelisted status in the Identity contract</li>
+            <li>Users must have whitelisted status in the Identity contract
+              <ul className="list-disc pl-6 mt-2">
+                <li>Users can be verified on <a href="https://goodwallet.xyz" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">https://goodwallet.xyz</a> or <a href="https://gooddapp.org" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">https://gooddapp.org</a></li>
+                <li>Alternatively you can integrate verification in your app. See: <a href="https://docs.gooddollar.org/for-developers/apis-and-sdks/identity-sybil-resistance" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">https://docs.gooddollar.org/for-developers/apis-and-sdks/identity-sybil-resistance</a></li>
+              </ul>
+            </li>
             <li>Users can only claim rewards once per cooldown period (180 days)</li>
             <li>Apps have a maximum reward limit that resets every 180 days</li>
             <li>Apps get rewards for users that didn't yet receive rewards from 3 other apps. This limit resets every 180 days. If your app is the 4th the user has used in the period your app will not get the reward.</li>
+            <li>
+              For development purposes, you can use the <b>DEV_REWARDS_CONTRACT</b> which allows anyone to approve apps. 
+              You can access the development environment at <a href="https://engagement-rewards-dev.vercel.app" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">https://engagement-rewards-dev.vercel.app</a>.
+            </li>
           </ul>
         </CardContent>
       </Card>
