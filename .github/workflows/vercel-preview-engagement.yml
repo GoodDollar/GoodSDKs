@@ -6,6 +6,7 @@ on:
       - ".github/workflows/*engagement*.yml"
     branches-ignore:
       - main
+      - dev
   pull_request:
     types: [opened, synchronize, edited, ready_for_review]
     branches:
