@@ -39,7 +39,7 @@ jobs:
         working-directory: apps/engagement-app
       - id: deploy
         run: |
-          url="$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})"
+          url="$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_DEPLOY_TOKEN }})"
           echo "url=$url" >> $GITHUB_OUTPUT
           echo "REF:${{ github.ref }}"
         working-directory: apps/engagement-app
