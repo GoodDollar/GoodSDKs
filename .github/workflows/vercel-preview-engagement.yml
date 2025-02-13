@@ -5,8 +5,6 @@ on:
       - "apps/engagement-app/**"
       - ".github/workflows/*engagement*.yml"
     branches-ignore:
-      - main
-      - dev
   pull_request:
     types: [opened, synchronize, edited, ready_for_review]
     branches:
@@ -40,5 +38,11 @@ jobs:
       - run: vercel build --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
         working-directory: apps/engagement-app
       - id: deploy
-        run: echo "::set-output name=url::$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_DEPLOY_TOKEN }})"
+        run: |
+          url="$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})"
+          echo "url=$url" >> $GITHUB_OUTPUT
+          echo "REF:${{ github.ref }}"
         working-directory: apps/engagement-app
+      - name: alias to dev domain
+        run: vercel alias --token=${{ secrets.VERCEL_DEPLOY_TOKEN }} set "${{ steps.deploy.outputs.url }}" engagement-rewards-dev.vercel.app
+        if: github.ref == 'refs/heads/main'
