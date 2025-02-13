@@ -43,6 +43,6 @@ jobs:
           echo "REF:${{ github.ref }}"
         working-directory: apps/engagement-app
       - name: alias to dev domain
-        run: vercel alias --token=${{ secrets.VERCEL_DEPLOY_TOKEN }} set "${{ steps.deploy.outputs.url }}" engagement-rewards-dev.vercel.app
+        run: vercel alias --scope=gooddollarteam --token=${{ secrets.VERCEL_DEPLOY_TOKEN }} set "${{ steps.deploy.outputs.url }}" engagement-rewards-dev.vercel.app
         if: github.ref == 'refs/heads/main'
         working-directory: apps/engagement-app
