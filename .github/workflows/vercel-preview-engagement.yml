@@ -5,11 +5,11 @@ on:
       - "apps/engagement-app/**"
       - ".github/workflows/*engagement*.yml"
     branches-ignore:
-      - master
+      - main
   pull_request:
     types: [opened, synchronize, edited, ready_for_review]
     branches:
-      - master
+      - main
     paths:
       - "apps/engagement-app/**"
       - ".github/workflows/*engagement*.yml"
