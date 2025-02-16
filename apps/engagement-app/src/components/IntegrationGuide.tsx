@@ -127,9 +127,25 @@ const IntegrationGuide: React.FC = () => {
       </Card>
 
       <Tabs defaultValue="smart-contract">
-        <TabsList>
-          <TabsTrigger value="smart-contract">Smart Contract Integration</TabsTrigger>
-          <TabsTrigger value="client">Client-Side Integration</TabsTrigger>
+        <TabsList className="border-b-0 bg-transparent flex justify-start gap-4 mb-6">
+          <TabsTrigger 
+            value="smart-contract" 
+            className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
+          >
+            Smart Contract Integration
+          </TabsTrigger>
+          <TabsTrigger 
+            value="client" 
+            className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
+          >
+            Client-Side Integration
+          </TabsTrigger>
+          <TabsTrigger 
+            value="invite" 
+            className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
+          >
+            Invite Link
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="smart-contract" className="space-y-6">
@@ -573,6 +589,100 @@ router.post('/api/sign-claim', async (req, res) => {
                   <li>Keep logs of all signature requests for auditing</li>
                   <li>Consider using a dedicated signing service/HSM for production</li>
                 </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="invite" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Invite Link Integration</CardTitle>
+              <CardDescription>
+                Generate an invite link using only the inviter address, store it in localStorage, and use it during claim.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">1. Generate Invite Link</h3>
+                <CodeBlock
+                  language="typescript"
+                  code={`
+// Function to generate an invite link using the inviter address only
+const generateInviteLink = (inviterAddress: string) => {
+  const baseUrl = window.location.origin; // or your dApp base URL
+  const inviteCode = btoa(JSON.stringify({ inviter: inviterAddress }));
+  return \`\${baseUrl}/?invite=\${inviteCode}\`;
+};
+
+// Usage example:
+const inviter = "0xYourInviterAddress";
+const inviteLink = generateInviteLink(inviter);
+console.log("Invite Link:", inviteLink);
+            `}
+                />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">2. Store and Retrieve Inviter from localStorage</h3>
+                <CodeBlock
+                  language="typescript"
+                  code={`
+// Save inviter from the invite link to localStorage
+const saveInviter = (inviter: string) => {
+  localStorage.setItem("invite_inviter", inviter);
+};
+
+// Retrieve the stored inviter
+const getStoredInviter = (): string | null => {
+  return localStorage.getItem("invite_inviter");
+};
+
+// On app load, parse URL and store inviter if present
+const parseAndStoreInviter = () => {
+  const params = new URLSearchParams(window.location.search);
+  const inviteCode = params.get("invite");
+  if (inviteCode) {
+    try {
+      const { inviter } = JSON.parse(atob(inviteCode));
+      if (inviter) {
+        saveInviter(inviter);
+      }
+    } catch (error) {
+      console.error("Invalid invite code", error);
+    }
+  }
+};
+
+parseAndStoreInviter();
+
+// Later, when claiming rewards:
+const inviterForClaim = getStoredInviter() || "0x0000000000000000000000000000000000000000";
+console.log("Inviter for Claim:", inviterForClaim);
+            `}
+                />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">3. Use Inviter in Claim Function</h3>
+                <CodeBlock
+                  language="typescript"
+                  code={`
+// Example claim function using the stored inviter address
+const handleClaim = async () => {
+  const inviterAddress = getStoredInviter() || "0x0000000000000000000000000000000000000000";
+  // Proceed with claim by passing the inviterAddress
+  const receipt = await engagementRewards.nonContractAppClaim(
+    APP_ADDRESS,
+    inviterAddress,
+    validUntilBlock,
+    userSignature,
+    appSignature
+  );
+  console.log("Claim Receipt:", receipt);
+};
+            `}
+                />
               </div>
             </CardContent>
           </Card>
