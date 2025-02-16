@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - "apps/engagement-app/**"
+      - "packages/engagement-sdk/**"
       - ".github/workflows/*engagement*.yml"
     branches:
       - main

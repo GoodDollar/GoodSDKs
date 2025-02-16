@@ -8,8 +8,7 @@ import {
 import { waitForTransactionReceipt } from "viem/actions";
 
 import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json";
-// import prod from "@goodsdks/engagement-contracts/ignition/deployments/chain-42220/deployed_addresses.json";
-const prod = {} as typeof devdeployments;
+import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json";
 
 export const DEV_REWARDS_CONTRACT =
   devdeployments["EngagementRewardsProxy#ERC1967Proxy"];

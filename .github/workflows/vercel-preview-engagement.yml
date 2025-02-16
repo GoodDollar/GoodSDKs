@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - "apps/engagement-app/**"
+      - "packages/engagement-sdk/**"
       - ".github/workflows/*engagement*.yml"
   pull_request:
     types: [opened, synchronize, edited, ready_for_review]
@@ -10,6 +11,7 @@ on:
       - main
     paths:
       - "apps/engagement-app/**"
+      - "packages/engagement-sdk/**"
       - ".github/workflows/*engagement*.yml"
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
