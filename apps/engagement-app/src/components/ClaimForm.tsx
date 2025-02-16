@@ -2,7 +2,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useAccount, useSignTypedData } from "wagmi"
 import { useEngagementRewards } from "@GoodSDKs/engagement-sdk"
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Label } from "./ui/label"
@@ -12,10 +12,10 @@ import env from "@/env"
 import { zeroAddress } from "viem"
 import { useSigningModal } from "@/hooks/useSigningModal"
 import { SigningModal } from "./SigningModal"
-
+import { Check } from "lucide-react"
 
 const ClaimForm: React.FC = () => {
-  const { isConnected, chainId } = useAccount()
+  const { isConnected, chainId, address } = useAccount()
   const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
   const { toast } = useToast()
   const { signTypedDataAsync } = useSignTypedData()
@@ -24,25 +24,39 @@ const ClaimForm: React.FC = () => {
   const [app, setApp] = useState("")
   const [inviter, setInviter] = useState("")
   const [appSignature, setAppSignature] = useState("")
-  const nonce = Date.now()
+  const [generatedAppSignature, setGeneratedAppSignature] = useState<string | null>(null);
+  const [appSignatureUser, setAppSignatureUser] = useState("")
   const [registeredApps, setRegisteredApps] = useState<string[]>([])
   const [appDescription, setAppDescription] = useState("")
+  const [validUntilBlock, setValidUntilBlock] = useState<bigint>(0n);
+  const [isAppSignatureValidSigner, setIsAppSignatureValidSigner] = useState(true);
 
   useEffect(() => {
-    if (!engagementRewards || registeredApps.length > 0) return
+    if (!engagementRewards) return;
 
     const fetchRegisteredApps = async () => {
-      const apps = await engagementRewards.getRegisteredApps()
-      console.log(apps)
-      setRegisteredApps(apps)
-    }
+      const apps = await engagementRewards.getRegisteredApps();
+      setRegisteredApps(apps);
+    };
+
+    const fetchCurrentBlock = async () => {
+      const currentBlock = await engagementRewards.getCurrentBlockNumber();
+      setValidUntilBlock(currentBlock + 50n);
+    };
 
     if (isConnected) {
-      fetchRegisteredApps()
+      fetchRegisteredApps();
+      fetchCurrentBlock();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, registeredApps.length, !!engagementRewards])
+  }, [isConnected, !!engagementRewards]);
 
+  useEffect(() => {
+    if (app && address) {
+      setIsAppSignatureValidSigner(app.toLowerCase() === address.toLowerCase());
+    } else {
+      setIsAppSignatureValidSigner(true);
+    }
+  }, [app, address]);
 
   const handleAppChange = async (value: string) => {
     if (!engagementRewards) return
@@ -63,10 +77,7 @@ const ClaimForm: React.FC = () => {
       return;
     }
 
-    await wrapWithSigningModal(async () => {      
-      const currentBlock = await engagementRewards.getCurrentBlockNumber();
-      const validUntilBlock = currentBlock + 10n;
-
+    await wrapWithSigningModal(async () => {
       // Get user signature
       const domain = {
         name: "EngagementRewards",
@@ -114,6 +125,44 @@ const ClaimForm: React.FC = () => {
 
       return receipt;
     }, "Claim submitted successfully!");
+  };
+
+  const handleGenerateAppSignature = async () => {
+    if (!engagementRewards || !app || !appSignatureUser) return;
+
+    try {
+      const { domain, types, message } = await engagementRewards.prepareAppSignature(
+        app as `0x${string}`,
+        appSignatureUser as `0x${string}`,
+        validUntilBlock
+      );
+
+      const signature = await signTypedDataAsync({
+        domain,
+        types,
+        message,
+        primaryType: "AppClaim",
+      });
+
+      setGeneratedAppSignature(signature);
+    } catch (error) {
+      console.error("Error generating app signature:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate app signature.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    if (generatedAppSignature) {
+      navigator.clipboard.writeText(generatedAppSignature);
+      toast({
+        title: "Copied!",
+        description: "App signature copied to clipboard.",
+      });
+    }
   };
 
   if (!isConnected) {
@@ -173,8 +222,8 @@ const ClaimForm: React.FC = () => {
               <p className="text-sm text-gray-500">The app signature should be obtained from your backend or app owner.</p>
             </div>
             <div>
-              <Label htmlFor="nonce">Nonce</Label>
-              <p className="text-sm text-gray-500">{nonce}</p>
+              <Label htmlFor="nonce">Valid Until Block</Label>
+              <p className="text-sm text-gray-500">{validUntilBlock.toString()}</p>
             </div>
             <div>
               <Label>App Description</Label>
@@ -182,6 +231,52 @@ const ClaimForm: React.FC = () => {
             </div>
             <Button type="submit">Claim</Button>
           </form>
+        </CardContent>
+      </Card>
+      <Card className="w-full max-w-2xl mx-auto mt-8">
+        <CardHeader>
+          <CardTitle>Generate App Signature</CardTitle>
+          <CardDescription>
+            Use this form to generate an app signature for testing purposes.
+            In production, this should be done on your backend.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="appSignatureUser">User Address</Label>
+            <Input
+              id="appSignatureUser"
+              value={appSignatureUser}
+              onChange={(e) => setAppSignatureUser(e.target.value)}
+              placeholder="0x..."
+            />
+            <p className="text-sm text-gray-500">Enter the user address for whom the app signature is generated.</p>
+          </div>
+          <Button
+            onClick={handleGenerateAppSignature}
+            disabled={!isAppSignatureValidSigner}
+          >
+            Generate App Signature
+          </Button>
+          {!isAppSignatureValidSigner && (
+            <p className="text-sm text-red-500">
+              You must connect with the same address as the selected app to generate the app signature.
+            </p>
+          )}
+          {generatedAppSignature && (
+            <div className="space-y-2">
+              <Label>Generated App Signature</Label>
+              <Input
+                readOnly
+                value={generatedAppSignature}
+                placeholder="0x..."
+              />
+              <Button onClick={handleCopyToClipboard} variant="secondary">
+                <Check className="mr-2 h-4 w-4" />
+                Copy to Clipboard
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
       <SigningModal 
