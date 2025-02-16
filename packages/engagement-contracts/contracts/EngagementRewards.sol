@@ -542,6 +542,12 @@ contract EngagementRewards is
         maxRewardsPerApp = _maxRewardsPerApp;
     }
 
+    function setIdentityContract(
+        address _identity
+    ) external onlyRole(ADMIN_ROLE) {
+        identityContract = IIdentity(_identity);
+    }
+
     function setRewardAmount(
         uint96 _rewardAmount
     ) external onlyRole(ADMIN_ROLE) {

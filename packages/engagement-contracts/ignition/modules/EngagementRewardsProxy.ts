@@ -10,10 +10,16 @@ const deployArgs: { [key: string]: any } = {
     parseEther((100e6).toString()),
     parseEther("1"),
   ],
-  "production-celo": [
-    "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475",
-    "0xF25fA0D4896271228193E782831F6f3CFCcF169C",
+  "development-celo": [
+    "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A", //prod token
+    "0xF25fA0D4896271228193E782831F6f3CFCcF169C", //dev identity
     parseEther((100e6).toString()),
+    parseEther("1"),
+  ],
+  "production-celo": [
+    "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A", //prod token
+    "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42", //prod identity
+    parseEther((50e6).toString()),
     parseEther("5000"),
   ],
 };
