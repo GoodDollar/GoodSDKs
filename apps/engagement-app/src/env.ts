@@ -1,7 +1,7 @@
 import {
   DEV_REWARDS_CONTRACT,
   REWARDS_CONTRACT,
-} from "@GoodSDKs/engagement-sdk";
+} from "@goodsdks/engagement-sdk";
 
 export default {
   devRewards: DEV_REWARDS_CONTRACT,
