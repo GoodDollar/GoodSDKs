@@ -1,0 +1,50 @@
+{
+  "name": "demo-identity-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@goodsdks/identity-sdk": "*",
+    "@reown/appkit": "^1.6.9",
+    "@reown/appkit-adapter-wagmi": "^1.6.9",
+    "@tamagui/config": "^1.125.22",
+    "@tamagui/core": "^1.125.22",
+    "@tamagui/font-inter": "^1.125.22",
+    "@tamagui/vite-plugin": "^1.125.22",
+    "@tamagui/web": "^1.125.22",
+    "@tanstack/react-query": "^4.36.1",
+    "clsx": "^1.2.1",
+    "lz-string": "^1.5.0",
+    "moment": "^2.30.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-use-promise": "^0.5.0",
+    "tamagui": "^1.125.22",
+    "viem": "^1.21.4",
+    "wagmi": "^1.4.13",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tamagui/babel-plugin": "^1.125.22",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^8.10.0",
+    "eslint-plugin-react": "^7.37.4",
+    "postcss": "^8.5.3",
+    "prettier": "^3.5.3",
+    "sass": "^1.85.1",
+    "typescript": "^5.8.2",
+    "vite": "^4.5.9"
+  }
+}
