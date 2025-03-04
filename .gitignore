@@ -38,3 +38,4 @@ yarn-error.log*
 *.pem
 .yarn/install-state.gz
 apps/engagement-app/tsconfig.tsbuildinfo
+.vscode/settings.json
