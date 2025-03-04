@@ -1,51 +1,58 @@
-import React, { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { useAccount } from "wagmi"
-import { useEngagementRewards } from "@GoodSDKs/engagement-sdk"
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { formatEther } from "viem"
-import { Loader2 } from "lucide-react"
-import env from "@/env"
-import { TruncatedAddress } from "./ui/TruncatedAddress"
-import { Button } from "./ui/button"
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAccount } from "wagmi";
+import { useEngagementRewards } from "@goodsdks/engagement-sdk";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { formatEther } from "viem";
+import { Loader2 } from "lucide-react";
+import env from "@/env";
+import { TruncatedAddress } from "./ui/TruncatedAddress";
+import { Button } from "./ui/button";
 
 type AppRewardInfo = {
-  address: string
-  totalRewards: bigint
-  appRewards: bigint
-  userRewards: bigint
-  inviterRewards: bigint
-  rewardEventCount: number
-}
+  address: string;
+  totalRewards: bigint;
+  appRewards: bigint;
+  userRewards: bigint;
+  inviterRewards: bigint;
+  rewardEventCount: number;
+};
 
 type AppInfo = AppRewardInfo & {
-  owner: string
-  rewardReceiver: string
-  userAndInviterPercentage: number
-  userPercentage: number
-  description: string
-  url: string
-  email: string
-}
+  owner: string;
+  rewardReceiver: string;
+  userAndInviterPercentage: number;
+  userPercentage: number;
+  description: string;
+  url: string;
+  email: string;
+};
 
 const RegisteredAppsPage: React.FC = () => {
-  const { isConnected } = useAccount()
-  const engagementRewards = useEngagementRewards(env.rewardsContract)
-  const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
-  const [apps, setApps] = useState<AppInfo[]>([])
+  const { isConnected } = useAccount();
+  const engagementRewards = useEngagementRewards(env.rewardsContract);
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [apps, setApps] = useState<AppInfo[]>([]);
 
   useEffect(() => {
     const fetchApps = async () => {
-      if (!engagementRewards) return
-      const registeredApps = await engagementRewards.getRegisteredApps()
+      if (!engagementRewards) return;
+      const registeredApps = await engagementRewards.getRegisteredApps();
       const appsInfo = await Promise.all(
         registeredApps.map(async (app) => {
           const [rewards, info] = await Promise.all([
             engagementRewards.getAppRewards(app as `0x${string}`),
-            engagementRewards.getAppInfo(app as `0x${string}`)
-          ])
+            engagementRewards.getAppInfo(app as `0x${string}`),
+          ]);
           return {
             address: app,
             ...rewards,
@@ -55,18 +62,18 @@ const RegisteredAppsPage: React.FC = () => {
             userPercentage: Number(info[6]),
             description: info[9],
             url: info[10],
-            email: info[11]
-          }
-        })
-      )
-      setApps(appsInfo)
-      setLoading(false)
-    }
+            email: info[11],
+          };
+        }),
+      );
+      setApps(appsInfo);
+      setLoading(false);
+    };
 
     if (isConnected) {
-      fetchApps()
+      fetchApps();
     }
-  }, [isConnected, !!engagementRewards])
+  }, [isConnected, !!engagementRewards]);
 
   if (!isConnected) {
     return (
@@ -78,7 +85,7 @@ const RegisteredAppsPage: React.FC = () => {
           <p>Please connect your wallet to view registered apps.</p>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (loading) {
@@ -93,7 +100,7 @@ const RegisteredAppsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -122,7 +129,12 @@ const RegisteredAppsPage: React.FC = () => {
                 <TableCell>
                   <div className="space-y-1">
                     <TruncatedAddress address={app.address} />
-                    <a href={app.url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline">
+                    <a
+                      href={app.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-muted-foreground hover:underline"
+                    >
                       {app.url}
                     </a>
                   </div>
@@ -148,24 +160,24 @@ const RegisteredAppsPage: React.FC = () => {
                 <TableCell>
                   <div className="space-y-2">
                     <Button
-                      variant="outline" 
-                      size="sm" 
+                      variant="outline"
+                      size="sm"
                       className="w-full"
                       onClick={() => navigate(`/app/${app.address}`)}
                     >
                       Details
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full"
                       onClick={() => navigate(`/app/${app.address}/settings`)}
                     >
                       Settings
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full"
                       onClick={() => navigate(`/apply/${app.address}`)}
                     >
@@ -179,7 +191,7 @@ const RegisteredAppsPage: React.FC = () => {
         </Table>
       </CardContent>
     </Card>
-  )
-}
+  );
+};
 
-export default RegisteredAppsPage
+export default RegisteredAppsPage;

@@ -1,44 +1,54 @@
-import React, { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
-import { useAccount } from "wagmi"
-import { useEngagementRewards, type RewardEvent } from "@GoodSDKs/engagement-sdk"
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { formatEther } from "viem"
-import { Loader2 } from "lucide-react"
-import env from "@/env"
-import { TruncatedAddress } from "./ui/TruncatedAddress"
+import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { useAccount } from "wagmi";
+import {
+  useEngagementRewards,
+  type RewardEvent,
+} from "@goodsdks/engagement-sdk";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { formatEther } from "viem";
+import { Loader2 } from "lucide-react";
+import env from "@/env";
+import { TruncatedAddress } from "./ui/TruncatedAddress";
 
 const AppDetailsPage: React.FC = () => {
-  const { appAddress } = useParams<{ appAddress: string }>()
-  const { isConnected } = useAccount()
-  const engagementRewards = useEngagementRewards(env.rewardsContract)
-  const [loading, setLoading] = useState(true)
+  const { appAddress } = useParams<{ appAddress: string }>();
+  const { isConnected } = useAccount();
+  const engagementRewards = useEngagementRewards(env.rewardsContract);
+  const [loading, setLoading] = useState(true);
   const [rewards, setRewards] = useState<{
-    totalRewards: bigint
-    appRewards: bigint
-    userRewards: bigint
-    inviterRewards: bigint
-    rewardEventCount: number
-  }>()
-  const [events, setEvents] = useState<RewardEvent[]>([])
+    totalRewards: bigint;
+    appRewards: bigint;
+    userRewards: bigint;
+    inviterRewards: bigint;
+    rewardEventCount: number;
+  }>();
+  const [events, setEvents] = useState<RewardEvent[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!engagementRewards || !appAddress) return
+      if (!engagementRewards || !appAddress) return;
       const [rewardsData, eventsData] = await Promise.all([
         engagementRewards.getAppRewards(appAddress as `0x${string}`),
-        engagementRewards.getAppRewardEvents(appAddress as `0x${string}`)
-      ])
-      setRewards(rewardsData)
-      setEvents(eventsData)
-      setLoading(false)
-    }
+        engagementRewards.getAppRewardEvents(appAddress as `0x${string}`),
+      ]);
+      setRewards(rewardsData);
+      setEvents(eventsData);
+      setLoading(false);
+    };
 
     if (isConnected) {
-      fetchData()
+      fetchData();
     }
-  }, [isConnected, appAddress, !!engagementRewards])
+  }, [isConnected, appAddress, !!engagementRewards]);
 
   if (!isConnected) {
     return (
@@ -50,7 +60,7 @@ const AppDetailsPage: React.FC = () => {
           <p>Please connect your wallet to view app details.</p>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (loading) {
@@ -65,7 +75,7 @@ const AppDetailsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -94,15 +104,21 @@ const AppDetailsPage: React.FC = () => {
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-lg font-semibold">App Share</p>
-              <p className="text-2xl">{formatEther(rewards?.appRewards || 0n)} G$</p>
+              <p className="text-2xl">
+                {formatEther(rewards?.appRewards || 0n)} G$
+              </p>
             </div>
             <div>
               <p className="text-lg font-semibold">User Share</p>
-              <p className="text-2xl">{formatEther(rewards?.userRewards || 0n)} G$</p>
+              <p className="text-2xl">
+                {formatEther(rewards?.userRewards || 0n)} G$
+              </p>
             </div>
             <div>
               <p className="text-lg font-semibold">Inviter Share</p>
-              <p className="text-2xl">{formatEther(rewards?.inviterRewards || 0n)} G$</p>
+              <p className="text-2xl">
+                {formatEther(rewards?.inviterRewards || 0n)} G$
+              </p>
             </div>
           </div>
         </CardContent>
@@ -144,7 +160,7 @@ const AppDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
     </div>
-  )
-}
+  );
+};
 
-export default AppDetailsPage
+export default AppDetailsPage;

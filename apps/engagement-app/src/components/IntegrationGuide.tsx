@@ -13,7 +13,10 @@ import Prism from "prismjs";
 import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-typescript";
 import "prismjs/components/prism-solidity";
-import { DEV_REWARDS_CONTRACT, REWARDS_CONTRACT } from "@GoodSDKs/engagement-sdk";
+import {
+  DEV_REWARDS_CONTRACT,
+  REWARDS_CONTRACT,
+} from "@goodsdks/engagement-sdk";
 
 // Add these styles to ensure code visibility
 const codeBlockStyles = {
@@ -181,11 +184,15 @@ const IntegrationGuide: React.FC = () => {
         <CardContent className="space-y-4">
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-3">
-              <h3 className="text-lg font-semibold">Development (Celo Mainnet)</h3>
+              <h3 className="text-lg font-semibold">
+                Development (Celo Mainnet)
+              </h3>
               <div className="space-y-2">
                 <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm font-medium mb-1">Engagement Rewards Contract:</p>
-                  <a 
+                  <p className="text-sm font-medium mb-1">
+                    Engagement Rewards Contract:
+                  </p>
+                  <a
                     href={`https://celoscan.io/address/${DEV_REWARDS_CONTRACT}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -195,17 +202,22 @@ const IntegrationGuide: React.FC = () => {
                   </a>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Use these addresses for testing. Anyone can approve apps in development environment.
+                  Use these addresses for testing. Anyone can approve apps in
+                  development environment.
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-lg font-semibold">Production (Celo Mainnet)</h3>
+              <h3 className="text-lg font-semibold">
+                Production (Celo Mainnet)
+              </h3>
               <div className="space-y-2">
                 <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm font-medium mb-1">Engagement Rewards Contract:</p>
-                  <a 
+                  <p className="text-sm font-medium mb-1">
+                    Engagement Rewards Contract:
+                  </p>
+                  <a
                     href={`https://celoscan.io/address/${REWARDS_CONTRACT}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -215,11 +227,12 @@ const IntegrationGuide: React.FC = () => {
                   </a>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Use these addresses for production deployments. Apps require approval from Good Labs.
+                  Use these addresses for production deployments. Apps require
+                  approval from Good Labs.
                 </p>
               </div>
             </div>
-          </div>         
+          </div>
         </CardContent>
       </Card>
 

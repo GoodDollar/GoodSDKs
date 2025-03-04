@@ -1,35 +1,51 @@
-import type React from "react"
-import { useState, useEffect } from "react"
-import { useAccount, useSignTypedData } from "wagmi"
-import { useEngagementRewards } from "@GoodSDKs/engagement-sdk"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
-import { Input } from "./ui/input"
-import { Button } from "./ui/button"
-import { Label } from "./ui/label"
-import { useToast } from "@/hooks/use-toast"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import env from "@/env"
-import { zeroAddress } from "viem"
-import { useSigningModal } from "@/hooks/useSigningModal"
-import { SigningModal } from "./SigningModal"
-import { Check } from "lucide-react"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { useAccount, useSignTypedData } from "wagmi";
+import { useEngagementRewards } from "@goodsdks/engagement-sdk";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { Label } from "./ui/label";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import env from "@/env";
+import { zeroAddress } from "viem";
+import { useSigningModal } from "@/hooks/useSigningModal";
+import { SigningModal } from "./SigningModal";
+import { Check } from "lucide-react";
 
 const ClaimForm: React.FC = () => {
-  const { isConnected, chainId, address } = useAccount()
-  const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
-  const { toast } = useToast()
-  const { signTypedDataAsync } = useSignTypedData()
-  const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } = useSigningModal();
+  const { isConnected, chainId, address } = useAccount();
+  const engagementRewards = useEngagementRewards(env.rewardsContract); // Replace with actual contract address
+  const { toast } = useToast();
+  const { signTypedDataAsync } = useSignTypedData();
+  const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } =
+    useSigningModal();
 
-  const [app, setApp] = useState("")
-  const [inviter, setInviter] = useState("")
-  const [appSignature, setAppSignature] = useState("")
-  const [generatedAppSignature, setGeneratedAppSignature] = useState<string | null>(null);
-  const [appSignatureUser, setAppSignatureUser] = useState("")
-  const [registeredApps, setRegisteredApps] = useState<string[]>([])
-  const [appDescription, setAppDescription] = useState("")
+  const [app, setApp] = useState("");
+  const [inviter, setInviter] = useState("");
+  const [appSignature, setAppSignature] = useState("");
+  const [generatedAppSignature, setGeneratedAppSignature] = useState<
+    string | null
+  >(null);
+  const [appSignatureUser, setAppSignatureUser] = useState("");
+  const [registeredApps, setRegisteredApps] = useState<string[]>([]);
+  const [appDescription, setAppDescription] = useState("");
   const [validUntilBlock, setValidUntilBlock] = useState<bigint>(0n);
-  const [isAppSignatureValidSigner, setIsAppSignatureValidSigner] = useState(true);
+  const [isAppSignatureValidSigner, setIsAppSignatureValidSigner] =
+    useState(true);
 
   useEffect(() => {
     if (!engagementRewards) return;
@@ -59,11 +75,11 @@ const ClaimForm: React.FC = () => {
   }, [app, address]);
 
   const handleAppChange = async (value: string) => {
-    if (!engagementRewards) return
-    setApp(value)
-    const appInfo = await engagementRewards.getAppInfo(value as `0x${string}`)    
-    if(appInfo) setAppDescription(appInfo[9])
-  }
+    if (!engagementRewards) return;
+    setApp(value);
+    const appInfo = await engagementRewards.getAppInfo(value as `0x${string}`);
+    if (appInfo) setAppDescription(appInfo[9]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +136,7 @@ const ClaimForm: React.FC = () => {
             title: "Transaction Submitted",
             description: `Transaction hash: ${hash}`,
           });
-        }
+        },
       );
 
       return receipt;
@@ -131,11 +147,12 @@ const ClaimForm: React.FC = () => {
     if (!engagementRewards || !app || !appSignatureUser) return;
 
     try {
-      const { domain, types, message } = await engagementRewards.prepareAppSignature(
-        app as `0x${string}`,
-        appSignatureUser as `0x${string}`,
-        validUntilBlock
-      );
+      const { domain, types, message } =
+        await engagementRewards.prepareAppSignature(
+          app as `0x${string}`,
+          appSignatureUser as `0x${string}`,
+          validUntilBlock,
+        );
 
       const signature = await signTypedDataAsync({
         domain,
@@ -175,7 +192,7 @@ const ClaimForm: React.FC = () => {
           <p>Please connect your wallet to claim rewards.</p>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -219,11 +236,16 @@ const ClaimForm: React.FC = () => {
                 onChange={(e) => setAppSignature(e.target.value)}
                 placeholder="0x..."
               />
-              <p className="text-sm text-gray-500">The app signature should be obtained from your backend or app owner.</p>
+              <p className="text-sm text-gray-500">
+                The app signature should be obtained from your backend or app
+                owner.
+              </p>
             </div>
             <div>
               <Label htmlFor="nonce">Valid Until Block</Label>
-              <p className="text-sm text-gray-500">{validUntilBlock.toString()}</p>
+              <p className="text-sm text-gray-500">
+                {validUntilBlock.toString()}
+              </p>
             </div>
             <div>
               <Label>App Description</Label>
@@ -237,8 +259,8 @@ const ClaimForm: React.FC = () => {
         <CardHeader>
           <CardTitle>Generate App Signature</CardTitle>
           <CardDescription>
-            Use this form to generate an app signature for testing purposes.
-            In production, this should be done on your backend.
+            Use this form to generate an app signature for testing purposes. In
+            production, this should be done on your backend.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -250,7 +272,9 @@ const ClaimForm: React.FC = () => {
               onChange={(e) => setAppSignatureUser(e.target.value)}
               placeholder="0x..."
             />
-            <p className="text-sm text-gray-500">Enter the user address for whom the app signature is generated.</p>
+            <p className="text-sm text-gray-500">
+              Enter the user address for whom the app signature is generated.
+            </p>
           </div>
           <Button
             onClick={handleGenerateAppSignature}
@@ -260,7 +284,8 @@ const ClaimForm: React.FC = () => {
           </Button>
           {!isAppSignatureValidSigner && (
             <p className="text-sm text-red-500">
-              You must connect with the same address as the selected app to generate the app signature.
+              You must connect with the same address as the selected app to
+              generate the app signature.
             </p>
           )}
           {generatedAppSignature && (
@@ -279,13 +304,12 @@ const ClaimForm: React.FC = () => {
           )}
         </CardContent>
       </Card>
-      <SigningModal 
-        open={isSigningModalOpen} 
+      <SigningModal
+        open={isSigningModalOpen}
         onOpenChange={setIsSigningModalOpen}
       />
     </>
-  )
-}
+  );
+};
 
-export default ClaimForm
-
+export default ClaimForm;
