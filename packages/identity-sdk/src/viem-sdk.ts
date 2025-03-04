@@ -176,7 +176,7 @@ export const generateFVLink = async (
       message: fvSigMessage,
     });
 
-    const identityUrl = Envs.development.identityUrl;
+    const {identityUrl} = Envs.development;
     if (!identityUrl) {
       throw new Error("identityUrl is not defined in environment settings.");
     }
