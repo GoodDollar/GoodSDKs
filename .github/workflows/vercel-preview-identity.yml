@@ -1,0 +1,50 @@
+name: preview
+on:
+  push:
+    paths:
+      - "apps/demo-identity-app/**"
+      - "packages/identity-sdk/**"
+      - ".github/workflows/*identity*.yml"
+  pull_request:
+    types: [opened, synchronize, edited, ready_for_review]
+    branches:
+      - main
+    paths:
+      - "apps/demo-identity-app/**"
+      - "packages/identity-sdk/**"
+      - ".github/workflows/*identity*.yml"
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: prj_TYzFsq9KkF1MGQ9ue2WhwrtucbTh
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - run: npm install --global turbo@latest
+      - run: yarn install --immutable
+      # Get env vars
+      - run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
+        working-directory: apps/demo-identity-app
+      - run: echo "$(node -v)"
+      - run: vercel build --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
+        working-directory: apps/demo-identity-app
+      - id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_DEPLOY_TOKEN }})"
+          echo "url=$url" >> $GITHUB_OUTPUT
+          echo "REF:${{ github.ref }}"
+        working-directory: apps/demo-identity-app
+      - name: alias to dev domain
+        run: vercel alias --scope=gooddollarteam --token=${{ secrets.VERCEL_DEPLOY_TOKEN }} set "${{ steps.deploy.outputs.url }}" demo-identity-dev.vercel.app
+        if: github.ref == 'refs/heads/main'
+        working-directory: apps/demo-identity-app
