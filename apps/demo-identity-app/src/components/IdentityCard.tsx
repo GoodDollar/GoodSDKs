@@ -1,25 +1,35 @@
 import React, { useEffect, useState } from "react";
 import { View, Text } from "tamagui";
-import { useIdentitySDK } from "@goodsdks/identity-sdk";
+import {
+  calculateIdentityExpiry,
+  useIdentitySDK,
+} from "@goodsdks/identity-sdk";
 import { useAccount } from "wagmi";
 
-interface IdentityCardProps {
-  contractAddress: any;
-}
-
-export const IdentityCard: React.FC<IdentityCardProps> = ({
-  contractAddress,
-}) => {
+export const IdentityCard: React.FC = () => {
   const { address } = useAccount();
-  const identitySDK = useIdentitySDK(contractAddress);
+  const identitySDK = useIdentitySDK("development");
   const [expiry, setExpiry] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const fetchExpiry = async () => {
       if (address) {
         const identityExpiry = await identitySDK.getIdentityExpiry(address);
-        if (identityExpiry?.formattedExpiryTimestamp) {
-          setExpiry(identityExpiry.formattedExpiryTimestamp);
+
+        const { expiryTimestamp } = calculateIdentityExpiry(
+          identityExpiry?.lastAuthenticated ?? BigInt(0),
+          identityExpiry?.authPeriod ?? BigInt(0),
+        );
+
+        const date = new Date(Number(expiryTimestamp));
+        const formattedExpiryTimestamp = date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "2-digit",
+        });
+
+        if (formattedExpiryTimestamp) {
+          setExpiry(formattedExpiryTimestamp);
         }
       }
     };
@@ -31,6 +41,7 @@ export const IdentityCard: React.FC<IdentityCardProps> = ({
 
   return (
     <View
+      width="350px"
       backgroundColor="$background"
       padding="40px"
       borderRadius="$small"

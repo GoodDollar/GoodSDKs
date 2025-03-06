@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [isWhitelisted, setIsWhitelisted] = useState(false);
   const location = useLocation();
   const { address } = useAccount();
-  const identitySDK = useIdentitySDK(CONTRACT_ADDRESS);
+  const identitySDK = useIdentitySDK("development");
 
   useEffect(() => {
     // Check if returning from FV link with success
@@ -42,8 +42,9 @@ const App: React.FC = () => {
     const checkWhitelistStatus = async () => {
       if (address) {
         try {
-          const whitelisted = await identitySDK.checkIsWhitelisted(address);
-          setIsWhitelisted(whitelisted);
+          const { isWhitelisted } =
+            await identitySDK.checkIsWhitelisted(address);
+          setIsWhitelisted(isWhitelisted);
         } catch (error) {
           console.error("Error checking if whitelisted:", error);
         }
@@ -79,9 +80,7 @@ const App: React.FC = () => {
           ) : null}
         </View>
 
-        {isWhitelisted || isVerified ? (
-          <IdentityCard contractAddress={CONTRACT_ADDRESS} />
-        ) : null}
+        {isWhitelisted || isVerified ? <IdentityCard /> : null}
 
         <SigningModal
           open={isSigningModalOpen}
