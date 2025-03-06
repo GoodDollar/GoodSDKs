@@ -2,7 +2,6 @@ import {
   Address,
   PublicClient,
   WalletClient,
-  parseAbi,
   SimulateContractParameters,
   WalletActions,
 } from "viem";
@@ -10,30 +9,17 @@ import { waitForTransactionReceipt } from "viem/actions";
 import { z } from "zod";
 import { compressToEncodedURIComponent } from "lz-string";
 
-import { Envs, FV_IDENTIFIER_MSG2 } from "./constants";
+import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI } from "./constants";
 
-const identityV2ABI = parseAbi([
-  "function addWhitelisted(address account)",
-  "function removeWhitelisted(address account)",
-  "function isWhitelisted(address account) view returns (bool)",
-  "function lastAuthenticated(address account) view returns (uint256)",
-  "function authenticationPeriod() view returns (uint256)",
-]);
+import type {
+  IdentityContract,
+  IdentityExpiryData,
+  IdentityExpiry,
+} from "./types";
 
 const addressSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
-
-interface IdentityContract {
-  publicClient: PublicClient;
-  contractAddress: Address;
-  abi: any;
-}
-
-interface IdentityExpiryData {
-  lastAuthenticated: bigint;
-  authPeriod: bigint;
-}
 
 export const initializeIdentityContract = (
   publicClient: PublicClient,
@@ -41,7 +27,6 @@ export const initializeIdentityContract = (
 ): IdentityContract => ({
   publicClient,
   contractAddress,
-  abi: identityV2ABI,
 });
 
 export const submitAndWait = async (
@@ -62,52 +47,35 @@ export const submitAndWait = async (
     const hash = await walletClient.writeContract(request);
     onHash?.(hash);
 
-    const receipt = await waitForTransactionReceipt(publicClient, { hash });
-
-    if (!receipt) {
-      throw new Error(`Transaction receipt not found for hash ${hash}`);
-    }
-
-    if (receipt.status !== "success") {
-      throw new Error(`Transaction failed with status ${receipt.status}`);
-    }
-
-    return receipt;
+    return waitForTransactionReceipt(publicClient, { hash });
   } catch (error: any) {
     console.error("submitAndWait Error:", error);
     throw new Error(`Failed to submit transaction: ${error.message}`);
   }
 };
-
-export const isWhitelisted = async (
+/* 
+Returns whitelist status of main account or any connected account
+see: https://docs.gooddollar.org/user-guides/connect-another-wallet-address-to-identity
+**/
+export const getWhitelistedRoot = async (
   contract: IdentityContract,
-  accountToCheck: Address,
-): Promise<boolean> => {
-  const validation = addressSchema.safeParse(accountToCheck);
-  if (!validation.success) {
-    throw new Error(
-      `isWhitelisted Error: ${validation.error.issues.map((issue) => issue.message).join(", ")}`,
-    );
-  }
-
+  account: Address,
+): Promise<{ isWhitelisted: boolean; root: Address }> => {
   try {
-    const result = await contract.publicClient.readContract({
+    const root = await contract.publicClient.readContract({
       address: contract.contractAddress,
-      abi: contract.abi,
-      functionName: "isWhitelisted",
-      args: [accountToCheck],
+      abi: identityV2ABI,
+      functionName: "getWhitelistedRoot",
+      args: [account],
     });
 
-    if (typeof result !== "boolean") {
-      throw new Error(
-        `isWhitelisted Error: Expected boolean, received ${typeof result}`,
-      );
-    }
-
-    return result;
+    return {
+      isWhitelisted: root !== "0x0000000000000000000000000000000000000000",
+      root,
+    };
   } catch (error: any) {
-    console.error("isWhitelisted Error:", error);
-    throw new Error(`Failed to check whitelist status: ${error.message}`);
+    console.error("getWhitelistedRoot Error:", error);
+    throw new Error(`Failed to get whitelisted root: ${error.message}`);
   }
 };
 
@@ -115,24 +83,17 @@ export const getIdentityExpiryData = async (
   contract: IdentityContract,
   account: Address,
 ): Promise<IdentityExpiryData> => {
-  const validation = addressSchema.safeParse(account);
-  if (!validation.success) {
-    throw new Error(
-      `getIdentityExpiryData Error: ${validation.error.issues.map((issue) => issue.message).join(", ")}`,
-    );
-  }
-
   try {
     const [lastAuthenticated, authPeriod] = await Promise.all([
       contract.publicClient.readContract({
         address: contract.contractAddress,
-        abi: contract.abi,
+        abi: identityV2ABI,
         functionName: "lastAuthenticated",
         args: [account],
       }),
       contract.publicClient.readContract({
         address: contract.contractAddress,
-        abi: contract.abi,
+        abi: identityV2ABI,
         functionName: "authenticationPeriod",
         args: [],
       }),
@@ -160,8 +121,8 @@ export const getIdentityExpiryData = async (
 export const generateFVLink = async (
   contract: IdentityContract,
   walletClient: WalletClient & WalletActions,
-  callbackUrl?: string,
   popupMode: boolean = false,
+  callbackUrl?: string,
   chainId?: number,
 ): Promise<string> => {
   try {
@@ -176,7 +137,7 @@ export const generateFVLink = async (
       message: fvSigMessage,
     });
 
-    const {identityUrl} = Envs.development;
+    const { identityUrl } = Envs.development;
     if (!identityUrl) {
       throw new Error("identityUrl is not defined in environment settings.");
     }
@@ -212,4 +173,22 @@ export const generateFVLink = async (
       `Failed to generate Face Verification link: ${error.message}`,
     );
   }
+};
+
+export const calculateIdentityExpiry = (
+  lastAuthenticated: bigint,
+  authPeriod: bigint,
+): IdentityExpiry => {
+  const MS_IN_A_SECOND = 1000;
+  const MS_IN_A_DAY = 24 * 60 * 60 * MS_IN_A_SECOND;
+
+  const periodInMs = authPeriod * BigInt(MS_IN_A_DAY);
+  const expiryTimestamp =
+    lastAuthenticated * BigInt(MS_IN_A_SECOND) + periodInMs;
+
+  return {
+    authPeriod,
+    expiryTimestamp,
+    lastAuthenticated,
+  };
 };

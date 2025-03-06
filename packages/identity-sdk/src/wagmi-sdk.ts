@@ -1,44 +1,50 @@
 import { useCallback } from "react";
 import { usePublicClient, useWalletClient } from "wagmi";
-import { Address, PublicClient } from "viem";
+import { Address, PublicClient, WalletClient, WalletActions } from "viem";
+
 import {
   initializeIdentityContract,
-  isWhitelisted,
+  getWhitelistedRoot,
   generateFVLink,
   getIdentityExpiryData,
 } from "./viem-sdk";
 
+import type { IdentityContract, IdentityExpiryData } from "./types";
+import { identityContractAddresses, contractEnv } from "./constants";
+
 interface IdentitySDK {
-  checkIsWhitelisted: (account: Address) => Promise<boolean>;
+  checkIsWhitelisted: (
+    account: Address,
+  ) => Promise<{ isWhitelisted: boolean; root: Address }>;
   generateFVLink: (
     callbackUrl?: string,
     popupMode?: boolean,
     chainId?: number,
   ) => Promise<string>;
-  getIdentityExpiry: (account: Address) => Promise<IdentityExpiry | undefined>;
+  getIdentityExpiry: (
+    account: Address,
+  ) => Promise<IdentityExpiryData | undefined>;
 }
 
-interface IdentityExpiry {
-  authPeriod: bigint;
-  expiryTimestamp: bigint;
-  formattedExpiryTimestamp?: string;
-  lastAuthenticated: bigint;
-}
-
-export const useIdentitySDK = (contractAddress: Address): IdentitySDK => {
+export const useIdentitySDK = (
+  env: contractEnv = "production",
+): IdentitySDK => {
   const publicClient = usePublicClient() as PublicClient;
   const { data: walletClient } = useWalletClient();
+  const contractAddress = identityContractAddresses[env];
 
   const contract = walletClient
     ? initializeIdentityContract(publicClient, contractAddress)
     : null;
 
   const checkIsWhitelisted = useCallback(
-    async (account: Address): Promise<boolean> => {
+    async (
+      account: Address,
+    ): Promise<{ isWhitelisted: boolean; root: Address }> => {
       if (!publicClient || !contract) {
         throw new Error("Public client or contract not initialized.");
       }
-      return await isWhitelisted(contract, account);
+      return await getWhitelistedRoot(contract, account);
     },
     [contract, publicClient],
   );
@@ -58,8 +64,8 @@ export const useIdentitySDK = (contractAddress: Address): IdentitySDK => {
       return await generateFVLink(
         contract,
         walletClient,
-        callbackUrl,
         popupMode,
+        callbackUrl,
         chainId,
       );
     },
@@ -67,7 +73,7 @@ export const useIdentitySDK = (contractAddress: Address): IdentitySDK => {
   );
 
   const getIdentityExpiry = useCallback(
-    async (account: Address): Promise<IdentityExpiry | undefined> => {
+    async (account: Address): Promise<IdentityExpiryData | undefined> => {
       if (!publicClient || !contract) {
         throw new Error("Public client or contract not initialized.");
       }
@@ -76,22 +82,7 @@ export const useIdentitySDK = (contractAddress: Address): IdentitySDK => {
         const expiryData = await getIdentityExpiryData(contract, account);
         if (!expiryData) return undefined;
 
-        const { lastAuthenticated, authPeriod } = expiryData;
-        const expiryTimestamp = lastAuthenticated + authPeriod;
-
-        const date = new Date(Number(expiryTimestamp) * 1000);
-        const formattedExpiryTimestamp = date.toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "2-digit",
-        });
-
-        return {
-          authPeriod,
-          expiryTimestamp,
-          formattedExpiryTimestamp,
-          lastAuthenticated,
-        };
+        return expiryData;
       } catch (error: any) {
         console.error("getIdentityExpiry Error:", error);
         throw new Error(`Failed to get identity expiry: ${error.message}`);
