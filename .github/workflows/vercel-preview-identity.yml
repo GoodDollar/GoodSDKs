@@ -1,4 +1,4 @@
-name: preview
+name: preview-demo-identity
 on:
   push:
     paths:
