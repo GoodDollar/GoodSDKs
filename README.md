@@ -1,84 +1,154 @@
-# Turborepo starter
+# GoodSdks Monorepo
 
-This is an official starter Turborepo.
+Welcome to the **GoodSdks Monorepo**, a unified repository housing multiple packages and applications designed to streamline integrating and working with the GoodDollar Protocol and G$ token. This monorepo leverages modern tools and libraries such as **React**, **Wagmi**, and **Viem SDK** to deliver robust and scalable solutions for both frontend and backend environments.
 
-## Using this example
+## Table of Contents
 
-Run the following command:
+- [Overview](#overview)
+- [Packages](#packages)
+  - [identity-sdk](packages/identity-sdk/README.md)
+- [Applications](#applications)
+  - [demo-identity-app](apps/demo-identity-app/README.md)
+- [Getting Started](#getting-started)
+- [Usage](#usage)
+- [Contributing](#contributing)
+- [License](#license)
 
-```sh
-npx create-turbo@latest
-```
+## Overview
 
-## What's inside?
+The GoodSDK's Monorepo is structured to facilitate seamless development, testing, and deployment of identity-related functionalities across various applications. By centralizing shared packages and utilities, it ensures consistency and reusability, reducing redundancy and enhancing maintainability.
 
-This Turborepo includes the following packages/apps:
+### Key Components
 
-### Apps and Packages
+- **Packages**: Reusable libraries and SDKs that provide core functionalities.
+- **Applications**: Frontend and backend applications that utilize the packages to deliver complete solutions.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Packages
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+### [identity-sdk](packages/identity-sdk/README.md)
 
-### Utilities
+The `identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification, whitelist management, and more.
 
-This Turborepo has some additional tools already setup for you:
+#### Features
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+- **Wagmi SDK Integration**: Simplifies blockchain interactions within React applications using hooks.
+- **Viem SDK Integration**: Provides utility functions for backend services or non-React environments.
+- **Identity Management**: Functions to verify identities, manage whitelists, and handle authentication periods.
 
-### Build
+For detailed information, refer to the [identity-sdk README](packages/identity-sdk/README.md).
 
-To build all apps and packages, run the following command:
+## Applications
 
-```
-cd my-turborepo
-pnpm build
-```
+### [demo-identity-app](apps/demo-identity-app/README.md)
 
-### Develop
+The `demo-identity-app` is a React-based application that demonstrates the capabilities of the `identity-sdk`. It showcases how to integrate identity verification features into a frontend application, providing a practical example for developers to follow.
 
-To develop all apps and packages, run the following command:
+#### Features
 
-```
-cd my-turborepo
-pnpm dev
-```
+- **Identity Card Component**: Displays wallet address and identity expiry information.
+- **Whitelist Status Checker**: Allows users to check their whitelist status through a simple interface.
+- **Responsive Design**: Built with Tamagui for a consistent and adaptable UI across devices.
 
-### Remote Caching
+For more details, please see the [demo-identity-app README](apps/demo-identity-app/README.md).
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+## Getting Started
 
-Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+To get started with the Identity Monorepo, follow these steps:
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+1. **Clone the Repository**
 
-```
-cd my-turborepo
-npx turbo login
-```
+   ```bash
+   git clone https://github.com/GoodDollar/GoodSdks
+   ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+2. **Navigate to the Project Directory**
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+   ```bash
+   cd identity-monorepo
+   ```
 
-```
-npx turbo link
-```
+3. **Install Dependencies**
 
-## Useful Links
+   The monorepo uses [Yarn Workspaces](https://yarnpkg.com/features/workspaces) for dependency management.
 
-Learn more about the power of Turborepo:
+   ```bash
+   yarn install
+   ```
 
-- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
-- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
-- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
-- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
-- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
-- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)
+4. **Start the Development Server**
+
+   Navigate to the desired application and start the development server.
+
+   ```bash
+   cd apps/demo-identity-app
+   yarn dev
+   ```
+
+## Usage
+
+### Developing with `identity-sdk`
+
+To utilize the `identity-sdk` within your application:
+
+1. **Import the SDK**
+
+   ```typescript file.tsx
+   import { useIdentitySDK } from "identity-sdk";
+   ```
+
+2. **Initialize the SDK**
+
+   ```typescript file.tsx
+   const identitySDK = useIdentitySDK("development");
+   ```
+
+3. **Use SDK Functions**
+
+   ```typescript file.tsx
+   const checkWhitelist = async (account: string) => {
+     try {
+       const { isWhitelisted, root } =
+         await identitySDK.checkIsWhitelisted(account);
+       console.log(`Is Whitelisted: ${isWhitelisted}, Root: ${root}`);
+     } catch (error) {
+       console.error(error);
+     }
+   };
+   ```
+
+For more examples and detailed usage, refer to the [identity-sdk README](packages/identity-sdk/README.md).
+
+### Running the Demo Application
+
+The `demo-identity-app` provides a practical example of how to integrate the `identity-sdk` into a React application.
+
+1. **Navigate to the Application Directory**
+
+   ```bash
+   cd apps/demo-identity-app
+   ```
+
+2. **Start the Application**
+
+   ```bash
+   yarn dev
+   ```
+
+3. **Access the Application**
+
+   Open your browser and navigate to `http://localhost:3000` to view the demo.
+
+For comprehensive instructions, check the [demo-identity-app README](apps/demo-identity-app/README.md).
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+See our main contribution Guidelines: https://github.com/GoodDollar/.github/blob/master/CONTRIBUTING.md
+
+There will also be tickets available with a 'scoutgame' label. see our rewards page for more information: https://scoutgame.xyz/info/partner-rewards/good-dollar
+
+You can also join our developer community on Discord: https://ubi.gd/GoodBuildersDiscord
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
