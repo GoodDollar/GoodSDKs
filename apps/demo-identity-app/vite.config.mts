@@ -27,17 +27,6 @@ export default defineConfig({
     https,
   },
   plugins: [react()],
-  // build: {
-  //   rollupOptions: {
-  //     preserveEntrySignatures: "allow-extension",
-  //   },
-  //   commonjsOptions: {
-  //     include: [/node_modules/],
-  //   },
-  // },
-  // optimizeDeps: {
-  //   include: ["react-dom", "react-native/normalize-color"],
-  // },
   define: {
     "process.browser": true,
     "process.env": process.env,
