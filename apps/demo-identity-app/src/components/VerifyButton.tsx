@@ -11,9 +11,7 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
   onVerificationSuccess,
 }) => {
   const { address } = useAccount();
-  const identitySDK = useIdentitySDK(
-    "0xF25fA0D4896271228193E782831F6f3CFCcF169C",
-  );
+  const identitySDK = useIdentitySDK("development");
 
   const handleVerify = async () => {
     if (!address) return;
