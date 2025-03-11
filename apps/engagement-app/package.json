@@ -1,5 +1,5 @@
 {
-  "name": "@GoodSDKs/engagement-app",
+  "name": "@goodsdks/engagement-app",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@GoodSDKs/engagement-sdk": "*",
+    "@goodsdks/engagement-sdk": "*",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-dialog": "^1.1.5",
     "@radix-ui/react-label": "^2.1.1",

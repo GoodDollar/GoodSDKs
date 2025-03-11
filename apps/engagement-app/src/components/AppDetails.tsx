@@ -1,9 +1,19 @@
 import React, { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
 import { useAccount } from "wagmi"
-import { useEngagementRewards, type RewardEvent } from "@GoodSDKs/engagement-sdk"
+import {
+  useEngagementRewards,
+  type RewardEvent,
+} from "@goodsdks/engagement-sdk"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table"
 import { formatEther } from "viem"
 import { Loader2 } from "lucide-react"
 import env from "@/env"
@@ -28,7 +38,7 @@ const AppDetailsPage: React.FC = () => {
       if (!engagementRewards || !appAddress) return
       const [rewardsData, eventsData] = await Promise.all([
         engagementRewards.getAppRewards(appAddress as `0x${string}`),
-        engagementRewards.getAppRewardEvents(appAddress as `0x${string}`)
+        engagementRewards.getAppRewardEvents(appAddress as `0x${string}`),
       ])
       setRewards(rewardsData)
       setEvents(eventsData)
@@ -94,15 +104,21 @@ const AppDetailsPage: React.FC = () => {
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-lg font-semibold">App Share</p>
-              <p className="text-2xl">{formatEther(rewards?.appRewards || 0n)} G$</p>
+              <p className="text-2xl">
+                {formatEther(rewards?.appRewards || 0n)} G$
+              </p>
             </div>
             <div>
               <p className="text-lg font-semibold">User Share</p>
-              <p className="text-2xl">{formatEther(rewards?.userRewards || 0n)} G$</p>
+              <p className="text-2xl">
+                {formatEther(rewards?.userRewards || 0n)} G$
+              </p>
             </div>
             <div>
               <p className="text-lg font-semibold">Inviter Share</p>
-              <p className="text-2xl">{formatEther(rewards?.inviterRewards || 0n)} G$</p>
+              <p className="text-2xl">
+                {formatEther(rewards?.inviterRewards || 0n)} G$
+              </p>
             </div>
           </div>
         </CardContent>

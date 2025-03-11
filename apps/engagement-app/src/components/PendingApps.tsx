@@ -1,45 +1,52 @@
-import React,{useEffect, useState} from "react"
-import { useAccount } from "wagmi"
-import { useEngagementRewards } from "@GoodSDKs/engagement-sdk"
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { Button } from "./ui/button"
-import env from "@/env"
-import { useNavigate } from "react-router-dom"
-import { Loader2 } from "lucide-react"
-import { TruncatedAddress } from "./ui/TruncatedAddress"
+import React, { useEffect, useState } from "react";
+import { useAccount } from "wagmi";
+import { useEngagementRewards } from "@goodsdks/engagement-sdk";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { Button } from "./ui/button";
+import env from "@/env";
+import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+import { TruncatedAddress } from "./ui/TruncatedAddress";
 
 const PendingAppsPage: React.FC = () => {
-  const { isConnected } = useAccount()
-  const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
-  const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
+  const { isConnected } = useAccount();
+  const engagementRewards = useEngagementRewards(env.rewardsContract); // Replace with actual contract address
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
 
   const [pendingApps, setPendingApps] = useState<
     Array<{
-      address: string
-      owner: string
-      rewardReceiver: string
-      totalRewardsClaimed: bigint
-      registeredAt: number
-      lastResetAt: number
-      userAndInviterPercentage: number
-      userPercentage: number
-      isRegistered: boolean
-      isApproved: boolean
-      description: string
-      url: string
-      email: string
+      address: string;
+      owner: string;
+      rewardReceiver: string;
+      totalRewardsClaimed: bigint;
+      registeredAt: number;
+      lastResetAt: number;
+      userAndInviterPercentage: number;
+      userPercentage: number;
+      isRegistered: boolean;
+      isApproved: boolean;
+      description: string;
+      url: string;
+      email: string;
     }>
-  >([])
+  >([]);
 
   useEffect(() => {
     const fetchPendingApps = async () => {
-      if(!engagementRewards) return
-      const apps = await engagementRewards.getPendingApps()
+      if (!engagementRewards) return;
+      const apps = await engagementRewards.getPendingApps();
       const appDetails = await Promise.all(
         apps.map(async (app) => {
-          const info = await engagementRewards.getAppInfo(app as `0x${string}`)
+          const info = await engagementRewards.getAppInfo(app as `0x${string}`);
           return {
             address: app,
             owner: info[0], // Updated index
@@ -53,22 +60,22 @@ const PendingAppsPage: React.FC = () => {
             isApproved: info[8],
             description: info[9],
             url: info[10],
-            email: info[11]
-          }
+            email: info[11],
+          };
         }),
-      )
-      setPendingApps(appDetails)
-      setLoading(false)
-    }
-    
+      );
+      setPendingApps(appDetails);
+      setLoading(false);
+    };
+
     if (isConnected) {
-      fetchPendingApps()
+      fetchPendingApps();
     }
-  }, [isConnected, !!engagementRewards])
+  }, [isConnected, !!engagementRewards]);
 
   const handleApprove = async (app: string) => {
-    navigate(`/approve/${app}`)
-  }
+    navigate(`/approve/${app}`);
+  };
 
   if (!isConnected) {
     return (
@@ -80,7 +87,7 @@ const PendingAppsPage: React.FC = () => {
           <p>Please connect your wallet to view pending apps.</p>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (loading) {
@@ -95,7 +102,7 @@ const PendingAppsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -121,14 +128,25 @@ const PendingAppsPage: React.FC = () => {
           <TableBody>
             {pendingApps.map((app) => (
               <TableRow key={app.address}>
-                <TableCell><TruncatedAddress address={app.address} /></TableCell>
-                <TableCell><TruncatedAddress address={app.owner} /></TableCell>
-                <TableCell><TruncatedAddress address={app.rewardReceiver} /></TableCell>
+                <TableCell>
+                  <TruncatedAddress address={app.address} />
+                </TableCell>
+                <TableCell>
+                  <TruncatedAddress address={app.owner} />
+                </TableCell>
+                <TableCell>
+                  <TruncatedAddress address={app.rewardReceiver} />
+                </TableCell>
                 <TableCell>{app.userAndInviterPercentage}%</TableCell>
                 <TableCell>{app.userPercentage}%</TableCell>
                 <TableCell>{app.description}</TableCell>
                 <TableCell>
-                  <a href={app.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  <a
+                    href={app.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
                     {app.url}
                   </a>
                 </TableCell>
@@ -138,7 +156,9 @@ const PendingAppsPage: React.FC = () => {
                   </a>
                 </TableCell>
                 <TableCell>
-                  <Button onClick={() => handleApprove(app.address)}>Approve</Button>
+                  <Button onClick={() => handleApprove(app.address)}>
+                    Approve
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -146,8 +166,7 @@ const PendingAppsPage: React.FC = () => {
         </Table>
       </CardContent>
     </Card>
-  )
-}
+  );
+};
 
-export default PendingAppsPage
-
+export default PendingAppsPage;

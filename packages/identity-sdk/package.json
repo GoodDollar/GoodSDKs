@@ -1,5 +1,5 @@
 {
-  "name": "@goodsdks/engagement-sdk",
+  "name": "@goodsdks/identity-sdk",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
       "import": "./dist/index.js"
     },
     "require": {
-      "types": "./dist/index.d.cts",
+      "types": "./dist/index.cts",
       "require": "./dist/index.cjs"
     }
   },
@@ -30,6 +30,11 @@
     "wagmi": "*"
   },
   "dependencies": {
-    "tsup": "^8.3.5"
-  }
+    "lz-string": "^1.5.0",
+    "tsup": "^8.4.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
 }

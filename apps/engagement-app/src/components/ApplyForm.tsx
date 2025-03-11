@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react'
-import { useEngagementRewards } from '@GoodSDKs/engagement-sdk'
-import { useAccount, usePublicClient } from 'wagmi'
-import { useToast } from "@/hooks/use-toast"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm, useWatch } from "react-hook-form"
-import * as z from "zod"
+import React, { useState, useEffect } from "react";
+import { useEngagementRewards } from "@goodsdks/engagement-sdk";
+import { useAccount, usePublicClient } from "wagmi";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
+import * as z from "zod";
 import {
   Form,
   FormControl,
@@ -16,52 +22,63 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import env from '@/env'
-import { PublicClient, zeroAddress } from 'viem'
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
-import { useSigningModal } from "@/hooks/useSigningModal"
-import { SigningModal } from "./SigningModal"
-import { useParams } from 'react-router-dom'
-import { isContract, checkSourceVerification } from '@/utils/contract-verification'
+} from "@/components/ui/form";
+import env from "@/env";
+import { PublicClient, zeroAddress } from "viem";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+import { useSigningModal } from "@/hooks/useSigningModal";
+import { SigningModal } from "./SigningModal";
+import { useParams } from "react-router-dom";
+import {
+  isContract,
+  checkSourceVerification,
+} from "@/utils/contract-verification";
 
 const baseFormSchema = z.object({
   app: z.string().startsWith("0x"),
-  rewardReceiver: z.string().startsWith("0x", { message: "Must be a valid Ethereum address" }),
+  rewardReceiver: z
+    .string()
+    .startsWith("0x", { message: "Must be a valid Ethereum address" }),
   userInviterPercentage: z.number().min(0).max(100),
   userPercentage: z.number().min(0).max(100),
-  description: z.string().min(50).max(512, { message: "Description must be up to 512 characters and longer than 50" }),
+  description: z
+    .string()
+    .min(50)
+    .max(512, {
+      message: "Description must be up to 512 characters and longer than 50",
+    }),
   url: z.string().url().max(255),
   email: z.string().email().max(255),
-})
+});
 
 const ApplyForm: React.FC = () => {
-  const { appAddress } = useParams<{ appAddress: string }>()
-  const { isConnected } = useAccount()
-  const { toast } = useToast()
-  const engagementRewards = useEngagementRewards(env.rewardsContract)  // Replace with actual contract address
+  const { appAddress } = useParams<{ appAddress: string }>();
+  const { isConnected } = useAccount();
+  const { toast } = useToast();
+  const engagementRewards = useEngagementRewards(env.rewardsContract); // Replace with actual contract address
   const [isReapplying, setIsReapplying] = useState(false);
-  const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } = useSigningModal();
-  const publicClient = usePublicClient()
+  const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } =
+    useSigningModal();
+  const publicClient = usePublicClient();
   const [verificationStatus, setVerificationStatus] = useState<{
-    isVerified: boolean
-    checked: boolean
+    isVerified: boolean;
+    checked: boolean;
   }>({
     isVerified: false,
-    checked: false
-  })
+    checked: false,
+  });
 
   const form = useForm<z.infer<typeof baseFormSchema>>({
     resolver: (values, context, options) => {
       const schema = baseFormSchema.refine(
         () => !verificationStatus.checked || verificationStatus.isVerified,
         {
-          path: ['app'],
-          message: "Contract must be verified on Sourcify"
-        }
-      )
-      return zodResolver(schema)(values, context, options)
+          path: ["app"],
+          message: "Contract must be verified on Sourcify",
+        },
+      );
+      return zodResolver(schema)(values, context, options);
     },
     defaultValues: {
       app: appAddress,
@@ -72,37 +89,48 @@ const ApplyForm: React.FC = () => {
       url: "",
       email: "",
     },
-  })
+  });
 
   const appValue = useWatch({
     control: form.control,
-    name: "app"
+    name: "app",
   });
 
   useEffect(() => {
     const handleAppChange = async () => {
       // Reset reapplying status
       setIsReapplying(false);
-      if (!publicClient || !appValue || !appValue.startsWith('0x') || appValue.length !== 42) return;
+      if (
+        !publicClient ||
+        !appValue ||
+        !appValue.startsWith("0x") ||
+        appValue.length !== 42
+      )
+        return;
 
       // Check if app exists
-      const appInfo = await engagementRewards?.getAppInfo(appValue as `0x${string}`);
+      const appInfo = await engagementRewards?.getAppInfo(
+        appValue as `0x${string}`,
+      );
       if (appInfo?.[0] !== zeroAddress) {
         setIsReapplying(true);
       }
 
       // Check contract verification
-      const contractStatus = await isContract(publicClient as PublicClient, appValue)
-      let verifiedStatus = true
+      const contractStatus = await isContract(
+        publicClient as PublicClient,
+        appValue,
+      );
+      let verifiedStatus = true;
       if (contractStatus) {
-        const chainId = await publicClient.getChainId()
-        verifiedStatus = await checkSourceVerification(appValue, chainId)
+        const chainId = await publicClient.getChainId();
+        verifiedStatus = await checkSourceVerification(appValue, chainId);
       }
       setVerificationStatus({
         isVerified: verifiedStatus,
-        checked: true
-      })
-    }
+        checked: true,
+      });
+    };
 
     handleAppChange();
   }, [appValue, !!engagementRewards, !!publicClient]);
@@ -117,33 +145,30 @@ const ApplyForm: React.FC = () => {
       return;
     }
 
-    await wrapWithSigningModal(
-      async () => {
-        const receipt = await engagementRewards.applyApp(
-          values.app as `0x${string}`,
-          {
-            rewardReceiver: values.rewardReceiver as `0x${string}`,
-            userAndInviterPercentage: values.userInviterPercentage,
-            userPercentage: values.userPercentage,
-            description: values.description,
-            url: values.url,
-            email: values.email,
-          },
-          (hash: string) => {
-            toast({
-              title: "Transaction Submitted",
-              description: `Transaction hash: ${hash}`,
-            });
-          }
-        );
+    await wrapWithSigningModal(async () => {
+      const receipt = await engagementRewards.applyApp(
+        values.app as `0x${string}`,
+        {
+          rewardReceiver: values.rewardReceiver as `0x${string}`,
+          userAndInviterPercentage: values.userInviterPercentage,
+          userPercentage: values.userPercentage,
+          description: values.description,
+          url: values.url,
+          email: values.email,
+        },
+        (hash: string) => {
+          toast({
+            title: "Transaction Submitted",
+            description: `Transaction hash: ${hash}`,
+          });
+        },
+      );
 
-        if (receipt?.status === "success") {
-          form.reset();
-        }
-        return receipt;
-      },
-      "Your application has been submitted successfully!"
-    );
+      if (receipt?.status === "success") {
+        form.reset();
+      }
+      return receipt;
+    }, "Your application has been submitted successfully!");
   };
 
   if (!isConnected) {
@@ -151,10 +176,12 @@ const ApplyForm: React.FC = () => {
       <Card className="w-full max-w-2xl mx-auto mt-8">
         <CardHeader>
           <CardTitle>Apply for Engagement Rewards</CardTitle>
-          <CardDescription>Please connect your wallet to apply for rewards.</CardDescription>
+          <CardDescription>
+            Please connect your wallet to apply for rewards.
+          </CardDescription>
         </CardHeader>
       </Card>
-    )
+    );
   }
 
   return (
@@ -162,7 +189,9 @@ const ApplyForm: React.FC = () => {
       <Card className="w-full max-w-2xl mx-auto mt-8">
         <CardHeader>
           <CardTitle>Apply for Engagement Rewards</CardTitle>
-          <CardDescription>Fill out this form to apply for engagement rewards for your app.</CardDescription>
+          <CardDescription>
+            Fill out this form to apply for engagement rewards for your app.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -177,17 +206,20 @@ const ApplyForm: React.FC = () => {
                       <Input placeholder="0x..." {...field} />
                     </FormControl>
                     <FormDescription>
-                      The contract address of your app or a backend wallet signer address
+                      The contract address of your app or a backend wallet
+                      signer address
                     </FormDescription>
-                    {verificationStatus.checked && !verificationStatus.isVerified && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Unverified Contract</AlertTitle>
-                        <AlertDescription>
-                          The contract must be verified on Sourcify.dev before it can be registered
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                    {verificationStatus.checked &&
+                      !verificationStatus.isVerified && (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Unverified Contract</AlertTitle>
+                          <AlertDescription>
+                            The contract must be verified on Sourcify.dev before
+                            it can be registered
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -215,10 +247,15 @@ const ApplyForm: React.FC = () => {
                   <FormItem>
                     <FormLabel>User+Inviter Percentage</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} onChange={e => field.onChange(+e.target.value)} />
+                      <Input
+                        type="number"
+                        {...field}
+                        onChange={(e) => field.onChange(+e.target.value)}
+                      />
                     </FormControl>
                     <FormDescription>
-                      Percentage of rewards allocated to users and inviters (0-100)
+                      Percentage of rewards allocated to users and inviters
+                      (0-100)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -231,10 +268,15 @@ const ApplyForm: React.FC = () => {
                   <FormItem>
                     <FormLabel>User Percentage</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} onChange={e => field.onChange(+e.target.value)} />
+                      <Input
+                        type="number"
+                        {...field}
+                        onChange={(e) => field.onChange(+e.target.value)}
+                      />
                     </FormControl>
                     <FormDescription>
-                      Percentage of user+inviter rewards allocated to users (0-100)
+                      Percentage of user+inviter rewards allocated to users
+                      (0-100)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -247,10 +289,14 @@ const ApplyForm: React.FC = () => {
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter a short description..." {...field} />
+                      <Input
+                        placeholder="Enter a short description..."
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription>
-                      A short description and terms of your app (up to 512 characters)
+                      A short description and terms of your app (up to 512
+                      characters)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -279,7 +325,11 @@ const ApplyForm: React.FC = () => {
                   <FormItem>
                     <FormLabel>Contact Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="contact@..." {...field} />
+                      <Input
+                        type="email"
+                        placeholder="contact@..."
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription>
                       Contact email for app-related communications
@@ -292,14 +342,12 @@ const ApplyForm: React.FC = () => {
                 <Alert>
                   <AlertTitle>Warning</AlertTitle>
                   <AlertDescription>
-                    This app is already registered. Re-applying will mark it as unapproved until reviewed again.
+                    This app is already registered. Re-applying will mark it as
+                    unapproved until reviewed again.
                   </AlertDescription>
                 </Alert>
               )}
-              <Button
-                type="submit"
-                disabled={!verificationStatus.isVerified}
-              >
+              <Button type="submit" disabled={!verificationStatus.isVerified}>
                 Apply
               </Button>
             </form>
@@ -311,8 +359,7 @@ const ApplyForm: React.FC = () => {
         onOpenChange={setIsSigningModalOpen}
       />
     </>
-  )
-}
+  );
+};
 
-export default ApplyForm
-
+export default ApplyForm;
