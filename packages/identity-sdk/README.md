@@ -1,6 +1,6 @@
 # Identity SDK
 
-`identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a users G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification, whitelist management, and more.
+`identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification, whitelist management, transaction handling, and more.
 
 ## Table of Contents
 
@@ -21,19 +21,19 @@
 
 To integrate `identity-sdk` into your project, you can easily install it from npm:
 
-```bash
-npm install identity-sdk
+```bash file.sh
+npm install @goodsdks/identity-sdk
 ```
 
 or if you prefer using Yarn:
 
-```bash
-yarn add identity-sdk
+```bash file.sh
+yarn add @goodsdks/identity-sdk
 ```
 
 ## Getting Started
 
-### Using the Wagmi SDK hooks
+### Using the Wagmi SDK
 
 The Identity SDK is built on top of `Wagmi` and provides React hooks for interacting with the Identity smart contracts. It abstracts the complexity of blockchain interactions, making it easier to integrate identity functionalities into your React applications.
 
@@ -41,17 +41,17 @@ The Identity SDK is built on top of `Wagmi` and provides React hooks for interac
 
 First, ensure that you have set up `Wagmi` in your React application. Then, import and use the `useIdentitySDK` hook as shown below.
 
-```typescript file.tsx
+```typescript packages/identity-sdk/src/example/WagmiInitExample.tsx
 import React from 'react';
 import { WagmiProvider } from 'wagmi';
-import { useIdentitySDK } from './packages/identity-sdk/src/wagmi-sdk';
+import { useIdentitySDK } from './wagmi-sdk';
 
 const IdentityComponent = () => {
   const identitySDK = useIdentitySDK('production');
 
-  const checkWhitelist = async (account: string) => {
+  const checkWhitelistedRoot = async (account: string) => {
     try {
-      const { isWhitelisted, root } = await identitySDK.checkIsWhitelisted(account);
+      const { isWhitelisted, root } = await identitySDK.getWhitelistedRoot(account);
       console.log(`Is Whitelisted: ${isWhitelisted}, Root: ${root}`);
     } catch (error) {
       console.error(error);
@@ -60,8 +60,8 @@ const IdentityComponent = () => {
 
   return (
     <div>
-      <button onClick={() => checkWhitelist('0xYourEthereumAddress')}>
-        Check Whitelist Status
+      <button onClick={() => checkWhitelistedRoot('0xYourEthereumAddress')}>
+        Check Whitelisted Root
       </button>
     </div>
   );
@@ -82,22 +82,19 @@ The Viem SDK provides a set of utility functions to interact directly with the I
 
 #### Initialization
 
-```typescript src/viem-sdk.ts
-import { PublicClient, WalletClient } from "viem";
-import { initializeIdentityContract } from "./viem-sdk";
+```typescript packages/identity-sdk/src/example/ViemInitExample.ts
+import { PublicClient, WalletClient } from "viem"
+import { initializeIdentityContract, IdentitySDK } from "./viem-sdk"
 
 const publicClient = new PublicClient({
-  /* config */
-});
+  /* configuration */
+})
 const walletClient = new WalletClient({
-  /* config */
-});
-const contractAddress = "0xYourContractAddress";
+  /* configuration */
+})
+const contractAddress = "0xYourContractAddress"
 
-const identityContract = initializeIdentityContract(
-  publicClient,
-  contractAddress,
-);
+const identitySDK = new IdentitySDK(publicClient, walletClient, "production")
 ```
 
 ## API Reference
@@ -120,11 +117,15 @@ const identitySDK = useIdentitySDK(env?: contractEnv);
 
 **Returns:**
 
-An object containing the following methods:
+An `IdentitySDK` instance or `null` if the required clients are not available.
 
-- `checkIsWhitelisted(account: Address): Promise<{ isWhitelisted: boolean; root: Address }>`
-- `generateFVLink(callbackUrl?: string, popupMode?: boolean, chainId?: number): Promise<string>`
-- `getIdentityExpiry(account: Address): Promise<IdentityExpiryData | undefined>`
+**Available Methods:**
+
+- `getWhitelistedRoot(account: Address): Promise<{ isWhitelisted: boolean; root: Address }>`
+- `getIdentityExpiryData(account: Address): Promise<IdentityExpiryData>`
+- `generateFVLink(popupMode?: boolean, callbackUrl?: string, chainId?: number): Promise<string>`
+- `submitAndWait(params: SimulateContractParameters, onHash?: (hash: `0x${string}`) => void): Promise<any>`
+- `calculateIdentityExpiry(lastAuthenticated: bigint, authPeriod: bigint): IdentityExpiry`
 
 ### Viem SDK
 
@@ -138,7 +139,7 @@ Initializes the Identity contract instance.
 const identityContract = initializeIdentityContract(
   publicClient,
   contractAddress,
-);
+)
 ```
 
 **Parameters:**
@@ -150,49 +151,167 @@ const identityContract = initializeIdentityContract(
 
 An `IdentityContract` object encapsulating the contract address and client.
 
-#### `submitAndWait`
+#### `IdentitySDK` Class
 
-Submits a transaction and waits for its receipt.
+Handles interactions with the Identity Contract.
 
-**Usage:**
+**Constructor:**
 
 ```typescript
-const receipt = await submitAndWait(params, publicClient, walletClient, onHash);
+new IdentitySDK(publicClient: PublicClient, walletClient: WalletClient & WalletActions, env?: contractEnv)
 ```
 
 **Parameters:**
 
-- `params`: Parameters for simulating the contract.
-- `publicClient`: An instance of `PublicClient` from Viem.
-- `walletClient`: An instance of `WalletClient` with wallet actions.
-- `onHash` _(optional)_: A callback function that receives the transaction hash.
+- `publicClient`: The `PublicClient` instance.
+- `walletClient`: The `WalletClient` with wallet actions.
+- `env` _(optional)_: The environment to use (`"production" | "staging" | "development"`), defaults to `"production"`.
 
-**Returns:**
+**Methods:**
 
-A transaction receipt upon successful submission.
+- **`submitAndWait`**
+
+  Submits a transaction and waits for its receipt.
+
+  **Usage:**
+
+  ```typescript
+  const receipt = await identitySDK.submitAndWait(params, onHashCallback)
+  ```
+
+  **Parameters:**
+
+  - `params`: Parameters for simulating the contract call (`SimulateContractParameters`).
+  - `onHash` _(optional)_: A callback function that receives the transaction hash.
+
+  **Returns:**
+
+  A transaction receipt upon successful submission.
+
+- **`getWhitelistedRoot`**
+
+  Returns the whitelist status of a main account or any connected account.
+
+  **Usage:**
+
+  ```typescript
+  const { isWhitelisted, root } =
+    await identitySDK.getWhitelistedRoot(accountAddress)
+  ```
+
+  **Parameters:**
+
+  - `account`: The account address to check.
+
+  **Returns:**
+
+  An object containing:
+
+  - `isWhitelisted`: `boolean` indicating if the account is whitelisted.
+  - `root`: The root address associated with the account.
+
+- **`getIdentityExpiryData`**
+
+  Retrieves identity expiry data for a given account.
+
+  **Usage:**
+
+  ```typescript
+  const expiryData = await identitySDK.getIdentityExpiryData(accountAddress)
+  ```
+
+  **Parameters:**
+
+  - `account`: The account address.
+
+  **Returns:**
+
+  An `IdentityExpiryData` object containing:
+
+  - `lastAuthenticated`: The timestamp of last authentication.
+  - `authPeriod`: The authentication period.
+
+- **`generateFVLink`**
+
+  Generates a Face Verification Link.
+
+  **Usage:**
+
+  ```typescript
+  const fvLink = await identitySDK.generateFVLink(
+    popupMode,
+    callbackUrl,
+    chainId,
+  )
+  ```
+
+  **Parameters:**
+
+  - `popupMode` _(optional)_: `boolean` indicating whether to generate a popup link.
+  - `callbackUrl` _(optional)_: The URL to callback after verification.
+  - `chainId` _(optional)_: The blockchain network ID.
+
+  **Returns:**
+
+  A `string` containing the generated Face Verification link.
+
+- **`calculateIdentityExpiry`**
+
+  Calculates the identity expiry timestamp.
+
+  **Usage:**
+
+  ```typescript
+  const identityExpiry = identitySDK.calculateIdentityExpiry(
+    lastAuthenticated,
+    authPeriod,
+  )
+  ```
+
+  **Parameters:**
+
+  - `lastAuthenticated`: The timestamp of last authentication (`bigint`).
+  - `authPeriod`: The authentication period (`bigint`).
+
+  **Returns:**
+
+  An `IdentityExpiry` object containing:
+
+  - `expiryTimestamp`: The calculated expiry timestamp.
 
 ## Example Usage
 
 ### Wagmi SDK Example
 
-Below is a practical example demonstrating how to use the Wagmi SDK to check if a user is whitelisted and generate a Face Verification link.
+Below is a practical example demonstrating how to use the Wagmi SDK to check if a user is whitelisted, retrieve identity expiry data, and generate a Face Verification link.
 
 ```typescript file.tsx
 import React, { useState } from 'react';
 import { WagmiProvider } from 'wagmi';
-import { useIdentitySDK } from './packages/identity-sdk/src/wagmi-sdk';
+import { useIdentitySDK } from './wagmi-sdk';
 
 const IdentityExample = () => {
   const identitySDK = useIdentitySDK('production');
   const [account, setAccount] = useState<string>('');
-  const [isWhitelisted, setIsWhitelisted] = useState<boolean | null>(null);
+  const [whitelistStatus, setWhitelistStatus] = useState<{ isWhitelisted: boolean; root: string } | null>(null);
+  const [expiryData, setExpiryData] = useState<IdentityExpiryData | null>(null);
   const [fvLink, setFvLink] = useState<string>('');
 
   const handleCheckWhitelist = async () => {
     try {
-      const result = await identitySDK.checkIsWhitelisted(account);
-      setIsWhitelisted(result.isWhitelisted);
+      const result = await identitySDK.getWhitelistedRoot(account);
+      setWhitelistStatus(result);
       console.log(`Whitelisted: ${result.isWhitelisted}, Root: ${result.root}`);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleGetExpiryData = async () => {
+    try {
+      const data = await identitySDK.getIdentityExpiryData(account);
+      setExpiryData(data);
+      console.log(`Last Authenticated: ${data.lastAuthenticated}, Auth Period: ${data.authPeriod}`);
     } catch (error) {
       console.error(error);
     }
@@ -200,7 +319,7 @@ const IdentityExample = () => {
 
   const handleGenerateFVLink = async () => {
     try {
-      const link = await identitySDK.generateFVLink('https://yourapp.com/callback');
+      const link = await identitySDK.generateFVLink(false, 'https://yourapp.com/callback', 1);
       setFvLink(link);
       console.log(`Face Verification Link: ${link}`);
     } catch (error) {
@@ -218,8 +337,18 @@ const IdentityExample = () => {
         onChange={(e) => setAccount(e.target.value)}
       />
       <button onClick={handleCheckWhitelist}>Check Whitelist Status</button>
-      {isWhitelisted !== null && (
-        <p>{isWhitelisted ? 'User is whitelisted.' : 'User is not whitelisted.'}</p>
+      {whitelistStatus && (
+        <p>
+          {whitelistStatus.isWhitelisted
+            ? `User is whitelisted. Root: ${whitelistStatus.root}`
+            : 'User is not whitelisted.'}
+        </p>
+      )}
+      <button onClick={handleGetExpiryData}>Get Identity Expiry Data</button>
+      {expiryData && (
+        <p>
+          Last Authenticated: {expiryData.lastAuthenticated.toString()}, Auth Period: {expiryData.authPeriod.toString()} seconds
+        </p>
       )}
       <button onClick={handleGenerateFVLink}>Generate Face Verification Link</button>
       {fvLink && (
@@ -242,28 +371,10 @@ const App = () => (
 export default App;
 ```
 
-#### `getIdentityExpiry`
-
-The `getIdentityExpiry` method available in the identity SDK provides a way to fetch the expiration data for a user's identity on the blockchain. It leverages the smart contract's `lastAuthenticated` and `authenticationPeriod` data to give an overview of when the user's identity will expire.
-
-**Parameters:**
-
-- `account`: The Ethereum address for which the identity expiry is being queried.
-
-**Returns:**
-
-- An `IdentityExpiryData` object containing:
-  - `lastAuthenticated`: The last time the account was authenticated.
-  - `authPeriod`: The period in days for which the identity is valid.
-
-**Usage Example:**
-
-This method can be used in your React application to inform users about their identity status and when they need to authenticate again to maintain their identity validation on the blockchain.Parameters:
-
 ## References
 
 - [Viem Documentation](https://viem.sh/)
 - [Wagmi Documentation](https://wagmi.sh/)
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
 - [IdentityV2 Smart Contract](./contracts/identity/IdentityV2.sol)
-- [Live demo identity app](https://demo-identity-app.vercel.app/)
+- [Live Demo Identity App](https://demo-identity-app.vercel.app/)
