@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react"
 import {
   createTamagui,
   TamaguiProvider,
@@ -9,62 +9,67 @@ import {
   YStack,
   Anchor,
   Stack,
-} from "tamagui";
-import { config } from "@tamagui/config/v3";
-import { useLocation } from "react-router-dom";
-import { useAccount } from "wagmi";
-import { useIdentitySDK } from "@goodsdks/identity-sdk";
+} from "tamagui"
+import { config } from "@tamagui/config/v3"
+import { useLocation } from "react-router-dom"
+import { useAccount } from "wagmi"
+import { useIdentitySDK } from "@goodsdks/identity-sdk"
 
-import { VerifyButton } from "./components/VerifyButton";
-import { IdentityCard } from "./components/IdentityCard";
-import { SigningModal } from "./components/SigningModal";
+import { VerifyButton } from "./components/VerifyButton"
+import { IdentityCard } from "./components/IdentityCard"
+import { SigningModal } from "./components/SigningModal"
+import { set } from "zod"
 
-const tamaguiConfig = createTamagui(config);
+const tamaguiConfig = createTamagui(config)
 
 const App: React.FC = () => {
-  const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
+  const [isSigningModalOpen, setIsSigningModalOpen] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
   const [isWhitelisted, setIsWhitelisted] = useState<boolean | undefined>(
     undefined,
-  );
-  const [loadingWhitelist, setLoadingWhitelist] = useState(false);
+  )
+  const [loadingWhitelist, setLoadingWhitelist] = useState(false)
 
-  const location = useLocation();
-  const { address, isConnected } = useAccount();
-  const identitySDK = useIdentitySDK("development");
+  const location = useLocation()
+  const { address, isConnected } = useAccount()
+  const identitySDK = useIdentitySDK("development")
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(location.search);
-    const verified = urlParams.get("verified");
+    const urlParams = new URLSearchParams(location.search)
+    const verified = urlParams.get("verified")
 
     if (verified === "true") {
-      setIsVerified(true);
-      window.history.replaceState({}, document.title, window.location.pathname);
+      setIsVerified(true)
+      window.history.replaceState({}, document.title, window.location.pathname)
     }
-  }, [location.search]);
+  }, [location.search])
 
   useEffect(() => {
     const checkWhitelistStatus = async () => {
-      if (address && isWhitelisted === undefined) {
-        setLoadingWhitelist(true);
+      if (address) {
+        setLoadingWhitelist(true)
         try {
           const { isWhitelisted } =
-            await identitySDK.checkIsWhitelisted(address);
-          setIsWhitelisted(isWhitelisted);
+            (await identitySDK?.getWhitelistedRoot(address)) ?? {}
+
+          setIsWhitelisted(isWhitelisted)
+          setIsVerified(isWhitelisted ?? false)
         } catch (error) {
-          console.error("Error checking whitelist:", error);
+          console.error("Error checking whitelist:", error)
         } finally {
-          setLoadingWhitelist(false);
+          setLoadingWhitelist(false)
         }
       }
-    };
+    }
 
-    checkWhitelistStatus();
-  }, [address, identitySDK]);
+    if (!loadingWhitelist) {
+      checkWhitelistStatus()
+    }
+  }, [address, identitySDK])
 
   const handleVerificationSuccess = () => {
-    setIsVerified(true);
-  };
+    setIsVerified(true)
+  }
 
   return (
     <TamaguiProvider config={tamaguiConfig}>
@@ -189,7 +194,7 @@ const App: React.FC = () => {
         />
       </ScrollView>
     </TamaguiProvider>
-  );
-};
+  )
+}
 
-export default App;
+export default App

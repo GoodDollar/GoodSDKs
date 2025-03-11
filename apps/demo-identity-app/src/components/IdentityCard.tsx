@@ -1,43 +1,40 @@
-import React, { useEffect, useState } from "react";
-import { View, Text } from "tamagui";
-import {
-  calculateIdentityExpiry,
-  useIdentitySDK,
-} from "@goodsdks/identity-sdk";
-import { useAccount } from "wagmi";
+import React, { useEffect, useState } from "react"
+import { View, Text } from "tamagui"
+import { useIdentitySDK } from "@goodsdks/identity-sdk"
+import { useAccount } from "wagmi"
 
 export const IdentityCard: React.FC = () => {
-  const { address } = useAccount();
-  const identitySDK = useIdentitySDK("development");
-  const [expiry, setExpiry] = useState<string | undefined>(undefined);
+  const { address } = useAccount()
+  const identitySDK = useIdentitySDK("development")
+  const [expiry, setExpiry] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     const fetchExpiry = async () => {
-      if (address) {
-        const identityExpiry = await identitySDK.getIdentityExpiry(address);
+      if (!identitySDK || !address) return
 
-        const { expiryTimestamp } = calculateIdentityExpiry(
-          identityExpiry?.lastAuthenticated ?? BigInt(0),
-          identityExpiry?.authPeriod ?? BigInt(0),
-        );
+      const identityExpiry = await identitySDK.getIdentityExpiryData(address)
 
-        const date = new Date(Number(expiryTimestamp));
-        const formattedExpiryTimestamp = date.toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "2-digit",
-        });
+      const { expiryTimestamp } = identitySDK.calculateIdentityExpiry(
+        identityExpiry?.lastAuthenticated ?? BigInt(0),
+        identityExpiry?.authPeriod ?? BigInt(0),
+      )
 
-        if (formattedExpiryTimestamp) {
-          setExpiry(formattedExpiryTimestamp);
-        }
+      const date = new Date(Number(expiryTimestamp))
+      const formattedExpiryTimestamp = date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "2-digit",
+      })
+
+      if (formattedExpiryTimestamp) {
+        setExpiry(formattedExpiryTimestamp)
       }
-    };
+    }
 
-    fetchExpiry();
-  }, [address, identitySDK]);
+    fetchExpiry()
+  }, [address, identitySDK])
 
-  if (!address) return null;
+  if (!address) return null
 
   return (
     <View
@@ -55,5 +52,5 @@ export const IdentityCard: React.FC = () => {
         {expiry || "Not Verified"}
       </Text>
     </View>
-  );
-};
+  )
+}
