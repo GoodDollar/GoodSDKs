@@ -1,10 +1,8 @@
 import { Address, PublicClient } from "viem";
 
 export interface IdentityExpiry {
-  authPeriod: bigint;
   expiryTimestamp: bigint;
   formattedExpiryTimestamp?: string;
-  lastAuthenticated: bigint;
 }
 
 export interface IdentityExpiryData {
