@@ -1,4 +1,3 @@
-import { useMemo } from "react"
 import { usePublicClient, useWalletClient } from "wagmi"
 import { PublicClient } from "viem"
 
@@ -12,13 +11,11 @@ export const useIdentitySDK = (
   const publicClient = usePublicClient() as PublicClient
   const { data: walletClient } = useWalletClient()
 
-  const sdk = useMemo(() => {
-    if (!publicClient || !walletClient) {
-      return null
-    }
+  if (!publicClient || !walletClient) {
+    return null
+  }
 
-    return new IdentitySDK(publicClient, walletClient, env)
-  }, [publicClient, walletClient, env])
+  const sdk = new IdentitySDK(publicClient, walletClient, env)
 
   return sdk
 }
