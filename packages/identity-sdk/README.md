@@ -1,6 +1,6 @@
 # Identity SDK
 
-`identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification, whitelist management, transaction handling, and more.
+`identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification and work with a uniquely identified user in your dapp or service.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ yarn add @goodsdks/identity-sdk
 
 ### Using the Wagmi SDK
 
-The Identity SDK is built on top of `Wagmi` and provides React hooks for interacting with the Identity smart contracts. It abstracts the complexity of blockchain interactions, making it easier to integrate identity functionalities into your React applications.
+The Identity SDK is built on top of `Wagmi` and provides a React hook for interacting with the Identity smart contracts. It abstracts the complexity of blockchain interactions, making it easier to integrate identity functionalities into your React applications.
 
 #### Initialization
 
@@ -119,7 +119,7 @@ const identitySDK = useIdentitySDK(env?: contractEnv);
 
 An `IdentitySDK` instance or `null` if the required clients are not available.
 
-**Available Methods:**
+**Available Methods in the Identity SDK:**
 
 - `getWhitelistedRoot(account: Address): Promise<{ isWhitelisted: boolean; root: Address }>`
 - `getIdentityExpiryData(account: Address): Promise<IdentityExpiryData>`
@@ -376,5 +376,5 @@ export default App;
 - [Viem Documentation](https://viem.sh/)
 - [Wagmi Documentation](https://wagmi.sh/)
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
-- [IdentityV2 Smart Contract](./contracts/identity/IdentityV2.sol)
+- [IdentityV2 Smart Contract](https://github.com/GoodDollar/GoodProtocol/blob/master/contracts/identity/IdentityV2.sol)
 - [Live Demo Identity App](https://demo-identity-app.vercel.app/)
