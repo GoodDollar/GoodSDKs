@@ -18,20 +18,24 @@ import { useIdentitySDK } from "@goodsdks/identity-sdk"
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
 import { SigningModal } from "./components/SigningModal"
-import { set } from "zod"
 
 const tamaguiConfig = createTamagui(config)
 
 const App: React.FC = () => {
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false)
-  const [isVerified, setIsVerified] = useState(false)
+  const [isVerified, setIsVerified] = useState<boolean | undefined>(false)
   const [isWhitelisted, setIsWhitelisted] = useState<boolean | undefined>(
     undefined,
   )
-  const [loadingWhitelist, setLoadingWhitelist] = useState(false)
+  const [loadingWhitelist, setLoadingWhitelist] = useState<boolean | undefined>(
+    undefined,
+  )
 
   const location = useLocation()
   const { address, isConnected } = useAccount()
+  const [connectedAccount, setConnectedAccount] = useState<string | undefined>(
+    undefined,
+  )
   const identitySDK = useIdentitySDK("development")
 
   useEffect(() => {
@@ -44,11 +48,23 @@ const App: React.FC = () => {
     }
   }, [location.search])
 
+  //ref: https://github.com/wevm/wagmi/discussions/1806#discussioncomment-12130996
+  // does not react to switch account when triggered from metamask.
+  // useAccountEffect({
+  //   onConnect(data) {
+  //     console.log("Connected!", data)
+  //   },
+  //   onDisconnect() {
+  //     console.log("Disconnected!")
+  //   },
+  // })
+
   useEffect(() => {
     const checkWhitelistStatus = async () => {
-      if (address) {
-        setLoadingWhitelist(true)
+      if (address && isWhitelisted === undefined) {
         try {
+          setLoadingWhitelist(true)
+          setConnectedAccount(address)
           const { isWhitelisted } =
             (await identitySDK?.getWhitelistedRoot(address)) ?? {}
 
@@ -62,7 +78,10 @@ const App: React.FC = () => {
       }
     }
 
-    if (!loadingWhitelist) {
+    if (address !== connectedAccount || !address) {
+      setConnectedAccount(address)
+      setIsWhitelisted(undefined)
+      setIsVerified(undefined)
       checkWhitelistStatus()
     }
   }, [address, identitySDK])
@@ -124,14 +143,20 @@ const App: React.FC = () => {
             alignItems="center"
             justifyContent="center"
           >
-            {!isConnected ? (
-              <Stack justifyContent="center" alignItems="center">
-                <Text fontSize={16} color="$red10" marginBottom={16}>
-                  Please connect your wallet to proceed.
-                </Text>
-                <appkit-button></appkit-button>
-              </Stack>
-            ) : null}
+            <Stack
+              justifyContent="center"
+              alignItems="center"
+              marginBottom={16}
+            >
+              {!isConnected ? (
+                <>
+                  <Text fontSize={16} color="$red10" marginBottom={16}>
+                    Please connect your wallet to proceed.
+                  </Text>
+                </>
+              ) : null}
+              <appkit-button></appkit-button>
+            </Stack>
 
             {isConnected && loadingWhitelist ? <Spinner size="large" /> : null}
 
