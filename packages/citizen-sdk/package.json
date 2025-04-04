@@ -1,0 +1,42 @@
+{
+  "name": "@goodsdks/citizen-sdk",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch",
+    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
+    "publish": "yarn build && npm publish --access public"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "require": {
+      "types": "./dist/index.cts",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "latest",
+    "viem": "latest",
+    "wagmi": "latest"
+  },
+  "peerDependencies": {
+    "viem": "*",
+    "wagmi": "*"
+  },
+  "dependencies": {
+    "lz-string": "^1.5.0",
+    "tsup": "^8.4.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
