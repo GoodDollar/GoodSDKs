@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GoodDollar Identity Demo</title>
+  </head>
+  <body
+    style="
+      height: 100vh;
+      margin: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    "
+  >
+    <div
+      style="
+        background-color: rgb(136, 136, 210);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid rgb(100, 100, 100);
+        box-shadow: 0px 0px 10px 0px rgb(100, 100, 100);
+      "
+    >
+      <claim-button environment="development"></claim-button>
+    </div>
+    <!-- Load the JavaScript entry point -->
+    <script type="module" src="/src/index.js"></script>
+  </body>
+</html>
