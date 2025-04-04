@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react"
 import { View, Text } from "tamagui"
-import { useIdentitySDK } from "@goodsdks/identity-sdk"
+import { useIdentitySDK } from "@goodsdks/citizen-sdk"
 import { useAccount } from "wagmi"
 
 export const IdentityCard: React.FC = () => {

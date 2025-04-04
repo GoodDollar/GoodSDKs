@@ -11,9 +11,10 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@goodsdks/identity-sdk": "*",
-    "@reown/appkit": "^1.6.9",
-    "@reown/appkit-adapter-wagmi": "^1.6.9",
+    "@goodsdks/citizen-sdk": "*",
+    "@reown/appkit": "^1.7.2",
+    "@reown/appkit-adapter-wagmi": "^1.7.2",
+    "@reown/appkit-wallet": "^1.7.2",
     "@tamagui/config": "^1.125.22",
     "@tamagui/core": "^1.125.22",
     "@tamagui/font-inter": "^1.125.22",
