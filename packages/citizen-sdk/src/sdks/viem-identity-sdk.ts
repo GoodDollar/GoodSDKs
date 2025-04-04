@@ -15,13 +15,13 @@ import {
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
   identityContractAddresses,
-} from "./constants"
+} from "../constants"
 
 import type {
   IdentityContract,
   IdentityExpiryData,
   IdentityExpiry,
-} from "./types"
+} from "../types"
 
 /**
  * Initializes the Identity Contract.

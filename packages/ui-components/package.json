@@ -1,0 +1,43 @@
+{
+  "name": "@goodsdks/ui-components",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "require": {
+      "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "devDependencies": {
+    "@goodsdks/citizen-sdk": "*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "latest",
+    "viem": "latest"
+  },
+  "peerDependencies": {
+    "viem": "*"
+  },
+  "dependencies": {
+    "@reown/appkit": "^1.7.2",
+    "@reown/appkit-adapter-ethers": "^1.7.2",
+    "@wagmi/connectors": "^5.7.12",
+    "lit": "^3.2.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-to-webcomponent": "^2.0.1",
+    "tsup": "^8.3.5"
+  }
+}
