@@ -1,12 +1,12 @@
 {
   "name": "@goodsdks/identity-sdk",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
     "dev": "tsc --watch",
     "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
-    "publish": "yarn bump && npm publish --access public"
+    "publish": "npm publish --access public"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
