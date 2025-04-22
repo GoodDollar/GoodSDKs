@@ -6,7 +6,7 @@
     "build": "tsup --clean",
     "dev": "tsc --watch",
     "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
-    "publish": "yarn build && npm publish --access public"
+    "publish": "yarn bump && npm publish --access public"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -21,6 +21,10 @@
       "require": "./dist/index.cjs"
     }
   },
+  "files": [
+    "dist",
+    "src"
+  ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "typescript": "latest",
