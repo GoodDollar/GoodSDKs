@@ -2,6 +2,8 @@
 
 `identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification and work with a uniquely identified user in your dapp or service.
 
+[A live demo app is live here](https://demo-identity-app.vercel.app/)
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -248,8 +250,8 @@ new IdentitySDK(publicClient: PublicClient, walletClient: WalletClient & WalletA
   **Parameters:**
 
   - `popupMode` _(optional)_: `boolean` indicating whether to generate a popup link.
-  - `callbackUrl`: The URL to callback after verification.
-  - `chainId` _(optional)_: The blockchain network ID.
+  - `callbackUrl`_(optional)_: The URL to callback after verification. _required_ when using pop-up mode = false.
+  - `chainId` _(optional)_: The blockchain network ID. if not provided, will take the active chain id from the public-client.
 
   **Returns:**
 
@@ -365,7 +367,7 @@ const IdentityExample = () => {
 const App = () => (
   <WagmiProvider>
     <IdentityExample />
-  </WagmiProvider>
+  </WagmiProvider>- [Live Demo Identity App](https://demo-identity-app.vercel.app/)
 );
 
 export default App;
@@ -378,3 +380,11 @@ export default App;
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
 - [IdentityV2 Smart Contract](https://github.com/GoodDollar/GoodProtocol/blob/master/contracts/identity/IdentityV2.sol)
 - [Live Demo Identity App](https://demo-identity-app.vercel.app/)
+- Celo identity contract addresses
+  [development](https://celoscan.io/address/0xF25fA0D4896271228193E782831F6f3CFCcF169C)
+  [staging](https://celoscan.io/address/0x0108BBc09772973aC27983Fc17c7D82D8e87ef4D)
+  [production](https://celoscan.io/address/0xC361A6E67822a0EDc17D899227dd9FC50BD62F42)
+- Fuse identity contract addresses
+  [development](https://explorer.fuse.io/address/0x1e006225cff7d37411db28f652e0Da9D20325eBb)
+  [staging](https://explorer.fuse.io/address/0xb0cD4828Cc90C5BC28f4920Adf2Fd8F025003D7E)
+  [production](https://explorer.fuse.io/address/0x2F9C28de9e6d44b71B91b8BA337A5D82e308E7BE)
