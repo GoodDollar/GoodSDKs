@@ -4,18 +4,21 @@ import {
   WalletClient,
   parseAbi,
   type SimulateContractParameters,
-} from "viem";
-import { waitForTransactionReceipt } from "viem/actions";
+} from "viem"
+import { waitForTransactionReceipt } from "viem/actions"
 
-import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json";
-import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json";
+import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json"
+import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json"
 
-export const DEV_REWARDS_CONTRACT =
-  devdeployments["EngagementRewardsProxy#ERC1967Proxy"];
-export const REWARDS_CONTRACT = prod?.["EngagementRewardsProxy#ERC1967Proxy"];
+export const DEV_REWARDS_CONTRACT = devdeployments[
+  "EngagementRewardsProxy#ERC1967Proxy"
+] as `0x${string}`
+export const REWARDS_CONTRACT = prod?.[
+  "EngagementRewardsProxy#ERC1967Proxy"
+] as `0x${string}`
 
-const BLOCKS_AGO = BigInt(100000);
-const WAIT_DELAY = 5000; // 1 second delay
+const BLOCKS_AGO = BigInt(100000)
+const WAIT_DELAY = 5000 // 1 second delay
 
 //TODO:
 // create guide how to integrate claiming with/without signature
@@ -37,73 +40,73 @@ const engagementRewardsABI = parseAbi([
   "event AppSettingsUpdated(address indexed app, uint256 userAndInviterPercentage, uint256 userPercentage)",
   "event RewardClaimed(address indexed app, address indexed user, address indexed inviter, uint256 appReward, uint256 userAmount, uint256 inviterAmount)",
   "event RewardAmountUpdated(uint256 newAmount)",
-]);
+])
 
 export interface AppInfo {
-  rewardReceiver: Address;
-  userAndInviterPercentage: number;
-  userPercentage: number;
-  description: string;
-  url: string;
-  email: string;
+  rewardReceiver: Address
+  userAndInviterPercentage: number
+  userPercentage: number
+  description: string
+  url: string
+  email: string
 }
 
 export interface RewardEvent {
-  tx: `0x${string}`;
-  block: bigint;
-  timestamp?: number; // Optional as we might not always have block timestamp
-  user: `0x${string}`; // Changed from optional to required as per contract event
-  inviter: `0x${string}`; // Changed from optional to required as per contract event
-  appReward: bigint; // Changed from optional to required as per contract event
-  userAmount: bigint; // Changed from optional to required as per contract event
-  inviterAmount: bigint; // Changed from optional to required as per contract event
+  tx: `0x${string}`
+  block: bigint
+  timestamp?: number // Optional as we might not always have block timestamp
+  user: `0x${string}` // Changed from optional to required as per contract event
+  inviter: `0x${string}` // Changed from optional to required as per contract event
+  appReward: bigint // Changed from optional to required as per contract event
+  userAmount: bigint // Changed from optional to required as per contract event
+  inviterAmount: bigint // Changed from optional to required as per contract event
 }
 
 export interface AppEvent {
-  owner: Address;
-  rewardReceiver: Address;
-  userAndInviterPercentage: number;
-  userPercentage: number;
-  description: string;
-  url: string;
-  email: string;
-  block: bigint;
+  owner: Address
+  rewardReceiver: Address
+  userAndInviterPercentage: number
+  userPercentage: number
+  description: string
+  url: string
+  email: string
+  block: bigint
 }
 
 export class EngagementRewardsSDK {
-  private publicClient: PublicClient;
-  private walletClient: WalletClient;
-  private contractAddress: Address;
+  private publicClient: PublicClient
+  private walletClient: WalletClient
+  private contractAddress: Address
 
   constructor(
     publicClient: PublicClient,
     walletClient: WalletClient,
     contractAddress: Address,
   ) {
-    this.publicClient = publicClient;
-    this.walletClient = walletClient;
-    this.contractAddress = contractAddress;
+    this.publicClient = publicClient
+    this.walletClient = walletClient
+    this.contractAddress = contractAddress
   }
 
   private async submitAndWait(
     simulateParams: SimulateContractParameters,
     onHash?: (hash: `0x${string}`) => void,
   ) {
-    const [account] = await this.walletClient.getAddresses();
+    const [account] = await this.walletClient.getAddresses()
     const { request } = await this.publicClient.simulateContract({
       account,
       ...simulateParams,
-    });
+    })
 
-    const hash = await this.walletClient.writeContract(request);
-    if (onHash) onHash(hash);
+    const hash = await this.walletClient.writeContract(request)
+    if (onHash) onHash(hash)
 
     // Add delay before waiting for receipt
-    await new Promise((resolve) => setTimeout(resolve, WAIT_DELAY));
+    await new Promise((resolve) => setTimeout(resolve, WAIT_DELAY))
 
     return waitForTransactionReceipt(this.publicClient, {
       hash,
-    });
+    })
   }
 
   async applyApp(
@@ -127,7 +130,7 @@ export class EngagementRewardsSDK {
         ],
       },
       onHash,
-    );
+    )
   }
 
   async approve(app: Address, onHash?: (hash: `0x${string}`) => void) {
@@ -139,7 +142,7 @@ export class EngagementRewardsSDK {
         args: [app],
       },
       onHash,
-    );
+    )
   }
 
   async updateAppSettings(
@@ -162,7 +165,7 @@ export class EngagementRewardsSDK {
         ],
       },
       onHash,
-    );
+    )
   }
 
   async getAppInfo(app: Address) {
@@ -171,7 +174,7 @@ export class EngagementRewardsSDK {
       abi: engagementRewardsABI,
       functionName: "registeredApps",
       args: [app],
-    });
+    })
   }
 
   async nonContractAppClaim(
@@ -190,7 +193,7 @@ export class EngagementRewardsSDK {
         args: [app, inviter, nonce, userSignature, appSignature],
       },
       onHash,
-    );
+    )
   }
 
   async prepareClaimSignature(
@@ -204,7 +207,7 @@ export class EngagementRewardsSDK {
       version: "1.0",
       chainId: await this.publicClient.getChainId(),
       verifyingContract: this.contractAddress,
-    };
+    }
 
     const types = {
       Claim: [
@@ -213,16 +216,16 @@ export class EngagementRewardsSDK {
         { name: "validUntilBlock", type: "uint256" },
         { name: "description", type: "string" },
       ],
-    };
+    }
 
     const message = {
       app,
       inviter,
       validUntilBlock,
       description,
-    };
+    }
 
-    return { domain, types, message };
+    return { domain, types, message }
   }
 
   async signClaim(
@@ -230,16 +233,16 @@ export class EngagementRewardsSDK {
     inviter: Address,
     validUntilBlock: bigint,
   ): Promise<`0x${string}`> {
-    const [account] = await this.walletClient.getAddresses();
-    if (!account) throw new Error("No account available");
+    const [account] = await this.walletClient.getAddresses()
+    if (!account) throw new Error("No account available")
 
-    const appInfo = await this.getAppInfo(app);
+    const appInfo = await this.getAppInfo(app)
     const { domain, types, message } = await this.prepareClaimSignature(
       app,
       inviter,
       validUntilBlock,
       appInfo[9], // description,
-    );
+    )
 
     return this.walletClient.signTypedData({
       account,
@@ -247,7 +250,7 @@ export class EngagementRewardsSDK {
       types,
       primaryType: "Claim",
       message,
-    });
+    })
   }
 
   // Add new method to prepare app signature
@@ -261,7 +264,7 @@ export class EngagementRewardsSDK {
       version: "1.0",
       chainId: await this.publicClient.getChainId(),
       verifyingContract: this.contractAddress,
-    };
+    }
 
     const types = {
       AppClaim: [
@@ -269,19 +272,19 @@ export class EngagementRewardsSDK {
         { name: "user", type: "address" },
         { name: "validUntilBlock", type: "uint256" },
       ],
-    };
+    }
 
     const message = {
       app,
       user,
       validUntilBlock,
-    };
+    }
 
-    return { domain, types, message };
+    return { domain, types, message }
   }
 
   async getPendingApps() {
-    const curBlock = await this.publicClient.getBlockNumber();
+    const curBlock = await this.publicClient.getBlockNumber()
     const [applyEvents, approvedEvents] = await Promise.all([
       this.publicClient.getContractEvents({
         address: this.contractAddress,
@@ -295,32 +298,32 @@ export class EngagementRewardsSDK {
         eventName: "AppApproved",
         fromBlock: curBlock - BigInt(BLOCKS_AGO),
       }),
-    ]);
+    ])
 
-    const approvedApps = new Set<string>();
+    const approvedApps = new Set<string>()
     approvedEvents
       .map((_) => _.args.app)
       .filter((_) => _ !== undefined)
       .forEach((app) => {
-        approvedApps.add(app.toLowerCase());
-      });
+        approvedApps.add(app.toLowerCase())
+      })
 
     return applyEvents
       .map((_) => _.args.app?.toLowerCase())
       .filter((_) => _ !== undefined)
-      .filter((app) => !approvedApps.has(app));
+      .filter((app) => !approvedApps.has(app))
   }
 
   async getRegisteredApps() {
-    const curBlock = await this.publicClient.getBlockNumber();
+    const curBlock = await this.publicClient.getBlockNumber()
     const approvedEvents = await this.publicClient.getContractEvents({
       address: this.contractAddress,
       abi: engagementRewardsABI,
       eventName: "AppApproved",
       fromBlock: curBlock - BigInt(BLOCKS_AGO),
-    });
+    })
 
-    return approvedEvents.map((_) => _.args.app).filter((_) => _ !== undefined);
+    return approvedEvents.map((_) => _.args.app).filter((_) => _ !== undefined)
   }
 
   async getAppRewards(app: Address) {
@@ -329,7 +332,7 @@ export class EngagementRewardsSDK {
       abi: engagementRewardsABI,
       functionName: "appsStats",
       args: [app],
-    });
+    })
 
     return {
       totalRewards: stats[1] + stats[2] + stats[3], // totalAppRewards + totalUserRewards + totalInviterRewards
@@ -337,19 +340,19 @@ export class EngagementRewardsSDK {
       userRewards: stats[2], // totalUserRewards
       inviterRewards: stats[3], // totalInviterRewards
       rewardEventCount: Number(stats[0]), // numberOfRewards
-    };
+    }
   }
 
   async getAppRewardEvents(app: Address): Promise<RewardEvent[]> {
-    const curBlock = await this.publicClient.getBlockNumber();
+    const curBlock = await this.publicClient.getBlockNumber()
 
     const rewardEvents = await this.publicClient.getContractEvents({
       address: this.contractAddress,
       abi: engagementRewardsABI,
-      eventName: "RewardClaimed",
+      eventName: "AppKitProviderRewardClaimed",
       args: { app },
       fromBlock: curBlock - BigInt(BLOCKS_AGO),
-    });
+    })
 
     return rewardEvents.map((log) => ({
       tx: log.transactionHash,
@@ -359,18 +362,18 @@ export class EngagementRewardsSDK {
       appReward: log.args.appReward as bigint,
       userAmount: log.args.userAmount as bigint,
       inviterAmount: log.args.inviterAmount as bigint,
-    }));
+    }))
   }
 
   async getAppHistory(app: Address): Promise<AppEvent[]> {
-    const curBlock = await this.publicClient.getBlockNumber();
+    const curBlock = await this.publicClient.getBlockNumber()
     const events = await this.publicClient.getContractEvents({
       address: this.contractAddress,
       abi: engagementRewardsABI,
       eventName: "AppApplied",
       args: { app },
       fromBlock: curBlock - BigInt(BLOCKS_AGO),
-    });
+    })
 
     return events.map((log) => ({
       owner: log.args.owner as Address,
@@ -381,11 +384,11 @@ export class EngagementRewardsSDK {
       url: log.args.url as string,
       email: log.args.email as string,
       block: log.blockNumber,
-    }));
+    }))
   }
 
   async getCurrentBlockNumber() {
-    return this.publicClient.getBlockNumber();
+    return this.publicClient.getBlockNumber()
   }
 
   async canClaim(app: Address, user: Address) {
@@ -395,10 +398,10 @@ export class EngagementRewardsSDK {
         abi: engagementRewardsABI,
         functionName: "canClaim",
         args: [app, user],
-      });
-      return true;
+      })
+      return true
     } catch (error) {
-      return false;
+      return false
     }
   }
 }
