@@ -349,7 +349,7 @@ export class EngagementRewardsSDK {
     const rewardEvents = await this.publicClient.getContractEvents({
       address: this.contractAddress,
       abi: engagementRewardsABI,
-      eventName: "AppKitProviderRewardClaimed",
+      eventName: "RewardClaimed",
       args: { app },
       fromBlock: curBlock - BigInt(BLOCKS_AGO),
     })
