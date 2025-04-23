@@ -248,7 +248,7 @@ new IdentitySDK(publicClient: PublicClient, walletClient: WalletClient & WalletA
   **Parameters:**
 
   - `popupMode` _(optional)_: `boolean` indicating whether to generate a popup link.
-  - `callbackUrl` _(optional)_: The URL to callback after verification.
+  - `callbackUrl`: The URL to callback after verification.
   - `chainId` _(optional)_: The blockchain network ID.
 
   **Returns:**
