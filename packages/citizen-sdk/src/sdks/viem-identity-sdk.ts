@@ -14,7 +14,7 @@ import {
   Envs,
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
-  identityContractAddresses,
+  contractAddresses,
 } from "../constants"
 
 import type {
@@ -61,7 +61,7 @@ export class IdentitySDK {
     this.walletClient = walletClient
     this.env = env
 
-    const contractAddress = identityContractAddresses[env]
+    const contractAddress = contractAddresses[env]?.identityContract
     if (!contractAddress) {
       throw new Error(`Contract address for environment "${env}" not found.`)
     }
