@@ -93,13 +93,13 @@ To utilize the `identity-sdk` within your application:
 1. **Import the SDK**
 
    ```typescript file.tsx
-   import { useIdentitySDK } from "identity-sdk";
+   import { useIdentitySDK } from "identity-sdk"
    ```
 
 2. **Initialize the SDK**
 
    ```typescript file.tsx
-   const identitySDK = useIdentitySDK("development");
+   const identitySDK = useIdentitySDK("development")
    ```
 
 3. **Use SDK Functions**
@@ -108,12 +108,12 @@ To utilize the `identity-sdk` within your application:
    const checkWhitelist = async (account: string) => {
      try {
        const { isWhitelisted, root } =
-         await identitySDK.checkIsWhitelisted(account);
-       console.log(`Is Whitelisted: ${isWhitelisted}, Root: ${root}`);
+         await identitySDK.checkIsWhitelisted(account)
+       console.log(`Is Whitelisted: ${isWhitelisted}, Root: ${root}`)
      } catch (error) {
-       console.error(error);
+       console.error(error)
      }
-   };
+   }
    ```
 
 For more examples and detailed usage, refer to the [identity-sdk README](packages/identity-sdk/README.md).
@@ -137,8 +137,6 @@ The `demo-identity-app` provides a practical example of how to integrate the `id
 3. **Access the Application**
 
    Open your browser and navigate to `http://localhost:3000` to view the demo.
-
-For comprehensive instructions, check the [demo-identity-app README](apps/demo-identity-app/README.md).
 
 ## Contributing
 
