@@ -10,6 +10,6 @@ export default defineConfig({
   clean: true,
   dts: false,
   minify: true,
-  target: "es2017",
+  target: "ESNext",
   outDir: "dist",
 })

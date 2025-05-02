@@ -11,7 +11,6 @@ import {
   createWalletClient,
   custom,
   formatUnits,
-  parseAbi,
 } from "viem"
 
 import { ClaimSDK, IdentitySDK } from "@goodsdks/citizen-sdk"

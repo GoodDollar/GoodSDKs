@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "build-claim": "tsup --config tsup.config.claim.ts"
   },
   "main": "./dist/index.global.js",
   "module": "./dist/index.js",
