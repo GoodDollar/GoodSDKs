@@ -4,9 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
-    "dev": "tsc --watch",
-    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
-    "publish": "yarn build && npm publish --access public"
+    "dev": "tsc --watch"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
