@@ -28,7 +28,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "typescript": "latest",
-    "viem": "latest",
+    "viem": "^2.29.0",
     "wagmi": "latest"
   },
   "peerDependencies": {
