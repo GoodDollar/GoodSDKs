@@ -1,6 +1,6 @@
 {
-  "name": "@goodsdks/identity-sdk",
-  "version": "1.0.5",
+  "name": "@goodsdks/citizen-sdk",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
