@@ -12,7 +12,11 @@ import {
 import { waitForTransactionReceipt } from "viem/actions"
 
 import { IdentitySDK } from "./viem-identity-sdk"
-import { type contractEnv, contractAddresses, g$ABI } from "../constants"
+import {
+  type contractEnv,
+  type SupportedChains,
+  contractAddresses,
+} from "../constants"
 import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
 
 export interface ClaimSDKOptions {
@@ -35,9 +39,10 @@ export class ClaimSDK {
   >
   private readonly identitySDK: IdentitySDK
   private readonly ubiSchemeAddress: Address
+  private readonly ubiSchemeAltAddress: Address
   private readonly faucetAddress: Address
-  private readonly g$Address: Address
   private readonly account: Address
+  private readonly altChain: SupportedChains
   private readonly env: contractEnv
   public readonly rdu: string
 
@@ -59,7 +64,10 @@ export class ClaimSDK {
     this.rdu = rdu
     this.env = env
 
-    const contractEnvAddresses = contractAddresses[env]
+    const chainId = this.walletClient.chain?.id as SupportedChains
+    this.altChain = chainId === 42220 ? 122 : 42220
+
+    const contractEnvAddresses = contractAddresses[chainId][env]
 
     if (!contractEnvAddresses) {
       throw new Error(
@@ -68,8 +76,9 @@ export class ClaimSDK {
     }
 
     this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
+    this.ubiSchemeAltAddress = contractAddresses[this.altChain][env]
+      .ubiContract as Address
     this.faucetAddress = contractEnvAddresses.faucetContract as Address
-    this.g$Address = contractEnvAddresses.g$Contract as Address
   }
 
   static async init(
@@ -85,14 +94,18 @@ export class ClaimSDK {
    * @returns The result of the contract read.
    * @throws If the contract read fails.
    */
-  private async readContract<T>(params: {
-    address: Address
-    abi: any
-    functionName: string
-    args?: any[]
-  }): Promise<T> {
+  private async readContract<T>(
+    params: {
+      address: Address
+      abi: any
+      functionName: string
+      args?: any[]
+    },
+    altClient?: PublicClient,
+  ): Promise<T> {
     try {
-      return (await this.publicClient.readContract({
+      const client = altClient || this.publicClient
+      return (await client.readContract({
         address: params.address,
         abi: params.abi,
         functionName: params.functionName,
@@ -127,8 +140,6 @@ export class ClaimSDK {
     })
 
     const hash = await this.walletClient.writeContract(request)
-
-    console.log("Transaction hash:", { hash })
     onHash?.(hash)
 
     // we wait one block
@@ -145,15 +156,20 @@ export class ClaimSDK {
    * Checks if the connected user is eligible to claim UBI for the current period.
    * Returns the amount they can claim (0 if not eligible or already claimed).
    * Does not check for whitelisting status.
+   * @param pClient - Optional public client to check entitlement on alternative chain.
    * @returns The claimable amount in the smallest unit (e.g., wei).
    * @throws If the entitlement check fails.
    */
-  async checkEntitlement(): Promise<bigint> {
-    return this.readContract<bigint>({
-      address: this.ubiSchemeAddress,
-      abi: ubiSchemeV2ABI,
-      functionName: "checkEntitlement",
-    })
+  async checkEntitlement(pClient?: PublicClient): Promise<bigint> {
+    return this.readContract<bigint>(
+      {
+        address: !pClient ? this.ubiSchemeAddress : this.ubiSchemeAltAddress,
+        abi: ubiSchemeV2ABI,
+        functionName: "checkEntitlement",
+        args: [this.account],
+      },
+      pClient,
+    )
   }
 
   /**
@@ -299,11 +315,8 @@ export class ClaimSDK {
     const minThreshold =
       (toppingAmount * (100n - BigInt(minTopping))) / 100n || minBalance
 
-    const balance = await this.readContract<bigint>({
-      address: this.g$Address,
-      abi: g$ABI,
-      functionName: "balanceOf",
-      args: [this.account],
+    const balance = await this.publicClient.getBalance({
+      address: this.account,
     })
 
     return balance >= minThreshold
