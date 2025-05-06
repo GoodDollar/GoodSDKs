@@ -1812,7 +1812,7 @@ __metadata:
     lz-string: "npm:^1.5.0"
     tsup: "npm:^8.4.0"
     typescript: "npm:latest"
-    viem: "npm:^2.29.0"
+    viem: "npm:latest"
     wagmi: "npm:latest"
   peerDependencies:
     viem: "*"
