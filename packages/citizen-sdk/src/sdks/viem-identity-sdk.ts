@@ -10,11 +10,12 @@ import { waitForTransactionReceipt } from "viem/actions"
 import { compressToEncodedURIComponent } from "lz-string"
 
 import {
+  contractAddresses,
   contractEnv,
   Envs,
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
-  contractAddresses,
+  SupportedChains,
 } from "../constants"
 
 import type {
@@ -61,7 +62,9 @@ export class IdentitySDK {
     this.walletClient = walletClient
     this.env = env
 
-    const contractAddress = contractAddresses[env]?.identityContract
+    const chainId = this.walletClient.chain?.id as SupportedChains
+
+    const contractAddress = contractAddresses[chainId][env]?.identityContract
     if (!contractAddress) {
       throw new Error(`Contract address for environment "${env}" not found.`)
     }
