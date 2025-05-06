@@ -127,9 +127,18 @@ export class ClaimSDK {
     })
 
     const hash = await this.walletClient.writeContract(request)
+
+    console.log("Transaction hash:", { hash })
     onHash?.(hash)
 
-    return waitForTransactionReceipt(this.publicClient, { hash })
+    // we wait one block
+    // to prevent waitFor... to immediately throw an error
+    await new Promise((res) => setTimeout(res, 5000))
+
+    return waitForTransactionReceipt(this.publicClient, {
+      hash,
+      retryDelay: 5000,
+    })
   }
 
   /**
@@ -331,7 +340,7 @@ export class ClaimSDK {
    */
   private async checkBalanceWithRetry(): Promise<boolean> {
     const maxRetries = 5
-    const retryDelay = 5000 // 5 seconds
+    const retryDelay = 5000
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const canClaim = await this.canClaim()
