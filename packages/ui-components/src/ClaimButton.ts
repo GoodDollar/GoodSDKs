@@ -2,19 +2,29 @@ import { LitElement, html, css } from "lit"
 import { customElement, property, state } from "lit/decorators.js"
 import { createAppKit } from "@reown/appkit"
 import type { AppKit, AppKitOptions } from "@reown/appkit"
-import { celo as reownCelo, type AppKitNetwork } from "@reown/appkit/networks"
+import {
+  celo as reownCelo,
+  fuse as reownFuse,
+  type AppKitNetwork,
+} from "@reown/appkit/networks"
 import { EthersAdapter } from "@reown/appkit-adapter-ethers"
 import type { PublicClient, WalletClient } from "viem"
-import { celo } from "viem/chains"
+import { celo, fuse } from "viem/chains"
 import {
   createPublicClient,
   createWalletClient,
   custom,
+  http,
   formatUnits,
 } from "viem"
 
 import { ClaimSDK, IdentitySDK } from "@goodsdks/citizen-sdk"
-import { G$TokenAddresses, goodDollarABI } from "./constant"
+import {
+  G$TokenAddresses,
+  goodDollarABI,
+  rpcUrls,
+  SupportedChains,
+} from "./constants"
 
 @customElement("claim-button")
 export class ClaimButton extends LitElement {
@@ -24,11 +34,18 @@ export class ClaimButton extends LitElement {
   @state() private error: string | null = null
   @state() private txHash: string | null = null
   @state() private claimAmount: number | null = null
+  @state() private chain: SupportedChains | null = null
   @state() private walletAddress: string | null = null
   @state() private tokenBalance: string | null = null
   @state() private timeLeft: number | null = null
-  @state() private claimState: "idle" | "claiming" | "success" | "timer" =
-    "idle"
+  @state() private decimals: number | null = null
+  @state() private claimOnAlt: boolean = false
+  @state() private claimState:
+    | "idle"
+    | "claiming"
+    | "success"
+    | "timer"
+    | "switching" = "idle"
 
   private countdownTimer: number | null = null
   private confettiCanvas: HTMLCanvasElement | null = null
@@ -44,7 +61,7 @@ export class ClaimButton extends LitElement {
     .claim-container {
       background: white;
       border-radius: 10px;
-      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); /* Enhanced for visibility */
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
       padding: 20px;
       text-align: center;
       max-width: 400px;
@@ -148,6 +165,7 @@ export class ClaimButton extends LitElement {
       font-size: 24px;
       font-weight: bold;
       color: #2c3e50;
+      margin-bottom: 12px;
     }
     .footer {
       margin-top: 20px;
@@ -160,13 +178,11 @@ export class ClaimButton extends LitElement {
       align-items: center;
       flex-direction: column;
     }
-
     .powered-by {
       display: flex;
       align-items: center;
       margin-bottom: 8px;
     }
-
     .gd-link {
       display: flex;
       align-items: center;
@@ -174,22 +190,32 @@ export class ClaimButton extends LitElement {
       text-decoration: none;
       font-weight: bold;
     }
-
     .gd-icon {
       width: 24px;
       height: 24px;
       margin-right: 5px;
       margin-left: 5px;
     }
-
     .footer-links {
       display: flex;
       gap: 10px;
     }
-
     .footer-links a {
       color: #007bff;
       text-decoration: underline;
+      cursor: pointer;
+    }
+    .chain-suggestion {
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 6px;
+      background-color: #3498db;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .chain-suggestion:hover {
+      background-color: #2980b9;
       cursor: pointer;
     }
   `
@@ -206,7 +232,7 @@ export class ClaimButton extends LitElement {
       url: "https://example.com",
       icons: ["https://avatars.githubusercontent.com/u/179229932"],
     }
-    const networks: [AppKitNetwork, ...AppKitNetwork[]] = [reownCelo]
+    const networks: [AppKitNetwork, ...AppKitNetwork[]] = [reownCelo, reownFuse]
 
     this.appKit = createAppKit({
       adapters: [new EthersAdapter()],
@@ -230,16 +256,22 @@ export class ClaimButton extends LitElement {
   async initializeClients() {
     const provider = (await this.appKit?.getProvider("eip155")) as any
     const account = this.appKit?.getAccount()
+    const chainId = Number(provider?.chainId) as SupportedChains
     if (!provider || !account) return
 
+    const isCelo = chainId === 42220
+    const chain = isCelo ? celo : fuse
+    this.chain = chainId
+    this.decimals = isCelo ? 18 : 2
+
     const pClient = createPublicClient({
-      chain: celo,
+      chain: chain,
       transport: custom(provider),
     }) as unknown as PublicClient
 
     const wClient = createWalletClient({
       account: account?.address as `0x${string}`,
-      chain: celo,
+      chain: chain,
       transport: custom(provider),
     })
 
@@ -280,9 +312,20 @@ export class ClaimButton extends LitElement {
   async fetchEntitlement(sdk: ClaimSDK) {
     try {
       const amount = await sdk.checkEntitlement()
-      this.claimAmount = Number(amount) / 1e18
+      this.claimAmount = Number(amount) / 10 ** this.decimals!
 
       if (this.claimAmount === 0) {
+        const altChainId = this.chain === 122 ? 42220 : 122
+        const altChain = altChainId === 122 ? fuse : celo
+
+        const tempPublicClient = createPublicClient({
+          chain: altChain,
+          transport: http(rpcUrls[altChainId]),
+        }) as PublicClient
+
+        const claimOnAlt = await sdk.checkEntitlement(tempPublicClient)
+        this.claimOnAlt = Number(claimOnAlt) > 0
+
         const nextTime = await sdk.nextClaimTime()
         this.startCountdownTimer(nextTime)
         this.claimState = "timer"
@@ -326,32 +369,53 @@ export class ClaimButton extends LitElement {
   }
 
   async fetchTokenBalance() {
-    if (!this.publicClient || !this.walletAddress || !G$TokenAddresses) {
+    if (
+      !this.publicClient ||
+      !this.walletAddress ||
+      !G$TokenAddresses ||
+      !this.chain ||
+      !this.decimals
+    ) {
       console.warn(
-        "Cannot fetch token balance: Missing public client, wallet address, or token address.",
+        "Cannot fetch token balance: Missing public client, wallet/token address, or chain.",
       )
       return
     }
 
     try {
-      const decimals = 18
-
       const balanceResult = await this.publicClient.readContract({
-        address: G$TokenAddresses[this.environment] as `0x${string}`,
+        address: G$TokenAddresses[this.chain][
+          this.environment
+        ] as `0x${string}`,
         abi: goodDollarABI,
         functionName: "balanceOf",
         args: [this.walletAddress as `0x${string}`],
       })
 
-      this.tokenBalance = Number(formatUnits(balanceResult, decimals)).toFixed(
-        2,
-      )
+      this.tokenBalance = Number(
+        formatUnits(balanceResult, this.decimals),
+      ).toFixed(2)
 
       this.error = null
     } catch (err: any) {
       console.error("Failed to fetch token balance:", err)
       this.error = `Failed to fetch token balance: ${err.shortMessage || err.message}`
       this.tokenBalance = null
+    }
+  }
+
+  async switchChain() {
+    try {
+      this.claimState = "switching"
+      const targetChain = this.chain === 122 ? celo : fuse
+      await this.walletClient?.switchChain(targetChain)
+
+      setTimeout(async () => {
+        await this.initializeClients()
+      }, 2000)
+    } catch (err: any) {
+      console.error("Failed to switch chain:", err)
+      this.error = `Failed to switch chain: ${err.message}`
     }
   }
 
@@ -471,7 +535,7 @@ export class ClaimButton extends LitElement {
       )
 
       this.particles.forEach((p) => {
-        if (!this.confettiCanvas) return
+        if (!this.confettiCanvas || !this.confettiCtx) return
         p.y += p.vy
         p.rotation += p.rotationSpeed
         p.vy += 0.0008
@@ -483,14 +547,14 @@ export class ClaimButton extends LitElement {
           p.x = Math.random() * this.confettiCanvas.width
         }
 
-        this.confettiCtx!.save()
-        this.confettiCtx!.translate(p.x + p.size / 2, p.y + p.size / 2)
-        this.confettiCtx!.rotate(p.rotation)
-        this.confettiCtx!.fillStyle = p.color
-        this.confettiCtx!.beginPath()
-        this.confettiCtx!.rect(-p.size / 2, -p.size / 2, p.size, p.size)
-        this.confettiCtx!.fill()
-        this.confettiCtx!.restore()
+        this.confettiCtx.save()
+        this.confettiCtx.translate(p.x + p.size / 2, p.y + p.size / 2)
+        this.confettiCtx.rotate(p.rotation)
+        this.confettiCtx.fillStyle = p.color
+        this.confettiCtx.beginPath()
+        this.confettiCtx.rect(-p.size / 2, -p.size / 2, p.size, p.size)
+        this.confettiCtx.fill()
+        this.confettiCtx.restore()
       })
 
       requestAnimationFrame(animate)
@@ -546,6 +610,15 @@ export class ClaimButton extends LitElement {
                         <div class="countdown">
                           ${this.formatTimeLeft(this.timeLeft)}
                         </div>
+                        ${this.claimOnAlt
+                          ? html`<p
+                              class="chain-suggestion"
+                              @click="${this.switchChain}"
+                            >
+                              Switch to ${this.chain === 122 ? "Celo" : "Fuse"}
+                              to claim more G$</p
+                            </p>`
+                          : null}
                       </div>`
                     : html` <button
                         class="button claim-button"
