@@ -61,7 +61,7 @@ export const ClaimButton: React.FC = () => {
         onPress={handleClaim}
         color="$colorWhite"
         backgroundColor={isLoading ? "$colorGray500" : "$colorGreen500"}
-        disabled={isLoading || !address}
+        disabled={isLoading || !address || claimAmount === 0}
         hoverStyle={{
           backgroundColor: isLoading ? "$colorGray600" : "$colorGreen600",
         }}
@@ -75,9 +75,9 @@ export const ClaimButton: React.FC = () => {
       >
         {isLoading
           ? "Claiming..."
-          : claimAmount === 0
+          : claimAmount !== 0
             ? `Claim UBI ${claimAmount}`
-            : "Claim UBI"}
+            : "Come back tomorrow to claim your UBI!"}
       </Button>
 
       {txHash && (
