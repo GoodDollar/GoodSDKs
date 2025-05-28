@@ -92,7 +92,7 @@ export const ClaimButton: React.FC = () => {
             textDecoration="underline"
             cursor="pointer"
             onPress={() =>
-              window.open(`https://etherscan.io/tx/${txHash}`, "_blank")
+              window.open(`https://celoscan.io/tx/${txHash}`, "_blank")
             }
           >
             {txHash.slice(0, 6)}...{txHash.slice(-4)}
