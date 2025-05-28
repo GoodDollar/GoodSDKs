@@ -14,7 +14,6 @@ import { config } from "@tamagui/config/v3"
 import { useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
 import { useIdentitySDK } from "@goodsdks/citizen-sdk"
-import "@goodsdks/ui-components"
 
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
@@ -241,9 +240,17 @@ const App: React.FC = () => {
           {isConnected ? (
             <ClaimButton />
           ) : (
-            <Text fontSize={14} color="$red10" textAlign="center">
-              Please connect your wallet to claim your UBI.
-            </Text>
+            <>
+              <Text
+                fontSize={14}
+                color="$red10"
+                textAlign="center"
+                marginBottom={12}
+              >
+                Please connect your wallet to claim your UBI.
+              </Text>
+              <appkit-button></appkit-button>
+            </>
           )}
         </YStack>
 
