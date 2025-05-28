@@ -30,8 +30,16 @@ import {
 export class ClaimButton extends LitElement {
   @property({ type: String })
   environment: "production" | "development" | "staging" = "development"
+  @property({ type: Array })
+  supportedChains: SupportedChains[] | number[] = [122, 42220]
+  @property({ type: Object })
+  appkitConfig = {
+    projectId: null,
+    metadata: null, // { name: string, description: string, url: string, icons: string[] }
+  }
 
-  @state() private error: string | null = null
+  @state()
+  private error: string | null = null
   @state() private txHash: string | null = null
   @state() private claimAmount: number | null = null
   @state() private chain: SupportedChains | null = null
@@ -45,12 +53,14 @@ export class ClaimButton extends LitElement {
     | "claiming"
     | "success"
     | "timer"
-    | "switching" = "idle"
+    | "switching"
+    | "loading" = "idle"
 
   private countdownTimer: number | null = null
   private confettiCanvas: HTMLCanvasElement | null = null
   private confettiCtx: CanvasRenderingContext2D | null = null
   private particles: any[] = []
+  private clientsInitialized: boolean = false
 
   private appKit: AppKit | null = null
   private publicClient: PublicClient | null = null
@@ -148,6 +158,14 @@ export class ClaimButton extends LitElement {
       animation: spin 1.5s linear infinite;
       margin: 20px auto;
     }
+    .loader2 {
+      border: 5px solid #ecf0f1;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1.5s linear infinite;
+    }
     @keyframes spin {
       0% {
         transform: rotate(0deg);
@@ -225,29 +243,29 @@ export class ClaimButton extends LitElement {
   }
 
   async initializeAppKit() {
-    const projectId = "71dd03d057d89d0af68a4c627ec59694"
-    const metadata = {
-      name: "AppKit",
-      description: "AppKit Example",
-      url: "https://example.com",
-      icons: ["https://avatars.githubusercontent.com/u/179229932"],
-    }
+    console.log("Initializing AppKit with metadata:", this.appkitConfig)
+    if (!this.appkitConfig.projectId || !this.appkitConfig.metadata) return
+
     const networks: [AppKitNetwork, ...AppKitNetwork[]] = [reownCelo, reownFuse]
 
     this.appKit = createAppKit({
       adapters: [new EthersAdapter()],
       basic: true,
       networks,
-      projectId,
-      metadata,
+      projectId: this.appkitConfig?.projectId,
+      metadata: this.appkitConfig?.metadata,
     } as AppKitOptions)
 
-    this.appKit.subscribeEvents((event) =>
-      console.log("appKit events", { data: event.data }),
-    )
+    this.appKit.subscribeState((state) => {
+      if (state.loading) {
+        this.claimState = "loading"
+      } else if (state.initialized) {
+        this.claimState = "idle"
+      }
+    })
 
     this.appKit.subscribeAccount(async (account) => {
-      if (account?.address) {
+      if (account?.address && !this.clientsInitialized) {
         await this.initializeClients()
       }
     })
@@ -256,12 +274,30 @@ export class ClaimButton extends LitElement {
   async initializeClients() {
     const provider = (await this.appKit?.getProvider("eip155")) as any
     const account = this.appKit?.getAccount()
-    const chainId = Number(provider?.chainId) as SupportedChains
+
+    let chainId: number | undefined
+
+    // for providers other then injected, we need to use eth_chainId
+    if (provider && typeof provider.request === "function") {
+      const chainIdHex = await provider.request({ method: "eth_chainId" })
+      chainId = Number(chainIdHex)
+    } else if (provider?.chainId) {
+      chainId = Number(provider.chainId)
+    }
+
+    if (
+      !chainId ||
+      !this.supportedChains.includes(chainId as SupportedChains)
+    ) {
+      this.error = `Unsupported chain ID: ${chainId}. Supported chains are: ${this.supportedChains.join(", ")}`
+      return
+    }
+
     if (!provider || !account) return
 
     const isCelo = chainId === 42220
     const chain = isCelo ? celo : fuse
-    this.chain = chainId
+    this.chain = chainId as SupportedChains
     this.decimals = isCelo ? 18 : 2
 
     const pClient = createPublicClient({
@@ -278,6 +314,8 @@ export class ClaimButton extends LitElement {
     this.publicClient = pClient
     this.walletClient = wClient
     this.walletAddress = account.address as string | null
+
+    this.clientsInitialized = true
 
     this.initializeSDK()
   }
@@ -476,6 +514,11 @@ export class ClaimButton extends LitElement {
   }
 
   updated(changedProperties: any) {
+    if (changedProperties.has("appkitConfig") && this.appkitConfig) {
+      console.log("appkitmetdata changed:", this.appkitConfig)
+      this.initializeAppKit()
+    }
+
     if (changedProperties.has("claimState") && this.claimState === "success") {
       this.startConfetti()
     }
@@ -567,12 +610,22 @@ export class ClaimButton extends LitElement {
     return html`
       <div class="claim-container">
         ${!this.walletAddress
-          ? html`<button
-              class="button connect-button"
-              @click="${this.openWalletModal}"
-            >
-              Connect Wallet
-            </button>`
+          ? html`${this.claimState === "loading"
+              ? html`
+                  <button class="button connect-button" disabled>
+                    <span>Connecting...</span>
+                    <div
+                      class="loader2"
+                      style="display:inline-block;width:20px;height:20px;margin-left:8px;vertical-align:middle;"
+                    ></div>
+                  </button>
+                `
+              : html` <button
+                  class="button connect-button"
+                  @click="${this.openWalletModal}"
+                >
+                  Connect Wallet
+                </button>`}`
           : html` <div class="connected-widget">
               <div class="wallet-details">
                 <div class="detail-item" @click="${this.openWalletModal}">
@@ -623,9 +676,18 @@ export class ClaimButton extends LitElement {
                     : html` <button
                         class="button claim-button"
                         @click="${this.handleClaim}"
-                        ?disabled="${this.claimAmount === 0}"
+                        ?disabled="${this.claimAmount === 0 ||
+                        this.claimAmount === null}"
                       >
-                        Claim UBI G$ ${this.claimAmount}
+                        ${this.claimAmount === null
+                          ? html`
+                              <span>Loading...</span>
+                              <div
+                                class="loader2"
+                                style="display:inline-block;width:20px;height:20px;margin-left:8px;vertical-align:middle;"
+                              ></div>
+                            `
+                          : html` Claim UBI G$ ${this.claimAmount} `}
                       </button>`}
               ${this.txHash
                 ? html`<div class="message success">

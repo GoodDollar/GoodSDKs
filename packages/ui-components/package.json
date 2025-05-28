@@ -19,7 +19,6 @@
   "dependencies": {
     "@reown/appkit": "^1.7.2",
     "@reown/appkit-adapter-ethers": "^1.7.2",
-    "@wagmi/connectors": "^5.7.12",
     "ethers": "6.13.5",
     "lit": "^3.2.1"
   }

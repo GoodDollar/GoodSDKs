@@ -60,7 +60,8 @@ export class ClaimSDK {
     this.publicClient = publicClient
     this.walletClient = walletClient
     this.identitySDK = identitySDK
-    this.account = account
+    this.account = account ?? walletClient.account.address
+
     this.rdu = rdu
     this.env = env
 

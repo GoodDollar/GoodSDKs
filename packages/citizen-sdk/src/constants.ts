@@ -89,7 +89,6 @@ export const identityV2ABI = parseAbi([
 // ABI for the UBISchemeV2 contract for essential functions and events
 export const ubiSchemeV2ABI = parseAbi([
   "function claim() returns (bool)",
-  "function checkEntitlement() view returns (uint256)",
   "function checkEntitlement(address _member) view returns (uint256)",
   "function getDailyStats() view returns (uint256 claimers, uint256 amount)",
   "function periodStart() view returns (uint256)",

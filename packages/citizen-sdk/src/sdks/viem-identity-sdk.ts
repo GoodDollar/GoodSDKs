@@ -87,7 +87,9 @@ export class IdentitySDK {
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
     try {
-      const [account] = await this.walletClient.getAddresses()
+      const [account = this.walletClient?.account?.address] =
+        await this.walletClient.getAddresses()
+
       if (!account) throw new Error("No active wallet address found.")
 
       const { request } = await this.publicClient.simulateContract({
@@ -176,7 +178,8 @@ export class IdentitySDK {
     chainId?: number,
   ): Promise<string> {
     try {
-      const [address] = await this.walletClient.getAddresses()
+      const [address = this.walletClient?.account?.address] =
+        await this.walletClient.getAddresses()
       if (!address) throw new Error("No wallet address found.")
 
       const nonce = Math.floor(Date.now() / 1000).toString()
