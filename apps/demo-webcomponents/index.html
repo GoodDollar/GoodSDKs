@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GoodDollar Identity Demo</title>
+    <title>GoodDollar Claim Demo</title>
   </head>
   <body
     style="
@@ -16,9 +16,24 @@
     "
   >
     <div>
-      <claim-button environment="development"></claim-button>
+      <claim-button id="claimBtn" environment="development"></claim-button>
     </div>
     <!-- Load the JavaScript entry point -->
     <script type="module" src="/src/index.js"></script>
+    <script type="module">
+      // Wait for the component to be defined
+      customElements.whenDefined("claim-button").then(() => {
+        const claimBtn = document.getElementById("claimBtn")
+        claimBtn.appkitConfig = {
+          projectId: "71dd03d057d89d0af68a4c627ec59694",
+          metadata: {
+            name: "AppKit",
+            description: "AppKit Example",
+            url: "https://example.com",
+            icons: ["https://avatars.githubusercontent.com/u/179229932"],
+          },
+        }
+      })
+    </script>
   </body>
 </html>

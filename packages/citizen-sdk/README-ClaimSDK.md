@@ -8,6 +8,10 @@ the `ClaimSDK` facilitates claiming Universal Basic Income (UBI) through the Goo
 
 To integrate the Claim SDK with Wagmi in a React application, you need to obtain the necessary blockchain clients and an instance of the Identity SDK, as the Claim SDK depends on it. Below is an example of how to initialize the Claim SDK within a React component.
 
+For a full demo integration look here:
+ClaimButton - [ClaimButton.tsx](/apps/demo-identity-app/src/components/ClaimButton.tsx)
+Wagmi/Reown Configuration - [WagmiConfiguration.tsx](/apps/demo-identity-app/src/config.tsx)
+
 ```typescript
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { useIdentitySDK } from '@goodsdks/identity-sdk/wagmi-sdk';
@@ -153,6 +157,7 @@ new ClaimSDK({
 ### Claim SDK Example
 
 This example demonstrates how to use the Claim SDK in a React component to check UBI entitlement and claim it, providing user feedback throughout the process.
+please reference this [config](/apps/demo-identity-app/src/config.tsx) for a full wagmi configuration
 
 ```typescript
 import React, { useState } from 'react';

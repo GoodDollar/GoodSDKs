@@ -33,15 +33,33 @@ Can be used in any website, for a quick setup:
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Claim Button Example</title>
-    <script src="path/to/claim-button.global.js"></script>
   </head>
   <body>
     <claim-button environment="production"></claim-button>
+    <script src="path/to/claim-button.global.js"></script>
+    <script type="module">
+      // Wait for the component to be defined
+      customElements.whenDefined("claim-button").then(() => {
+        const claimBtn = document.getElementById("claimBtn")
+        claimBtn.appkitConfig = {
+          projectId: "71dd03d057d89d0af68a4c627ec59694",
+          metadata: {
+            name: "AppKit",
+            description: "AppKit Example",
+            url: "https://example.com",
+            icons: ["https://avatars.githubusercontent.com/u/179229932"],
+          },
+        }
+      })
+    </script>
   </body>
 </html>
 ```
 
 ### Option 2: Using ESM Modules
+
+**Note:**: see above example for the metadata configuration, for simplicity removed from
+below examples.
 
 For projects with a modern JavaScript setup:
 
@@ -53,9 +71,13 @@ For projects with a modern JavaScript setup:
    ```javascript
    import "@goodsdks/ui-components"
    ```
-3. **Use in HTML**: Place the `<claim-button>` tag in your template.
+3. **For use in HTML**: Place the `<claim-button>` tag in your template.
    ```html
    <claim-button environment="production"></claim-button>
+   ```
+4. **For use in React**": Place the `<claim-button>` tag in your render method.
+   ```javascript
+   render(<claim-button environment="production"></claim-button>)
    ```
 
 ## Configurable Options
@@ -69,6 +91,25 @@ Customize the `claim-button` using these properties:
     ```html
     <claim-button environment="production"></claim-button>
     ```
+- **`appkitConfig`**: _(Set via JavaScript property)_  
+  Provides configuration for wallet connection and custom branding in wallet dialogs.
+  - Expected to be an object with at least `projectId` and a `metadata` object containing your app's details.
+  - Example:
+    ```js
+    // In your JavaScript, after the component is defined:
+    customElements.whenDefined("claim-button").then(() => {
+      document.querySelector("claim-button").appkitConfig = {
+        projectId: "YOUR_PROJECT_ID",
+        metadata: {
+          name: "YourAppName",
+          description: "A short app description",
+          url: "https://yourapp.example.com",
+          icons: ["https://yourapp.example.com/icon.png"],
+        },
+      }
+    })
+    ```
+  - **Note:** `appkitConfig` cannot be set as an HTML attribute; it must be set on the element as a property from JavaScript.
 
 ## Additional Notes
 
