@@ -243,7 +243,6 @@ export class ClaimButton extends LitElement {
   }
 
   async initializeAppKit() {
-    console.log("Initializing AppKit with metadata:", this.appkitConfig)
     if (!this.appkitConfig.projectId || !this.appkitConfig.metadata) return
 
     const networks: [AppKitNetwork, ...AppKitNetwork[]] = [reownCelo, reownFuse]
@@ -515,7 +514,6 @@ export class ClaimButton extends LitElement {
 
   updated(changedProperties: any) {
     if (changedProperties.has("appkitConfig") && this.appkitConfig) {
-      console.log("appkitmetdata changed:", this.appkitConfig)
       this.initializeAppKit()
     }
 
