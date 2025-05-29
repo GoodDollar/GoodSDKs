@@ -1915,18 +1915,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/ui-components@file:.yalc/@goodsdks/ui-components::locator=demo-identity-app%40workspace%3Aapps%2Fdemo-identity-app":
-  version: 1.0.0
-  resolution: "@goodsdks/ui-components@file:.yalc/@goodsdks/ui-components#.yalc/@goodsdks/ui-components::hash=54ee2c&locator=demo-identity-app%40workspace%3Aapps%2Fdemo-identity-app"
-  dependencies:
-    "@reown/appkit": "npm:^1.7.2"
-    "@reown/appkit-adapter-ethers": "npm:^1.7.2"
-    ethers: "npm:6.13.5"
-    lit: "npm:^3.2.1"
-  checksum: 10c0/c4be6b3c7a185549e12a81bbcc2e7e0a523c07180bf7fa77dbf9028bb0d925351a9bdc888efe6410d06240e872f2f2e10ae2276af87b20018bcf03c3db27ab7f
-  languageName: node
-  linkType: hard
-
 "@goodsdks/ui-components@npm:*, @goodsdks/ui-components@workspace:packages/ui-components":
   version: 0.0.0-use.local
   resolution: "@goodsdks/ui-components@workspace:packages/ui-components"
@@ -9750,7 +9738,6 @@ __metadata:
   resolution: "demo-identity-app@workspace:apps/demo-identity-app"
   dependencies:
     "@goodsdks/citizen-sdk": "npm:*"
-    "@goodsdks/ui-components": "file:.yalc/@goodsdks/ui-components"
     "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
     "@reown/appkit-wallet": "npm:^1.7.2"
