@@ -3,6 +3,7 @@
 `identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification and work with a uniquely identified user in your dapp or service.
 
 [A live demo app is live here](https://demo-identity-app.vercel.app/)
+[How to use the ClaimSDK](packages/citizen-sdk/README-ClaimSDK.md)
 
 ## Table of Contents
 
@@ -24,13 +25,13 @@
 To integrate `identity-sdk` into your project, you can easily install it from npm:
 
 ```bash file.sh
-npm install @goodsdks/identity-sdk
+npm install @goodsdks/citizen-sdk
 ```
 
 or if you prefer using Yarn:
 
 ```bash file.sh
-yarn add @goodsdks/identity-sdk
+yarn add @goodsdks/citizen-sdk
 ```
 
 ## Getting Started
@@ -43,7 +44,7 @@ The Identity SDK is built on top of `Wagmi` and provides a React hook for intera
 
 First, ensure that you have set up `Wagmi` in your React application. Then, import and use the `useIdentitySDK` hook as shown below.
 
-```typescript packages/identity-sdk/src/example/WagmiInitExample.tsx
+```typescript packages/citizen-sdk/src/example/WagmiInitExample.tsx
 import React from 'react';
 import { WagmiProvider } from 'wagmi';
 import { useIdentitySDK } from './wagmi-sdk';
@@ -84,7 +85,7 @@ The Viem SDK provides a set of utility functions to interact directly with the I
 
 #### Initialization
 
-```typescript packages/identity-sdk/src/example/ViemInitExample.ts
+```typescript packages/citizen-sdk/src/example/ViemInitExample.ts
 import { PublicClient, WalletClient } from "viem"
 import { initializeIdentityContract, IdentitySDK } from "./viem-sdk"
 

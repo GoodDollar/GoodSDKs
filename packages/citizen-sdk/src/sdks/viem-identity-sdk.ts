@@ -10,18 +10,19 @@ import { waitForTransactionReceipt } from "viem/actions"
 import { compressToEncodedURIComponent } from "lz-string"
 
 import {
+  contractAddresses,
   contractEnv,
   Envs,
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
-  identityContractAddresses,
-} from "./constants"
+  SupportedChains,
+} from "../constants"
 
 import type {
   IdentityContract,
   IdentityExpiryData,
   IdentityExpiry,
-} from "./types"
+} from "../types"
 
 /**
  * Initializes the Identity Contract.
@@ -61,7 +62,9 @@ export class IdentitySDK {
     this.walletClient = walletClient
     this.env = env
 
-    const contractAddress = identityContractAddresses[env]
+    const chainId = this.walletClient.chain?.id as SupportedChains
+
+    const contractAddress = contractAddresses[chainId][env]?.identityContract
     if (!contractAddress) {
       throw new Error(`Contract address for environment "${env}" not found.`)
     }
@@ -84,7 +87,9 @@ export class IdentitySDK {
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
     try {
-      const [account] = await this.walletClient.getAddresses()
+      const [account = this.walletClient?.account?.address] =
+        await this.walletClient.getAddresses()
+
       if (!account) throw new Error("No active wallet address found.")
 
       const { request } = await this.publicClient.simulateContract({
@@ -173,7 +178,8 @@ export class IdentitySDK {
     chainId?: number,
   ): Promise<string> {
     try {
-      const [address] = await this.walletClient.getAddresses()
+      const [address = this.walletClient?.account?.address] =
+        await this.walletClient.getAddresses()
       if (!address) throw new Error("No wallet address found.")
 
       const nonce = Math.floor(Date.now() / 1000).toString()

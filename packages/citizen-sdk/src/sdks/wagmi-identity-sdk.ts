@@ -1,9 +1,9 @@
 import { usePublicClient, useWalletClient } from "wagmi"
 import { PublicClient } from "viem"
 
-import { IdentitySDK } from "./viem-sdk"
+import { IdentitySDK } from "./viem-identity-sdk"
 
-import { contractEnv } from "./constants"
+import { contractEnv } from "../constants"
 
 export const useIdentitySDK = (
   env: contractEnv = "production",

@@ -13,11 +13,12 @@ import {
 import { config } from "@tamagui/config/v3"
 import { useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
-import { useIdentitySDK } from "@goodsdks/identity-sdk"
+import { useIdentitySDK } from "@goodsdks/citizen-sdk"
 
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
 import { SigningModal } from "./components/SigningModal"
+import { ClaimButton } from "./components/ClaimButton"
 
 const tamaguiConfig = createTamagui(config)
 
@@ -211,6 +212,46 @@ const App: React.FC = () => {
               .
             </Text>
           </YStack>
+        </YStack>
+
+        {/* Claim UBI Section */}
+        <YStack
+          padding="$4"
+          backgroundColor="white"
+          borderRadius="$4"
+          borderWidth={1}
+          borderColor="#E2E8F0"
+          width="100%"
+          maxWidth={600}
+          alignItems="center"
+          justifyContent="center"
+          marginTop={24}
+          shadow="$1"
+        >
+          <Text
+            fontSize={18}
+            fontWeight="bold"
+            color="$text"
+            marginBottom={12}
+            textAlign="center"
+          >
+            Claim Your Daily UBI
+          </Text>
+          {isConnected ? (
+            <ClaimButton />
+          ) : (
+            <>
+              <Text
+                fontSize={14}
+                color="$red10"
+                textAlign="center"
+                marginBottom={12}
+              >
+                Please connect your wallet to claim your UBI.
+              </Text>
+              <appkit-button></appkit-button>
+            </>
+          )}
         </YStack>
 
         <SigningModal

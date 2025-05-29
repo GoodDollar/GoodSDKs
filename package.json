@@ -21,7 +21,7 @@
     "packages/*"
   ],
   "resolutions": {
-    "viem": "^2.22.10",
+    "viem": "2.28.x",
     "wagmi": "^2.14.8"
   }
 }

@@ -1,6 +1,6 @@
 import React from "react"
 import { Button } from "tamagui"
-import { useIdentitySDK } from "@goodsdks/identity-sdk" // Adjust the import path as needed
+import { useIdentitySDK } from "@goodsdks/citizen-sdk"
 import { useAccount } from "wagmi"
 
 interface VerifyButtonProps {

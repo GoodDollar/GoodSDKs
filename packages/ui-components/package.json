@@ -1,0 +1,26 @@
+{
+  "name": "@goodsdks/ui-components",
+  "version": "1.0.2",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch",
+    "build-claim": "tsup --config tsup.config.claim.ts",
+    "bump-claim": "yarn version patch && yarn build-claim && git add package.json && git commit -m \"version bump\""
+  },
+  "main": "./dist/index.global.js",
+  "module": "./dist/index.js",
+  "devDependencies": {
+    "@goodsdks/citizen-sdk": "*",
+    "@repo/typescript-config": "workspace:*",
+    "tsup": "^8.3.5",
+    "typescript": "latest",
+    "viem": "latest"
+  },
+  "dependencies": {
+    "@reown/appkit": "^1.7.2",
+    "@reown/appkit-adapter-ethers": "^1.7.2",
+    "ethers": "6.13.5",
+    "lit": "^3.2.1"
+  }
+}
