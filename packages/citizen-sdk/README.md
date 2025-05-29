@@ -44,7 +44,7 @@ The Identity SDK is built on top of `Wagmi` and provides a React hook for intera
 
 First, ensure that you have set up `Wagmi` in your React application. Then, import and use the `useIdentitySDK` hook as shown below.
 
-```typescript packages/identity-sdk/src/example/WagmiInitExample.tsx
+```typescript packages/citizen-sdk/src/example/WagmiInitExample.tsx
 import React from 'react';
 import { WagmiProvider } from 'wagmi';
 import { useIdentitySDK } from './wagmi-sdk';
@@ -85,7 +85,7 @@ The Viem SDK provides a set of utility functions to interact directly with the I
 
 #### Initialization
 
-```typescript packages/identity-sdk/src/example/ViemInitExample.ts
+```typescript packages/citizen-sdk/src/example/ViemInitExample.ts
 import { PublicClient, WalletClient } from "viem"
 import { initializeIdentityContract, IdentitySDK } from "./viem-sdk"
 

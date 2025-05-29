@@ -14,8 +14,8 @@ Wagmi/Reown Configuration - [WagmiConfiguration.tsx](/apps/demo-identity-app/src
 
 ```typescript
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { useIdentitySDK } from '@goodsdks/identity-sdk/wagmi-sdk';
-import { ClaimSDK } from '@goodsdks/identity-sdk/viem-claim-sdk';
+import { useIdentitySDK } from '@goodsdks/citizen-sdk/wagmi-sdk';
+import { ClaimSDK } from '@goodsdks/citizen-sdk/viem-claim-sdk';
 
 const ClaimComponent = () => {
   const { address } = useAccount();
@@ -46,8 +46,8 @@ For non-React environments or backend services, you can initialize the Claim SDK
 
 ```typescript
 import { PublicClient, WalletClient } from "viem"
-import { IdentitySDK } from "@goodsdks/identity-sdk/viem-identity-sdk"
-import { ClaimSDK } from "@goodsdks/identity-sdk/viem-claim-sdk"
+import { IdentitySDK } from "@goodsdks/citizen-sdk/viem-identity-sdk"
+import { ClaimSDK } from "@goodsdks/citizen-sdk/viem-claim-sdk"
 
 const publicClient = new PublicClient({
   /* configuration */
@@ -163,8 +163,8 @@ please reference this [config](/apps/demo-identity-app/src/config.tsx) for a ful
 import React, { useState } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { WagmiProvider } from 'wagmi';
-import { useIdentitySDK } from '@goodsdks/identity-sdk/wagmi-sdk';
-import { ClaimSDK } from '@goodsdks/identity-sdk/viem-claim-sdk';
+import { useIdentitySDK } from '@goodsdks/citizen-sdk/wagmi-sdk';
+import { ClaimSDK } from '@goodsdks/citizen-sdk/viem-claim-sdk';
 
 const ClaimExample = () => {
   const { address } = useAccount();

@@ -6,7 +6,7 @@ Welcome to the **GoodSdks Monorepo**, a unified repository housing multiple pack
 
 - [Overview](#overview)
 - [Packages](#packages)
-  - [identity-sdk](packages/identity-sdk/README.md)
+  - [identity-sdk](packages/citizen-sdk/README.md)
 - [Applications](#applications)
   - [demo-identity-app](apps/demo-identity-app/README.md)
 - [Getting Started](#getting-started)
@@ -25,7 +25,7 @@ The GoodSDK's Monorepo is structured to facilitate seamless development, testing
 
 ## Packages
 
-### [identity-sdk](packages/identity-sdk/README.md)
+### [identity-sdk](packages/citizen-sdk/README.md)
 
 The `identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification, whitelist management, and more.
 
@@ -35,7 +35,7 @@ The `identity-sdk` is a comprehensive library designed to interact seamlessly wi
 - **Viem SDK Integration**: Provides utility functions for backend services or non-React environments.
 - **Identity Management**: Functions to verify identities, manage whitelists, and handle authentication periods.
 
-For detailed information, refer to the [identity-sdk README](packages/identity-sdk/README.md).
+For detailed information, refer to the [identity-sdk README](packages/citizen-sdk/README.md).
 
 ## Applications
 
@@ -116,7 +116,7 @@ To utilize the `identity-sdk` within your application:
    }
    ```
 
-For more examples and detailed usage, refer to the [identity-sdk README](packages/identity-sdk/README.md).
+For more examples and detailed usage, refer to the [identity-sdk README](packages/citizen-sdk/README.md).
 
 ### Running the Demo Application
 
