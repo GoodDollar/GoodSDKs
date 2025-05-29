@@ -1,11 +1,12 @@
 {
   "name": "@goodsdks/ui-components",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
     "dev": "tsc --watch",
-    "build-claim": "tsup --config tsup.config.claim.ts"
+    "build-claim": "tsup --config tsup.config.claim.ts",
+    "bump-claim": "yarn version patch && yarn build-claim && git add package.json && git commit -m \"version bump\""
   },
   "main": "./dist/index.global.js",
   "module": "./dist/index.js",
