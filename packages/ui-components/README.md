@@ -35,7 +35,7 @@ Can be used in any website, for a quick setup:
     <title>Claim Button Example</title>
   </head>
   <body>
-    <claim-button environment="production"></claim-button>
+    <claim-button id="claimBtn" environment="production"></claim-button>
     <script src="path/to/claim-button.global.js"></script>
     <script type="module">
       // Wait for the component to be defined
