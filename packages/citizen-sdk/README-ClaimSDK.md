@@ -4,6 +4,11 @@ the `ClaimSDK` facilitates claiming Universal Basic Income (UBI) through the Goo
 
 ## Getting Started
 
+### Prerequisites
+
+Make sure you register your wallet on re-own cloud dashboard: https://cloud.reown.com/sign-in
+you want to register an dapp which integrates 'appkit'
+
 ### Using the Wagmi SDK for Claim
 
 To integrate the Claim SDK with Wagmi in a React application, you need to obtain the necessary blockchain clients and an instance of the Identity SDK, as the Claim SDK depends on it. Below is an example of how to initialize the Claim SDK within a React component.
