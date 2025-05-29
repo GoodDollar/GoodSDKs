@@ -25,13 +25,13 @@
 To integrate `identity-sdk` into your project, you can easily install it from npm:
 
 ```bash file.sh
-npm install @goodsdks/identity-sdk
+npm install @goodsdks/citizen-sdk
 ```
 
 or if you prefer using Yarn:
 
 ```bash file.sh
-yarn add @goodsdks/identity-sdk
+yarn add @goodsdks/citizen-sdk
 ```
 
 ## Getting Started
