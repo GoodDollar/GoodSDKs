@@ -1,22 +1,22 @@
-import React, { useEffect } from "react";
+import React, { useEffect } from "react"
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "./ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Button } from "./ui/button";
-import { Check } from "lucide-react";
-import Prism from "prismjs";
-import "prismjs/themes/prism-tomorrow.css";
-import "prismjs/components/prism-typescript";
-import "prismjs/components/prism-solidity";
+} from "./ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
+import { Button } from "./ui/button"
+import { Check } from "lucide-react"
+import Prism from "prismjs"
+import "prismjs/themes/prism-tomorrow.css"
+import "prismjs/components/prism-typescript"
+import "prismjs/components/prism-solidity"
 import {
   DEV_REWARDS_CONTRACT,
   REWARDS_CONTRACT,
-} from "@goodsdks/engagement-sdk";
+} from "@goodsdks/engagement-sdk"
 
 // Add these styles to ensure code visibility
 const codeBlockStyles = {
@@ -24,15 +24,15 @@ const codeBlockStyles = {
   code: "block text-sm text-zinc-50 font-mono",
   copyButton:
     "absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity",
-};
+}
 
 const CodeBlock: React.FC<{ code: string; language: string }> = ({
   code,
   language,
 }) => {
   useEffect(() => {
-    Prism.highlightAll();
-  }, [code]);
+    Prism.highlightAll()
+  }, [code])
 
   return (
     <div className="group relative">
@@ -50,8 +50,8 @@ const CodeBlock: React.FC<{ code: string; language: string }> = ({
         </code>
       </pre>
     </div>
-  );
-};
+  )
+}
 
 // Add global styles to your CSS (tailwind.css or similar)
 const globalStyles = `
@@ -72,18 +72,18 @@ const globalStyles = `
   .token.keyword { color: #ff7b72 !important; }
   .token.function { color: #d2a8ff !important; }
   .token.boolean { color: #ff7b72 !important; }
-`;
+`
 
 const IntegrationGuide: React.FC = () => {
   useEffect(() => {
     // Insert global styles
-    const styleSheet = document.createElement("style");
-    styleSheet.innerText = globalStyles;
-    document.head.appendChild(styleSheet);
+    const styleSheet = document.createElement("style")
+    styleSheet.innerText = globalStyles
+    document.head.appendChild(styleSheet)
     return () => {
-      document.head.removeChild(styleSheet);
-    };
-  }, []);
+      document.head.removeChild(styleSheet)
+    }
+  }, [])
 
   // const copyToClipboard = (code: string) => {
   //   navigator.clipboard.writeText(code)
@@ -136,7 +136,7 @@ const IntegrationGuide: React.FC = () => {
                 <li>
                   Alternatively you can integrate verification in your app. See:{" "}
                   <a
-                    href="https://docs.gooddollar.org/for-developers/apis-and-sdks/identity-sybil-resistance"
+                    href="https://docs.gooddollar.org/for-developers/apis-and-sdks/sybil-resistance"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline text-blue-600"
@@ -932,7 +932,7 @@ const handleClaim = async () => {
         </CardContent>
       </Card>
     </div>
-  );
-};
+  )
+}
 
-export default IntegrationGuide;
+export default IntegrationGuide

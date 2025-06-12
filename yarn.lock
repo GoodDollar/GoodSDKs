@@ -1833,7 +1833,7 @@ __metadata:
     "@radix-ui/react-slot": "npm:^1.1.1"
     "@radix-ui/react-tabs": "npm:^1.1.2"
     "@radix-ui/react-toast": "npm:^1.2.4"
-    "@reown/appkit": "npm:^1.6.4"
+    "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-wagmi": "npm:^1.6.4"
     "@tanstack/react-query": "npm:^5.64.2"
     "@types/prismjs": "npm:^1"
@@ -4070,7 +4070,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@reown/appkit@npm:1.6.9, @reown/appkit@npm:^1.6.4":
+"@reown/appkit@npm:1.6.9":
   version: 1.6.9
   resolution: "@reown/appkit@npm:1.6.9"
   dependencies:
