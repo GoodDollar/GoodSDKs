@@ -70,9 +70,10 @@ To get started with the Identity Monorepo, follow these steps:
 3. **Install Dependencies**
 
    The monorepo uses [Yarn Workspaces](https://yarnpkg.com/features/workspaces) for dependency management.
+   Make sure to run yarn build, as the demo apps are not pulling in the goodsdk packages from npm, but rely on the locally build versions
 
    ```bash
-   yarn install
+   yarn install && yarn build
    ```
 
 4. **Start the Development Server**
