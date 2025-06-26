@@ -6,7 +6,7 @@ Welcome to the **GoodSdks Monorepo**, a unified repository housing multiple pack
 
 - [Overview](#overview)
 - [Packages](#packages)
-  - [identity-sdk](packages/citizen-sdk/README.md)
+  - [citizen-sdk](packages/citizen-sdk/README.md)
 - [Applications](#applications)
   - [demo-identity-app](apps/demo-identity-app/README.md)
 - [Getting Started](#getting-started)
@@ -25,9 +25,9 @@ The GoodSDK's Monorepo is structured to facilitate seamless development, testing
 
 ## Packages
 
-### [identity-sdk](packages/citizen-sdk/README.md)
+### [citizen-sdk](packages/citizen-sdk/README.md)
 
-The `identity-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `identity-sdk` offers the tools you need to handle identity verification, whitelist management, and more.
+The `citizen-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `citizen-sdk` offers the tools you need to handle identity verification, whitelist management, and more.
 
 #### Features
 
@@ -35,13 +35,13 @@ The `identity-sdk` is a comprehensive library designed to interact seamlessly wi
 - **Viem SDK Integration**: Provides utility functions for backend services or non-React environments.
 - **Identity Management**: Functions to verify identities, manage whitelists, and handle authentication periods.
 
-For detailed information, refer to the [identity-sdk README](packages/citizen-sdk/README.md).
+For detailed information, refer to the [citizen-sdk README](packages/citizen-sdk/README.md).
 
 ## Applications
 
 ### [demo-identity-app](apps/demo-identity-app/README.md)
 
-The `demo-identity-app` is a React-based application that demonstrates the capabilities of the `identity-sdk`. It showcases how to integrate identity verification features into a frontend application, providing a practical example for developers to follow.
+The `demo-identity-app` is a React-based application that demonstrates the capabilities of the `citizen-sdk`. It showcases how to integrate identity verification features into a frontend application, providing a practical example for developers to follow.
 
 #### Features
 
@@ -53,7 +53,7 @@ For more details, please see the [demo-identity-app README](apps/demo-identity-a
 
 ## Getting Started
 
-To get started with the Identity Monorepo, follow these steps:
+To get started with the Identity Demo App, follow these steps:
 
 1. **Clone the Repository**
 
@@ -64,7 +64,7 @@ To get started with the Identity Monorepo, follow these steps:
 2. **Navigate to the Project Directory**
 
    ```bash
-   cd identity-monorepo
+   cd GoodSDKs
    ```
 
 3. **Install Dependencies**
@@ -87,14 +87,14 @@ To get started with the Identity Monorepo, follow these steps:
 
 ## Usage
 
-### Developing with `identity-sdk`
+### Developing with `citizen-sdk`
 
-To utilize the `identity-sdk` within your application:
+To utilize the `citizen-sdk` within your application:
 
 1. **Import the SDK**
 
    ```typescript file.tsx
-   import { useIdentitySDK } from "identity-sdk"
+   import { useIdentitySDK } from "citizen-sdk"
    ```
 
 2. **Initialize the SDK**
@@ -117,11 +117,11 @@ To utilize the `identity-sdk` within your application:
    }
    ```
 
-For more examples and detailed usage, refer to the [identity-sdk README](packages/citizen-sdk/README.md).
+For more examples and detailed usage, refer to the [citizen-sdk README](packages/citizen-sdk/README.md).
 
 ### Running the Demo Application
 
-The `demo-identity-app` provides a practical example of how to integrate the `identity-sdk` into a React application.
+The `demo-identity-app` provides a practical example of how to integrate the `citizen-sdk` into a React application.
 
 1. **Navigate to the Application Directory**
 
