@@ -73,7 +73,7 @@ To get started with the Identity Demo App, follow these steps:
    Make sure to run yarn build, as the demo apps are not pulling in the goodsdk packages from npm, but rely on the locally build versions
 
    ```bash
-   yarn install && yarn build
+   yarn install --immutable && yarn build
    ```
 
 4. **Start the Development Server**
