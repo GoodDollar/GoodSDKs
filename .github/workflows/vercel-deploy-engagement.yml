@@ -25,6 +25,7 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
       - run: npm install --global turbo@latest
+      - run: npm install --global vite@latest
       - run: yarn install --immutable
       #get env vars
       - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
