@@ -1,4 +1,4 @@
-# Identity SDK
+# Citizen SDK
 
 `citizen-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `citizen-sdk` offers the tools you need to handle identity verification and work with a uniquely identified user in your dapp or service.
 
