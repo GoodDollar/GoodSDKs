@@ -32,6 +32,10 @@ To get started with the Identity Demo App, follow these steps:
    yarn dev
    ```
 
+5. **Access the Application**
+
+   Open your browser and navigate to `http://localhost:3000` to view the demo.
+
 ## Usage
 
 ### Developing with `citizen-sdk`
@@ -65,23 +69,3 @@ To utilize the `citizen-sdk` within your application:
    ```
 
 For more examples and detailed usage, refer to the [citizen-sdk README](packages/citizen-sdk/README.md).
-
-### Running the Demo Application
-
-The `demo-identity-app` provides a practical example of how to integrate the `citizen-sdk` into a React application.
-
-1. **Navigate to the Application Directory**
-
-   ```bash
-   cd apps/demo-identity-app
-   ```
-
-2. **Start the Application**
-
-   ```bash
-   yarn dev
-   ```
-
-3. **Access the Application**
-
-   Open your browser and navigate to `http://localhost:3000` to view the demo.
