@@ -34,7 +34,7 @@ The Identity SDK provides tools for managing user identity verification and whit
 
 ### 2. **Claim SDK** (`@goodsdks/citizen-sdk`)
 
-The Claim SDK handles Universal Basic Income (UBI) claiming functionality. It works in conjunction with the Identity SDK to ensure only verified users can claim their daily UBI.
+The Claim SDK is part of the same `@goodsdks/citizen-sdk` package and handles Universal Basic Income (UBI) claiming functionality. It works in conjunction with the Identity SDK to ensure only verified users can claim their daily UBI.
 
 **Key Features:**
 - ✅ Daily UBI claiming with automatic balance checks
@@ -68,35 +68,7 @@ The GoodDollar SDK implements a sophisticated claim flow that ensures fair and s
    - Shows claimable amount
    - Displays "Claim UBI [amount]" button
 
-### **Implementation Example:**
-
-```typescript
-import { useIdentitySDK, useClaimSDK } from '@goodsdks/citizen-sdk';
-
-const GoodDollarIntegration = () => {
-  const identitySDK = useIdentitySDK('production');
-  const claimSDK = useClaimSDK('production');
-  
-  // Check whitelist status
-  const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address);
-  
-  if (!isWhitelisted) {
-    // Show Verify Button
-    return <VerifyButton />;
-  }
-  
-  // Check claim entitlement
-  const entitlement = await claimSDK.checkEntitlement();
-  
-  if (entitlement === 0n) {
-    // Show Timer - already claimed
-    return <ClaimTimer />;
-  }
-  
-  // Show Claim Button - can claim
-  return <ClaimButton amount={entitlement} />;
-};
-```
+For complete implementation details and code examples, see our **[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)**.
 
 ## 🚀 Quick Start
 

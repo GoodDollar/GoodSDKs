@@ -384,7 +384,7 @@ The GoodDollar SDK implements a sophisticated claim flow that ensures fair and s
 2. **⏰ Timer State** - User is verified but already claimed
 3. **💰 Claim State** - User is verified and can claim
 
-For a complete implementation guide with code examples, see our **[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)**.
+For complete implementation details with code examples, see our **[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)**.
 
 ### Quick Flow Overview
 
