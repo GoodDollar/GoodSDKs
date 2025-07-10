@@ -4,6 +4,7 @@
 
 [A live demo app is live here](https://demo-identity-app.vercel.app/)
 [How to use the ClaimSDK](packages/citizen-sdk/README-ClaimSDK.md)
+[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)
 
 ## Table of Contents
 
@@ -16,6 +17,7 @@
   - [Viem SDK](#viem-sdk)
 - [Example Usage](#example-usage)
   - [Wagmi SDK Example](#wagmi-sdk-example)
+- [Claim Flow Logic](#claim-flow-logic)
 - [References](#references)
 - [Contributing](#contributing)
 - [License](#license)
@@ -374,6 +376,39 @@ const App = () => (
 export default App;
 ```
 
+## Claim Flow Logic
+
+The GoodDollar SDK implements a sophisticated claim flow that ensures fair and secure UBI distribution. The flow consists of three main states:
+
+1. **🔍 Verify State** - User needs identity verification
+2. **⏰ Timer State** - User is verified but already claimed
+3. **💰 Claim State** - User is verified and can claim
+
+For a complete implementation guide with code examples, see our **[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)**.
+
+### Quick Flow Overview
+
+```typescript
+// 1. Check whitelist status
+const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address);
+
+if (!isWhitelisted) {
+  // Show Verify Button
+  return <VerifyButton />;
+}
+
+// 2. Check claim entitlement
+const entitlement = await claimSDK.checkEntitlement();
+
+if (entitlement === 0n) {
+  // Show Timer - already claimed
+  return <ClaimTimer />;
+}
+
+// 3. Show Claim Button - can claim
+return <ClaimButton amount={entitlement} />;
+```
+
 ## References
 
 - [Viem Documentation](https://viem.sh/)
@@ -381,6 +416,7 @@ export default App;
 - [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/)
 - [IdentityV2 Smart Contract](https://github.com/GoodDollar/GoodProtocol/blob/master/contracts/identity/IdentityV2.sol)
 - [Live Demo Identity App](https://demo-identity-app.vercel.app/)
+- [Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)
 - Celo identity contract addresses
   [development](https://celoscan.io/address/0xF25fA0D4896271228193E782831F6f3CFCcF169C)
   [staging](https://celoscan.io/address/0x0108BBc09772973aC27983Fc17c7D82D8e87ef4D)
