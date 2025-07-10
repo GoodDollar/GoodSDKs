@@ -6,6 +6,15 @@ Welcome to the **GoodDollar SDKs**, a comprehensive collection of libraries and 
 
 GoodDollar is a protocol that aims to reduce wealth inequality through blockchain technology by providing Universal Basic Income (UBI) to verified users. The protocol uses identity verification to ensure fair distribution of G$ tokens.
 
+## 📋 Overview
+
+The GoodSDK's Monorepo is structured to facilitate seamless development, testing, and deployment of identity-related functionalities across various applications. By centralizing shared packages and utilities, it ensures consistency and reusability, reducing redundancy and enhancing maintainability.
+
+### Key Components
+
+- **Packages**: Reusable libraries and SDKs that provide core functionalities.
+- **Applications**: Frontend and backend applications that utilize the packages to deliver complete solutions.
+
 ## 📦 SDK Components
 
 ### 1. **Identity SDK** (`@goodsdks/citizen-sdk`)
@@ -132,6 +141,7 @@ function App() {
 
 - **[Identity SDK Documentation](packages/citizen-sdk/README.md)** - Complete guide to identity verification
 - **[Claim SDK Documentation](packages/citizen-sdk/README-ClaimSDK.md)** - UBI claiming implementation details
+- **[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)** - Detailed claim flow logic
 - **[Demo Application](apps/demo-identity-app/README.md)** - Live example implementation
 
 ## 🎮 Live Demos
