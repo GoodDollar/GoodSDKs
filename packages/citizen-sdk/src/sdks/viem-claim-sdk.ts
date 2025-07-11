@@ -30,6 +30,12 @@ export interface ClaimSDKOptions {
 
 const DAY = 1000 * 60 * 60 * 24
 
+export interface WalletClaimStatus {
+  status: "not_whitelisted" | "can_claim" | "already_claimed"
+  entitlement: bigint
+  nextClaimTime?: Date
+}
+
 export class ClaimSDK {
   private readonly publicClient: PublicClient
   private readonly walletClient: WalletClient<
@@ -174,14 +180,54 @@ export class ClaimSDK {
   }
 
   /**
+   * Checks the wallet claim status for the connected user.
+   * This method provides a single point to check if the user can claim, needs verification, or has already claimed.
+   * @returns WalletClaimStatus object with status, entitlement, and optionally nextClaimTime
+   * @throws If unable to check wallet status or fetch required data.
+   */
+  async getWalletClaimStatus(): Promise<WalletClaimStatus> {
+    const userAddress = this.account
+
+    // 1. Check whitelisting status
+    const { isWhitelisted } =
+      await this.identitySDK.getWhitelistedRoot(userAddress)
+    
+    if (!isWhitelisted) {
+      return {
+        status: "not_whitelisted",
+        entitlement: 0n,
+      }
+    }
+
+    // 2. Check entitlement (if 0, user has already claimed or can't claim)
+    const entitlement = await this.checkEntitlement()
+    
+    if (entitlement > 0n) {
+      return {
+        status: "can_claim",
+        entitlement,
+      }
+    }
+
+    // 3. User is whitelisted but can't claim (already claimed)
+    const nextClaimTime = await this.nextClaimTime()
+    return {
+      status: "already_claimed",
+      entitlement: 0n,
+      nextClaimTime,
+    }
+  }
+
+  /**
    * Attempts to claim UBI for the connected user.
    * 1. Checks if the user is whitelisted using IdentitySDK.
    * 2. If not whitelisted, redirects to face verification and throws an error.
-   * 3. If whitelisted, checks if the user can claim UBI by ensuring sufficient balance.
-   * 4. If the user cannot claim due to low balance, triggers a faucet request and waits.
-   * 5. If whitelisted and can claim, proceeds to call the claim function on the UBIScheme contract.
+   * 3. If whitelisted, checks if the user can claim UBI from the pool using checkEntitlement.
+   * 4. If whitelisted and can claim, checks if the user has sufficient balance.
+   * 5. If the user cannot claim due to low balance, triggers a faucet request and waits.
+   * 6. If whitelisted and can claim, proceeds to call the claim function on the UBIScheme contract.
    * @returns The transaction receipt if the claim is successful.
-   * @throws If the user is not whitelisted, balance check fails, or claim transaction fails.
+   * @throws If the user is not whitelisted, not entitled to claim, balance check fails, or claim transaction fails.
    */
   async claim(): Promise<TransactionReceipt | any> {
     const userAddress = this.account
@@ -194,13 +240,19 @@ export class ClaimSDK {
       throw new Error("User requires identity verification.")
     }
 
-    // 2. Ensure the user has sufficient balance to claim
+    // 2. Check if user can claim from UBI pool
+    const entitlement = await this.checkEntitlement()
+    if (entitlement === 0n) {
+      throw new Error("No UBI available to claim for this period.")
+    }
+
+    // 3. Ensure the user has sufficient balance to claim
     const canClaim = await this.checkBalanceWithRetry()
     if (!canClaim) {
       throw new Error("Failed to meet balance threshold after faucet request.")
     }
 
-    // 3. Execute the claim transaction
+    // 4. Execute the claim transaction
     try {
       return await this.submitAndWait({
         address: this.ubiSchemeAddress,
@@ -233,10 +285,17 @@ export class ClaimSDK {
 
   /**
    * Retrieves the next available claim time for the connected user.
-   * @returns The timestamp when the user can next claim UBI.
+   * Returns epoch time (0) if the user can claim now (entitlement > 0).
+   * @returns The timestamp when the user can next claim UBI, or epoch time if can claim now.
    * @throws If unable to fetch the next claim time.
    */
   async nextClaimTime(): Promise<Date> {
+    // Check if user can claim now (entitlement > 0)
+    const entitlement = await this.checkEntitlement()
+    if (entitlement > 0n) {
+      return new Date(0) // Return epoch time if can claim now
+    }
+
     const [periodStart, currentDay] = await Promise.all([
       this.readContract<bigint>({
         address: this.ubiSchemeAddress,
