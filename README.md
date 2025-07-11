@@ -1,20 +1,12 @@
-# GoodSdks Monorepo
+# GoodDollar SDKs
 
-Welcome to the **GoodSdks Monorepo**, a unified repository housing multiple packages and applications designed to streamline integrating and working with the GoodDollar Protocol and G$ token. This monorepo leverages modern tools and libraries such as **React**, **Wagmi**, and **Viem SDK** to deliver robust and scalable solutions for both frontend and backend environments.
+Welcome to the **GoodDollar SDKs**, a comprehensive collection of libraries and tools designed to integrate the GoodDollar Protocol into your applications. This monorepo provides everything you need to work with GoodDollar's Identity verification and Universal Basic Income (UBI) claiming systems.
 
-## Table of Contents
+## 🎯 What is GoodDollar?
 
-- [Overview](#overview)
-- [Packages](#packages)
-  - [citizen-sdk](packages/citizen-sdk/README.md)
-- [Applications](#applications)
-  - [demo-identity-app](apps/demo-identity-app/README.md)
-- [Getting Started](#getting-started)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
+GoodDollar is a protocol that aims to reduce wealth inequality through blockchain technology by providing Universal Basic Income (UBI) to verified users. The protocol uses identity verification to ensure fair distribution of G$ tokens.
 
-## Overview
+## 📋 Overview
 
 The GoodSDK's Monorepo is structured to facilitate seamless development, testing, and deployment of identity-related functionalities across various applications. By centralizing shared packages and utilities, it ensures consistency and reusability, reducing redundancy and enhancing maintainability.
 
@@ -23,43 +15,158 @@ The GoodSDK's Monorepo is structured to facilitate seamless development, testing
 - **Packages**: Reusable libraries and SDKs that provide core functionalities.
 - **Applications**: Frontend and backend applications that utilize the packages to deliver complete solutions.
 
-## Packages
+## 📦 SDK Components
 
-### [citizen-sdk](packages/citizen-sdk/README.md)
+### 1. **Identity SDK** (`@goodsdks/citizen-sdk`)
 
-The `citizen-sdk` is a comprehensive library designed to interact seamlessly with GoodDollar's Identity smart contracts. It leverages both **Viem** and **Wagmi** SDKs to provide robust functionalities for managing a user's G$ identity on the blockchain. Whether you're building a frontend application or integrating backend services, `citizen-sdk` offers the tools you need to handle identity verification, whitelist management, and more.
+The Identity SDK provides tools for managing user identity verification and whitelist status. It's the foundation for all GoodDollar integrations.
 
-#### Features
+**Key Features:**
+- ✅ Identity verification and whitelist management
+- ✅ Face verification link generation
+- ✅ Identity expiry tracking
+- ✅ Support for both Wagmi (React) and Viem (backend) integrations
 
-- **Wagmi SDK Integration**: Simplifies blockchain interactions within React applications using hooks.
-- **Viem SDK Integration**: Provides utility functions for backend services or non-React environments.
-- **Identity Management**: Functions to verify identities, manage whitelists, and handle authentication periods.
+**Use Cases:**
+- Verify user identity before allowing UBI claims
+- Check whitelist status for access control
+- Generate face verification links for new users
 
-For detailed information, refer to the [citizen-sdk README](packages/citizen-sdk/README.md).
+### 2. **Claim SDK** (`@goodsdks/citizen-sdk`)
 
-## Applications
+The Claim SDK is part of the same `@goodsdks/citizen-sdk` package and handles Universal Basic Income (UBI) claiming functionality. It works in conjunction with the Identity SDK to ensure only verified users can claim their daily UBI.
 
-### [demo-identity-app](apps/demo-identity-app/README.md)
+**Key Features:**
+- ✅ Daily UBI claiming with automatic balance checks
+- ✅ Entitlement verification
+- ✅ Next claim time tracking
+- ✅ Daily statistics
 
-The `demo-identity-app` is a React-based application that demonstrates the capabilities of the `citizen-sdk`. It showcases how to integrate identity verification features into a frontend application, providing a practical example for developers to follow.
+**Use Cases:**
+- Allow verified users to claim their daily UBI
+- Show users when they can next claim
+- Display claiming statistics
 
-#### Features
+## 🔄 Claim Flow Logic
 
-- **Identity Card Component**: Displays wallet address and identity expiry information.
-- **Whitelist Status Checker**: Allows users to check their whitelist status through a simple interface.
-- **Responsive Design**: Built with Tamagui for a consistent and adaptable UI across devices.
+The GoodDollar SDK implements a sophisticated claim flow that ensures fair and secure UBI distribution:
 
-For more details, please see the [demo-identity-app README](apps/demo-identity-app/README.md).
+### **Flow States:**
 
-## Contributing
+1. **🔍 Verify Button** - When user is **NOT whitelisted**
+   - User needs to complete identity verification
+   - Shows "Verify Me" button
+   - Redirects to face verification process
 
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
-See our main contribution Guidelines: https://github.com/GoodDollar/.github/blob/master/CONTRIBUTING.md
+2. **⏰ Timer State** - When user is **whitelisted but already claimed**
+   - User has already claimed UBI for the current period
+   - Shows countdown to next claim time
+   - Displays "Come back tomorrow to claim your UBI!"
 
-There will also be tickets available with a 'scoutgame' label. see our rewards page for more information: https://scoutgame.xyz/info/partner-rewards/good-dollar
+3. **💰 Claim Button** - When user is **whitelisted and can claim**
+   - User is verified and eligible for UBI
+   - Shows claimable amount
+   - Displays "Claim UBI [amount]" button
 
-You can also join our developer community on Discord: https://ubi.gd/GoodBuildersDiscord
+For complete implementation details and code examples, see our **[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)**.
 
-## License
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+npm install @goodsdks/citizen-sdk
+# or
+yarn add @goodsdks/citizen-sdk
+```
+
+### Basic Usage
+
+```typescript
+import { useIdentitySDK, useClaimSDK } from '@goodsdks/citizen-sdk';
+
+function App() {
+  const identitySDK = useIdentitySDK('production');
+  const claimSDK = useClaimSDK('production');
+  
+  // Check if user is whitelisted
+  const checkWhitelist = async (address: string) => {
+    const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address);
+    return isWhitelisted;
+  };
+  
+  // Claim UBI
+  const claimUBI = async () => {
+    const receipt = await claimSDK.claim();
+    console.log('UBI claimed!', receipt);
+  };
+  
+  return (
+    <div>
+      {/* Your UI components */}
+    </div>
+  );
+}
+```
+
+## 📚 Documentation
+
+- **[Identity SDK Documentation](packages/citizen-sdk/README.md)** - Complete guide to identity verification
+- **[Claim SDK Documentation](packages/citizen-sdk/README-ClaimSDK.md)** - UBI claiming implementation details and claim flow examples
+- **[Demo Application](apps/demo-identity-app/README.md)** - Live example implementation
+
+## 🎮 Live Demos
+
+- **[Identity Demo App](https://demo-identity-app.vercel.app/)** - See the SDK in action
+- **[Source Code](apps/demo-identity-app/)** - Complete implementation example
+
+## 🛠️ Development
+
+### Prerequisites
+
+- Node.js >= 18
+- Yarn package manager
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/GoodDollar/GoodSDKs.git
+cd GoodSDKs
+
+# Install dependencies
+yarn install --immutable
+
+# Build all packages
+yarn build
+
+# Start development server
+cd apps/demo-identity-app
+yarn dev
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](https://github.com/GoodDollar/.github/blob/master/CONTRIBUTING.md) for details.
+
+### Getting Started with Contributions
+
+1. **Fork and clone** the repository
+2. **Create a feature branch** for your work
+3. **Make your changes** following the existing patterns
+4. **Test thoroughly** using the demo applications
+5. **Submit a pull request** with clear descriptions
+
+### Scoutgame Rewards
+
+We offer rewards for contributions through our [Scoutgame Program](https://scoutgame.xyz/info/partner-rewards/good-dollar). Look for issues labeled with `scoutgame` to get started!
+
+## 🌐 Community
+
+- **[Discord](https://ubi.gd/GoodBuildersDiscord)** - Join our developer community
+- **[Documentation](https://docs.gooddollar.org)** - Official GoodDollar docs
+- **[GoodBuilders Program](https://gooddollar.notion.site/GoodBuilders-Program-1a6f258232f080fea8a6e3760bb8f53d)** - Build on GoodDollar
+
+## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
