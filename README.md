@@ -112,8 +112,7 @@ function App() {
 ## 📚 Documentation
 
 - **[Identity SDK Documentation](packages/citizen-sdk/README.md)** - Complete guide to identity verification
-- **[Claim SDK Documentation](packages/citizen-sdk/README-ClaimSDK.md)** - UBI claiming implementation details
-- **[Claim Flow Implementation Guide](packages/citizen-sdk/README-ClaimFlow.md)** - Detailed claim flow logic
+- **[Claim SDK Documentation](packages/citizen-sdk/README-ClaimSDK.md)** - UBI claiming implementation details and claim flow examples
 - **[Demo Application](apps/demo-identity-app/README.md)** - Live example implementation
 
 ## 🎮 Live Demos
