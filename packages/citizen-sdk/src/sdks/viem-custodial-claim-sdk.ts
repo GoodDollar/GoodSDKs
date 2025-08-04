@@ -11,112 +11,31 @@ import {
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
-
-import { IdentitySDK } from "./viem-identity-sdk"
-import {
-    contractAddresses,
-} from "../constants"
-import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
+import { ClaimSDK, type ClaimSDKOptions } from "./viem-claim-sdk" // Import the base ClaimSDK
 import type { WalletClaimStatus } from "../types"
 
-interface ClaimSDKOptions {
-    publicClient: PublicClient
-    walletClient: WalletClient<any, Chain | undefined, Account | undefined>
-    identitySDK: IdentitySDK
-    rdu?: string
-    env?: any
+interface ClaimCustodialSDKOptions extends Omit<ClaimSDKOptions, 'account'> {
+    // Remove account from the options since we'll get it from walletClient
 }
 
-const DAY = 1000 * 60 * 60 * 24
-
-export class ClaimCustodialSDK {
-    private readonly publicClient: PublicClient
-    private readonly walletClient: WalletClient<
-        any,
-        Chain | undefined,
-        Account | undefined
-    >
-    private readonly identitySDK: IdentitySDK
-    private readonly ubiSchemeAddress: Address
-    private readonly ubiSchemeAltAddress: Address
-    private readonly faucetAddress: Address
-    private readonly altChain: any
-    private readonly env: any
-    public readonly rdu: string
-
-    constructor({
-        publicClient,
-        walletClient,
-        identitySDK,
-        rdu = typeof window !== 'undefined' ? window.location.href : '',
-        env = "production",
-    }: ClaimSDKOptions) {
-        if (!walletClient.account) {
-            throw new Error("ClaimSDK: WalletClient must have an account attached.")
+export class ClaimCustodialSDK extends ClaimSDK {
+    constructor(options: ClaimCustodialSDKOptions) {
+        // Get account from walletClient and pass to parent constructor
+        const account = options.walletClient.account?.address
+        if (!account) {
+            throw new Error("ClaimCustodialSDK: WalletClient must have an account attached.")
         }
-        this.publicClient = publicClient
-        this.walletClient = walletClient
-        this.identitySDK = identitySDK
-
-        this.rdu = rdu
-        this.env = env
-
-        const chainId = this.walletClient.chain?.id as any
-        this.altChain = chainId === 42220 ? 122 : 42220
-        // @ts-ignore
-        const contractEnvAddresses = contractAddresses[chainId][env]
-
-        if (!contractEnvAddresses) {
-            throw new Error(
-                `ClaimSDK: Contract addresses not found for configured env: '${env}'`,
-            )
-        }
-
-        this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
-        // @ts-ignore
-        this.ubiSchemeAltAddress = contractAddresses[this.altChain][env]
-            .ubiContract as Address
-        this.faucetAddress = contractEnvAddresses.faucetContract as Address
+        
+        super({
+            ...options,
+            account,
+        })
     }
 
-    static create(props: ClaimSDKOptions): ClaimCustodialSDK {
-        return new ClaimCustodialSDK(props)
-    }
+
 
     /**
-     * Reads a contract function using publicClient.
-     * @param params - Parameters for the contract read operation.
-     * @returns The result of the contract read.
-     * @throws If the contract read fails.
-     */
-    private async readContract<T>(
-        params: {
-            address: Address
-            abi: any
-            functionName: string
-            args?: any[]
-        },
-        altClient?: PublicClient,
-    ): Promise<T> {
-        try {
-            const client = altClient || this.publicClient
-            const account = this.walletClient.account?.address
-
-            return (await client.readContract({
-                address: params.address,
-                abi: params.abi,
-                functionName: params.functionName,
-                args: params.args || [],
-                account,
-            })) as T
-        } catch (error: any) {
-            throw new Error(
-                `Failed to read contract ${params.functionName}: ${error.message}`,
-            )
-        }
-    }
-
-    /**
+     * Override submitAndWait to handle LocalAccount signing for Celo RPC compatibility
      * Submits a transaction and waits for its receipt.
      * @param params - Parameters for simulating the contract call.
      * @param onHash - Optional callback to receive the transaction hash.
@@ -148,7 +67,6 @@ export class ClaimCustodialSDK {
                 console.log('Using LocalAccount - signing transaction locally')
 
                 // Prepare the transaction request with proper gas estimation
-
                 const preparedRequest: any = await this.walletClient.prepareTransactionRequest({
                     account: account.address,
                     // @ts-ignore
@@ -213,290 +131,63 @@ export class ClaimCustodialSDK {
     }
 
     /**
-     * Checks if the connected user is eligible to claim UBI for the current period.
-     * Returns the amount they can claim (0 if not eligible or already claimed).
-     * Does not check for whitelisting status.
-     * @param pClient - Optional public client to check entitlement on alternative chain.
-     * @returns The claimable amount in the smallest unit (e.g., wei).
-     * @throws If the entitlement check fails.
+     * Override checkEntitlement to add additional error handling for missing wallet address
      */
     async checkEntitlement(pClient?: PublicClient): Promise<bigint> {
         const userAddress = this.walletClient.account?.address
         if (!userAddress) {
             throw new Error("No wallet address found for entitlement check")
         }
-
-        return this.readContract<bigint>(
-            {
-                address: !pClient ? this.ubiSchemeAddress : this.ubiSchemeAltAddress,
-                abi: ubiSchemeV2ABI,
-                functionName: "checkEntitlement",
-                args: [userAddress],
-            },
-            pClient,
-        )
+        return super.checkEntitlement(pClient)
     }
 
     /**
-     * Checks the wallet claim status for the connected user.
-     * This method provides a single point to check if the user can claim, needs verification, or has already claimed.
-     * @returns WalletClaimStatus object with status, entitlement, and optionally nextClaimTime
-     * @throws If unable to check wallet status or fetch required data.
+     * Override getWalletClaimStatus to add additional error handling for missing wallet address
      */
     async getWalletClaimStatus(): Promise<WalletClaimStatus> {
         const userAddress = this.walletClient.account?.address
         if (!userAddress) {
             throw new Error("No wallet address found for status check")
         }
-
-        // 1. Check whitelisting status
-        const { isWhitelisted } =
-            await this.identitySDK.getWhitelistedRoot(userAddress)
-
-        if (!isWhitelisted) {
-            return {
-                status: "not_whitelisted",
-                entitlement: 0n,
-            }
-        }
-
-        // 2. Check entitlement (if 0, user has already claimed or can't claim)
-        const entitlement = await this.checkEntitlement()
-
-        if (entitlement > 0n) {
-            return {
-                status: "can_claim",
-                entitlement,
-            }
-        }
-
-        // 3. User is whitelisted but can't claim (already claimed)
-        const nextClaimTime = await this.nextClaimTime()
-        return {
-            status: "already_claimed",
-            entitlement: 0n,
-            nextClaimTime,
-        }
+        return super.getWalletClaimStatus()
     }
 
     /**
-     * Attempts to claim UBI for the connected user.
-     * 1. Checks if the user is whitelisted using IdentitySDK.
-     * 2. If not whitelisted, redirects to face verification and throws an error.
-     * 3. If whitelisted, checks if the user can claim UBI from the pool using checkEntitlement.
-     * 4. If whitelisted and can claim, checks if the user has sufficient balance.
-     * 5. If the user cannot claim due to low balance, triggers a faucet request and waits.
-     * 6. If whitelisted and can claim, proceeds to call the claim function on the UBIScheme contract.
-     * @returns The transaction receipt if the claim is successful.
-     * @throws If the user is not whitelisted, not entitled to claim, balance check fails, or claim transaction fails.
+     * Override claim to add additional error handling for missing wallet address
      */
     async claim(): Promise<TransactionReceipt | any> {
         const userAddress = this.walletClient.account?.address
         if (!userAddress) {
             throw new Error("No wallet address found for claim")
         }
-
-        // 1. Check whitelisting status
-        const { isWhitelisted } =
-            await this.identitySDK.getWhitelistedRoot(userAddress)
-        if (!isWhitelisted) {
-            await this.fvRedirect()
-            throw new Error("User requires identity verification.")
-        }
-
-        // 2. Check if user can claim from UBI pool
-        const entitlement = await this.checkEntitlement()
-        if (entitlement === 0n) {
-            throw new Error("No UBI available to claim for this period.")
-        }
-
-        // 3. Ensure the user has sufficient balance to claim
-        const canClaim = await this.checkBalanceWithRetry()
-        if (!canClaim) {
-            throw new Error("Failed to meet balance threshold after faucet request.")
-        }
-
-        // 4. Execute the claim transaction
-        try {
-            return await this.submitAndWait({
-                address: this.ubiSchemeAddress,
-                abi: ubiSchemeV2ABI,
-                functionName: "claim",
-                chain: this.walletClient.chain,
-            })
-        } catch (error: any) {
-            if (error instanceof ContractFunctionExecutionError) {
-                throw new Error(`Claim failed: ${error.shortMessage}`)
-            }
-            throw new Error(`Claim failed: ${error.message}`)
-        }
+        return super.claim()
     }
 
-    /**
-     * Redirects the user through the face-verification flow.
-     * @throws If face verification redirect fails.
-     */
-    private async fvRedirect(): Promise<void> {
-        const fvLink = await this.identitySDK.generateFVLink(false, this.rdu, 42220)
-        if (typeof window !== "undefined") {
-            window.location.href = fvLink
-        } else {
-            throw new Error(
-                "Face verification redirect is only supported in browser environments.",
-            )
-        }
-    }
-
-    /**
-     * Retrieves the next available claim time for the connected user.
-     * Returns epoch time (0) if the user can claim now (entitlement > 0).
-     * @returns The timestamp when the user can next claim UBI, or epoch time if can claim now.
-     * @throws If unable to fetch the next claim time.
-     */
-    async nextClaimTime(): Promise<Date> {
-        // Check if user can claim now (entitlement > 0)
-        const entitlement = await this.checkEntitlement()
-        if (entitlement > 0n) {
-            return new Date(0) // Return epoch time if can claim now
-        }
-
-        const [periodStart, currentDay] = await Promise.all([
-            this.readContract<bigint>({
-                address: this.ubiSchemeAddress,
-                abi: ubiSchemeV2ABI,
-                functionName: "periodStart",
-            }),
-            this.readContract<bigint>({
-                address: this.ubiSchemeAddress,
-                abi: ubiSchemeV2ABI,
-                functionName: "currentDay",
-            }),
-        ])
-
-        const periodStartMs = Number(periodStart) * 1000
-        const startRef = new Date(periodStartMs + Number(currentDay) * DAY)
-
-        const now = new Date()
-        return startRef < now ? new Date(startRef.getTime() + DAY) : startRef
-    }
-
-    /**
-     * Gets the number of claimers and total amount claimed for the current day.
-     * @returns An object containing the number of claimers and total amount claimed.
-     * @throws If unable to fetch daily stats.
-     */
-    async getDailyStats(): Promise<{ claimers: bigint; amount: bigint }> {
-        const [claimers, amount] = await this.readContract<[bigint, bigint]>({
-            address: this.ubiSchemeAddress,
-            abi: ubiSchemeV2ABI,
-            functionName: "getDailyStats",
-        })
-        return { claimers, amount }
-    }
-
-    /**
-     * Triggers a faucet request to top up the user's balance.
-     * @throws If the faucet request fails.
-     */
-    private async triggerFaucet(): Promise<void> {
+    // Override these methods to add wallet address validation while maintaining visibility
+    async triggerFaucet(): Promise<void> {
         const userAddress = this.walletClient.account?.address
         if (!userAddress) {
             throw new Error("No wallet address found for faucet request")
         }
-
-        const { env } = this
-        const { backend } = Envs[env as keyof typeof Envs]
-
-        const body = JSON.stringify({
-            chainId: this.walletClient.chain?.id,
-            account: userAddress,
-        })
-
-        const response = await fetch(`${backend}/verify/topWallet`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-        })
-
-        if (!response.ok) {
-            const errorMessage = await response.text()
-            throw new Error(`Faucet request failed: ${errorMessage}`)
-        }
+        return super.triggerFaucet()
     }
 
-    /**
-     * Checks if the user has sufficient balance to claim UBI.
-     * @returns True if the user can claim, false otherwise.
-     * @throws If gas price cannot be determined or balance check fails.
-     */
-    private async canClaim(): Promise<boolean> {
+    async canClaim(): Promise<boolean> {
         const userAddress = this.walletClient.account?.address
         if (!userAddress) {
             throw new Error("No wallet address found for balance check")
         }
-
-        const { minTopping, toppingAmount } = await this.getFaucetParameters()
-        const chainId = this.walletClient.chain?.id
-
-        const gasPrice = getGasPrice(chainId)
-        if (!gasPrice) {
-            throw new Error(
-                "Cannot determine gasPrice for the current connected chain.",
-            )
-        }
-
-        const minBalance = (chainId === 42220 ? 250000n : 150000n) * gasPrice
-        const minThreshold =
-            (toppingAmount * (100n - BigInt(minTopping))) / 100n || minBalance
-
-        const balance = await this.publicClient.getBalance({
-            address: userAddress,
-        })
-
-        return balance >= minThreshold
+        return super.canClaim()
     }
 
-    /**
-     * Fetches faucet parameters (minTopping and toppingAmount).
-     * @returns Faucet configuration parameters.
-     * @throws If unable to fetch faucet parameters.
-     */
-    private async getFaucetParameters(): Promise<{
+    async getFaucetParameters(): Promise<{
         minTopping: number
         toppingAmount: bigint
     }> {
-        const [minTopping, toppingAmount] = await Promise.all([
-            this.readContract<number>({
-                address: this.faucetAddress,
-                abi: faucetABI,
-                functionName: "minTopping",
-            }),
-            this.readContract<bigint>({
-                address: this.faucetAddress,
-                abi: faucetABI,
-                functionName: "getToppingAmount",
-            }),
-        ])
-        return { minTopping, toppingAmount }
+        return super.getFaucetParameters()
     }
 
-    /**
-     * Checks the user's balance with retries, triggering a faucet request if needed.
-     * @returns True if the balance meets the threshold, false otherwise.
-     * @throws If the maximum retries are exceeded or faucet request fails.
-     */
-    private async checkBalanceWithRetry(): Promise<boolean> {
-        const maxRetries = 5
-        const retryDelay = 5000
-
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            const canClaim = await this.canClaim()
-            if (canClaim) return true
-
-            await this.triggerFaucet()
-            await new Promise((resolve) => setTimeout(resolve, retryDelay))
-        }
-
-        return false
+    async checkBalanceWithRetry(): Promise<boolean> {
+        return super.checkBalanceWithRetry()
     }
 }

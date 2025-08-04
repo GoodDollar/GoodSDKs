@@ -4,79 +4,20 @@ import {
     WalletClient,
     SimulateContractParameters,
     WalletActions,
-    zeroAddress,
     LocalAccount,
 } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
 import { compressToEncodedURIComponent } from "lz-string"
 
-import {
-    contractAddresses,
-    Envs,
-    FV_IDENTIFIER_MSG2,
-    identityV2ABI,
-} from "../constants"
-
-import type {
-    IdentityContract,
-    IdentityExpiryData,
-    IdentityExpiry,
-    SupportedChains,
-} from "../types"
+import { IdentitySDK } from "./viem-identity-sdk" // Import the base IdentitySDK
+import { Envs, FV_IDENTIFIER_MSG2 } from "../constants"
 
 /**
- * Initializes the Identity Contract.
- * @param publicClient - The PublicClient instance.
- * @param contractAddress - The contract address.
- * @returns An IdentityContract instance.
+ * Custodial version of IdentitySDK that handles LocalAccount signing for Celo RPC compatibility
  */
-const initializeIdentityContract = (
-    publicClient: PublicClient,
-    contractAddress: Address,
-): IdentityContract => ({
-    publicClient,
-    contractAddress,
-})
-
-/**
- * Handles interactions with the Identity Contract.
- */
-export class IdentityCustodialSDK {
-    private publicClient: PublicClient
-    private walletClient: WalletClient & WalletActions
-    private contract: IdentityContract
-    private env: any
-
+export class IdentityCustodialSDK extends IdentitySDK {
     /**
-     * Initializes the IdentitySDK.
-     * @param publicClient - The PublicClient instance.
-     * @param walletClient - The WalletClient with WalletActions.
-     * @param env - The environment to use ("production" | "staging" | "development").
-     */
-    constructor(
-        publicClient: PublicClient,
-        walletClient: WalletClient & WalletActions,
-        env: any = "production",
-    ) {
-        this.publicClient = publicClient
-        this.walletClient = walletClient
-        this.env = env
-
-        const chainId = this.walletClient.chain?.id as SupportedChains
-        // @ts-ignore
-        const contractAddress = contractAddresses[chainId][env]?.identityContract
-        if (!contractAddress) {
-            throw new Error(`Contract address for environment "${env}" not found.`)
-        }
-
-        this.contract = initializeIdentityContract(
-            this.publicClient,
-            contractAddress,
-        )
-    }
-
-    /**
-     * Submits a transaction and waits for its receipt.
+     * Override submitAndWait to handle account retrieval differently for custodial wallets
      * @param params - Parameters for simulating the contract call.
      * @param onHash - Optional callback to receive the transaction hash.
      * @returns The transaction receipt.
@@ -107,65 +48,7 @@ export class IdentityCustodialSDK {
     }
 
     /**
-     * Returns whitelist status of main account or any connected account.
-     * @param account - The account address to check.
-     * @returns An object containing whitelist status and root address.
-     * @reference: https://docs.gooddollar.org/user-guides/connect-another-wallet-address-to-identity
-     */
-    async getWhitelistedRoot(
-        account: Address,
-    ): Promise<{ isWhitelisted: boolean; root: Address }> {
-        try {
-            const root = await this.publicClient.readContract({
-                address: this.contract.contractAddress,
-                abi: identityV2ABI,
-                functionName: "getWhitelistedRoot",
-                args: [account],
-            })
-
-            return {
-                isWhitelisted: root !== zeroAddress,
-                root,
-            }
-        } catch (error: any) {
-            console.error("getWhitelistedRoot Error:", error)
-            throw new Error(`Failed to get whitelisted root: ${error.message}`)
-        }
-    }
-
-    /**
-     * Retrieves identity expiry data for a given account.
-     * @param account - The account address.
-     * @returns The identity expiry data.
-     */
-    async getIdentityExpiryData(account: Address): Promise<IdentityExpiryData> {
-        try {
-            const [lastAuthenticated, authPeriod] = await Promise.all([
-                this.publicClient.readContract({
-                    address: this.contract.contractAddress,
-                    abi: identityV2ABI,
-                    functionName: "lastAuthenticated",
-                    args: [account],
-                }),
-                this.publicClient.readContract({
-                    address: this.contract.contractAddress,
-                    abi: identityV2ABI,
-                    functionName: "authenticationPeriod",
-                    args: [],
-                }),
-            ])
-
-            return { lastAuthenticated, authPeriod }
-        } catch (error: any) {
-            console.error("getIdentityExpiryData Error:", error)
-            throw new Error(
-                `Failed to retrieve identity expiry data: ${error.message}`,
-            )
-        }
-    }
-
-    /**
-     * Generates a Face Verification Link.
+     * Override generateFVLink to handle LocalAccount message signing for Celo RPC compatibility
      * @param popupMode - Whether to generate a popup link.
      * @param callbackUrl - The URL to callback after verification.
      * @param chainId - The blockchain network ID.
@@ -238,28 +121,6 @@ export class IdentityCustodialSDK {
             throw new Error(
                 `Failed to generate Face Verification link: ${error.message}`,
             )
-        }
-    }
-
-    /**
-     * Calculates the identity expiry timestamp.
-     * @param lastAuthenticated - The timestamp of last authentication.
-     * @param authPeriod - The authentication period.
-     * @returns The identity expiry data.
-     */
-    calculateIdentityExpiry(
-        lastAuthenticated: bigint,
-        authPeriod: bigint,
-    ): IdentityExpiry {
-        const MS_IN_A_SECOND = 1000
-        const MS_IN_A_DAY = 24 * 60 * 60 * MS_IN_A_SECOND
-
-        const periodInMs = authPeriod * BigInt(MS_IN_A_DAY)
-        const expiryTimestamp =
-            lastAuthenticated * BigInt(MS_IN_A_SECOND) + periodInMs
-
-        return {
-            expiryTimestamp,
         }
     }
 }

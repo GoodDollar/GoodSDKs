@@ -37,8 +37,8 @@ export interface WalletClaimStatus {
 }
 
 export class ClaimSDK {
-  private readonly publicClient: PublicClient
-  private readonly walletClient: WalletClient<
+  readonly publicClient: PublicClient
+  readonly walletClient: WalletClient<
     any,
     Chain | undefined,
     Account | undefined
