@@ -42,8 +42,8 @@ export const initializeIdentityContract = (
  * Handles interactions with the Identity Contract.
  */
 export class IdentitySDK {
-  private publicClient: PublicClient
-  private walletClient: WalletClient & WalletActions
+  publicClient: PublicClient
+  walletClient: WalletClient & WalletActions
   private contract: IdentityContract
   private env: contractEnv
 
