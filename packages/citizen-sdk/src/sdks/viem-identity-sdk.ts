@@ -53,8 +53,8 @@ export interface IdentitySDKOptions {
  */
 export class IdentitySDK {
   public account: Address
-  private publicClient: PublicClient
-  private walletClient: WalletClient & WalletActions
+  publicClient: PublicClient
+  walletClient: WalletClient & WalletActions
   private contract: IdentityContract
   private env: contractEnv = "production"
 
