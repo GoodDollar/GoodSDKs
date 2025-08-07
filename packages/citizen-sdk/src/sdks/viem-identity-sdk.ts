@@ -55,8 +55,8 @@ export class IdentitySDK {
   public account: Address
   publicClient: PublicClient
   walletClient: WalletClient & WalletActions
-  private contract: IdentityContract
-  private env: contractEnv = "production"
+  public contract: IdentityContract
+  public env: contractEnv = "production"
 
   /**
    * Initializes the IdentitySDK.
