@@ -1915,7 +1915,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/react-hooks@workspace:packages/react-hooks":
+"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
   dependencies:
@@ -9671,6 +9671,7 @@ __metadata:
   resolution: "demo-identity-app@workspace:apps/demo-identity-app"
   dependencies:
     "@goodsdks/citizen-sdk": "npm:*"
+    "@goodsdks/react-hooks": "npm:*"
     "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
     "@reown/appkit-wallet": "npm:^1.7.2"
