@@ -25,14 +25,17 @@ export const Envs: Record<string, Record<string, string>> = {
   },
 }
 
-interface ContractAddresses {
+export interface ContractAddresses {
   identityContract: `0x${string}`
   ubiContract: `0x${string}`
   faucetContract: `0x${string}`
   g$Contract: `0x${string}`
 }
 
-export type SupportedChains = 42220 | 122
+export enum SupportedChains {
+  "FUSE" = 122,
+  "CELO" = 42220,
+}
 
 type ChainContracts = Record<contractEnv, ContractAddresses>
 export const contractAddresses: Record<SupportedChains, ChainContracts> = {

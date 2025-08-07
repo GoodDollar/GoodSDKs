@@ -1,6 +1,6 @@
 import React from "react"
 import { Button } from "tamagui"
-import { useIdentitySDK } from "@goodsdks/citizen-sdk"
+import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
 interface VerifyButtonProps {
@@ -11,7 +11,7 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
   onVerificationSuccess,
 }) => {
   const { address } = useAccount()
-  const identitySDK = useIdentitySDK("development")
+  const { sdk: identitySDK } = useIdentitySDK("development")
 
   const handleVerify = async () => {
     if (!identitySDK || !address) return

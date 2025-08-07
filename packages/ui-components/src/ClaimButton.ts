@@ -8,7 +8,7 @@ import {
   type AppKitNetwork,
 } from "@reown/appkit/networks"
 import { EthersAdapter } from "@reown/appkit-adapter-ethers"
-import type { PublicClient, WalletClient } from "viem"
+import type { Address, PublicClient, WalletClient } from "viem"
 import { celo, fuse } from "viem/chains"
 import {
   createPublicClient,
@@ -43,7 +43,7 @@ export class ClaimButton extends LitElement {
   @state() private txHash: string | null = null
   @state() private claimAmount: number | null = null
   @state() private chain: SupportedChains | null = null
-  @state() private walletAddress: string | null = null
+  @state() private walletAddress: Address | null = null
   @state() private tokenBalance: string | null = null
   @state() private timeLeft: number | null = null
   @state() private decimals: number | null = null
@@ -312,7 +312,7 @@ export class ClaimButton extends LitElement {
 
     this.publicClient = pClient
     this.walletClient = wClient
-    this.walletAddress = account.address as string | null
+    this.walletAddress = account.address as `0x${string}` | null
 
     this.clientsInitialized = true
 
@@ -326,11 +326,12 @@ export class ClaimButton extends LitElement {
     }
 
     try {
-      const identitySDK = new IdentitySDK(
-        this.publicClient,
-        this.walletClient,
-        this.environment,
-      )
+      const identitySDK = await IdentitySDK.init({
+        publicClient: this.publicClient,
+        walletClient: this.walletClient,
+        env: this.environment,
+      })
+
       const sdk = await ClaimSDK.init({
         publicClient: this.publicClient,
         walletClient: this.walletClient,

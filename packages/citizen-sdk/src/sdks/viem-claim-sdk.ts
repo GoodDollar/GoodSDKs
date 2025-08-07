@@ -18,6 +18,7 @@ import {
   contractAddresses,
 } from "../constants"
 import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
+import { resolveChainAndContract } from "../utils/chains"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -71,16 +72,12 @@ export class ClaimSDK {
     this.rdu = rdu
     this.env = env
 
-    const chainId = this.walletClient.chain?.id as SupportedChains
+    const { chainId, contractEnvAddresses } = resolveChainAndContract(
+      walletClient,
+      env,
+    )
+
     this.altChain = chainId === 42220 ? 122 : 42220
-
-    const contractEnvAddresses = contractAddresses[chainId][env]
-
-    if (!contractEnvAddresses) {
-      throw new Error(
-        `ClaimSDK: Contract addresses not found for configured env: '${env}'`,
-      )
-    }
 
     this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
     this.ubiSchemeAltAddress = contractAddresses[this.altChain][env]

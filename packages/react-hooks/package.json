@@ -1,0 +1,48 @@
+{
+  "name": "@goodsdks/react-hooks",
+  "version": "1.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch",
+    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "require": {
+      "types": "./dist/index.cts",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "^19",
+    "typescript": "latest",
+    "viem": "latest",
+    "wagmi": "latest"
+  },
+  "peerDependencies": {
+    "viem": "*",
+    "wagmi": "*"
+  },
+  "dependencies": {
+    "@goodsdks/citizen-sdk": "*",
+    "lz-string": "^1.5.0",
+    "react": "^19.1.1",
+    "tsup": "^8.4.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
