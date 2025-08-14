@@ -29,6 +29,53 @@ export default defineConfig({
   plugins: [react()],
   define: {
     "process.browser": true,
-    "process.env": process.env,
+    // Only define specific env vars instead of the entire process.env object
+    "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "development"),
   },
+  build: {
+    rollupOptions: {
+      external: [
+        // External Node.js modules that should not be bundled for browser
+        "crypto",
+        "node:crypto",
+        "http",
+        "https", 
+        "stream",
+        "zlib",
+        "node:buffer",
+        "buffer",
+        "util",
+        "url",
+        "querystring",
+        "fs",
+        "path",
+        "os",
+        "net",
+        "tls",
+        "assert"
+      ],
+      output: {
+        globals: {
+          // Provide browser globals for externalized modules
+          "crypto": "crypto",
+          "node:crypto": "crypto",
+          "http": "http",
+          "https": "https",
+          "stream": "stream",
+          "zlib": "zlib",
+          "node:buffer": "Buffer",
+          "buffer": "Buffer",
+          "util": "util",
+          "url": "URL",
+          "querystring": "querystring",
+          "fs": "fs",
+          "path": "path",
+          "os": "os",
+          "net": "net",
+          "tls": "tls",
+          "assert": "assert"
+        }
+      }
+    }
+  }
 });

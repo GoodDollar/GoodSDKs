@@ -4,7 +4,7 @@ import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
 interface VerifyButtonProps {
-  onVerificationSuccess: () => void
+  onVerificationSuccess?: () => void
 }
 
 export const VerifyButton: React.FC<VerifyButtonProps> = ({
