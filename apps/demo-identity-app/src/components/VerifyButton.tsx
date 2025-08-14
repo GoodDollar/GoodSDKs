@@ -17,13 +17,12 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
     if (!identitySDK || !address) return
 
     try {
-      const fvLink = await identitySDK.generateFVLink(
+      // Use the new navigation method that automatically handles Farcaster miniapps
+      await identitySDK.navigateToFaceVerification(
         false,
         window.location.href,
-        42220,
+        42220
       )
-
-      window.location.href = fvLink
     } catch (error) {
       console.error("Verification failed:", error)
       // Handle error (e.g., show toast)

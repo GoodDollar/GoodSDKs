@@ -14,6 +14,7 @@ import { config } from "@tamagui/config/v3"
 import { useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
+import { handleVerificationResponse, isInFarcasterMiniApp, isInFarcasterMiniAppSync } from "@goodsdks/citizen-sdk"
 
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
@@ -31,6 +32,7 @@ const App: React.FC = () => {
   const [loadingWhitelist, setLoadingWhitelist] = useState<boolean | undefined>(
     undefined,
   )
+  const [isFarcasterMode, setIsFarcasterMode] = useState<boolean>(false)
 
   const location = useLocation()
   const { address, isConnected } = useAccount()
@@ -40,12 +42,32 @@ const App: React.FC = () => {
   const { sdk: identitySDK } = useIdentitySDK("development")
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(location.search)
-    const verified = urlParams.get("verified")
-
-    if (verified === "true") {
+    // Check if running in Farcaster miniapp mode (async)
+    const checkFarcasterMode = async () => {
+      try {
+        const isFarcaster = await isInFarcasterMiniApp()
+        setIsFarcasterMode(isFarcaster)
+      } catch (error) {
+        // Fallback to sync version if async fails
+        console.warn('Async Farcaster detection failed, using sync fallback:', error)
+        setIsFarcasterMode(isInFarcasterMiniAppSync())
+      }
+    }
+    
+    checkFarcasterMode()
+    
+    // Use the new verification response handler
+    const verificationResult = handleVerificationResponse()
+    
+    if (verificationResult.isVerified) {
       setIsVerified(true)
+      // Clean up URL parameters
       window.history.replaceState({}, document.title, window.location.pathname)
+    }
+    
+    // Log additional verification parameters for debugging
+    if (verificationResult.params.size > 0) {
+      console.log("Verification response parameters:", Object.fromEntries(verificationResult.params))
     }
   }, [location.search])
 
@@ -108,6 +130,22 @@ const App: React.FC = () => {
           >
             GoodDollar Identity Verification
           </Text>
+          
+          {isFarcasterMode && (
+            <YStack
+              padding="$2"
+              backgroundColor="#E3F2FD"
+              borderRadius="$3"
+              borderWidth={1}
+              borderColor="#2196F3"
+              marginVertical={8}
+            >
+              <Text fontSize={12} color="#1976D2" textAlign="center" fontWeight="bold">
+                Farcaster MiniApp Mode Detected
+              </Text>
+              
+            </YStack>
+          )}
 
           {/* Disclaimer Section */}
           <YStack
