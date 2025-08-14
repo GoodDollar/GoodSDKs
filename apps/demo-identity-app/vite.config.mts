@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import path from "path";
 import react from "@vitejs/plugin-react";
 import fs from "fs";
+import { builtinModules } from "module";
 
 let https: any;
 if (process.env.HTTPS === "true") {
@@ -12,6 +13,19 @@ if (process.env.HTTPS === "true") {
 } else {
   https = false;
 }
+
+const nodeBuiltins = [
+  ...builtinModules,
+  ...builtinModules.map((m) => `node:${m}`)
+];
+
+const nodeBuiltinGlobals = nodeBuiltins.reduce((acc, name) => {
+  // Strip the `node:` prefix for the global key if present
+  const key = name.startsWith('node:') ? name.slice(5) : name
+  // Map both `foo` and `node:foo` → global `foo`
+  acc[name] = key
+  return acc
+}, {} as Record<string, string>);
 
 export default defineConfig({
   resolve: {
@@ -34,47 +48,9 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: [
-        // External Node.js modules that should not be bundled for browser
-        "crypto",
-        "node:crypto",
-        "http",
-        "https", 
-        "stream",
-        "zlib",
-        "node:buffer",
-        "buffer",
-        "util",
-        "url",
-        "querystring",
-        "fs",
-        "path",
-        "os",
-        "net",
-        "tls",
-        "assert"
-      ],
+      external: nodeBuiltins,
       output: {
-        globals: {
-          // Provide browser globals for externalized modules
-          "crypto": "crypto",
-          "node:crypto": "crypto",
-          "http": "http",
-          "https": "https",
-          "stream": "stream",
-          "zlib": "zlib",
-          "node:buffer": "Buffer",
-          "buffer": "Buffer",
-          "util": "util",
-          "url": "URL",
-          "querystring": "querystring",
-          "fs": "fs",
-          "path": "path",
-          "os": "os",
-          "net": "net",
-          "tls": "tls",
-          "assert": "assert"
-        }
+        globals: nodeBuiltinGlobals
       }
     }
   }

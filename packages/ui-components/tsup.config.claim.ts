@@ -1,4 +1,10 @@
 import { defineConfig } from "tsup"
+import { builtinModules } from "module"
+
+const nodeBuiltins = [
+  ...builtinModules,
+  ...builtinModules.map((m) => `node:${m}`)
+]
 
 export default defineConfig({
   entry: ["src/index.ts"],
@@ -18,24 +24,8 @@ export default defineConfig({
     "@goodsdks/citizen-sdk",
     // Mark viem as external since it's the main source of Node.js dependencies
     "viem",
-    // Mark Node.js built-ins as external
-    "crypto",
-    "node:crypto", 
-    "http",
-    "https",
-    "stream",
-    "zlib",
-    "node:buffer",
-    "buffer",
-    "util",
-    "url",
-    "querystring",
-    "fs",
-    "path",
-    "os",
-    "net",
-    "tls",
-    "assert"
+    // Dynamically include all Node.js built-ins
+    ...nodeBuiltins
   ],
   // Only bundle UI-specific code, not blockchain/crypto libraries
   noExternal: [

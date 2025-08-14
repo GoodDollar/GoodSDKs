@@ -1,6 +1,33 @@
 import { Account, createWalletClient, http } from "viem";
 import { Envs, FV_IDENTIFIER_MSG2 } from "../constants";
 
+// Cache for the Farcaster SDK to avoid repeated dynamic imports
+let _cachedSdk: typeof import('@farcaster/miniapp-sdk').sdk | null = null;
+
+/**
+ * Lazy-load and cache the Farcaster SDK
+ */
+export async function loadFarcasterSdk() {
+  if (!_cachedSdk) {
+    const { sdk } = await import('@farcaster/miniapp-sdk');
+    _cachedSdk = sdk;
+  }
+  return _cachedSdk;
+}
+
+/**
+ * Fallback detection using context check
+ */
+async function fallbackDetect(): Promise<boolean> {
+  try {
+    const sdk = await loadFarcasterSdk();
+    const context = await sdk.context;
+    return !!(context.location && context.location.type !== undefined);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Detects if the SDK is running inside a Farcaster miniapp using the official SDK
  */
@@ -8,23 +35,11 @@ export async function isInFarcasterMiniApp(timeoutMs: number = 100): Promise<boo
   if (typeof window === "undefined") return false;
   
   try {
-    // Use the official Farcaster SDK for detection
-    const { sdk } = await import('@farcaster/miniapp-sdk');
+    const sdk = await loadFarcasterSdk();
     return await sdk.isInMiniApp();
   } catch (error) {
-    // Fallback detection if SDK fails
     console.warn('Farcaster SDK detection failed, using fallback:', error);
-    
-    // Fallback: Check if context exists (indicates we're in a miniapp)
-    try {
-      const { sdk } = await import('@farcaster/miniapp-sdk');
-      const context = await sdk.context;
-      const location = context.location;
-      return !!(location && location.type !== undefined);
-    } catch (fallbackError) {
-      console.warn('Farcaster SDK context check failed:', fallbackError);
-      return false;
-    }
+    return fallbackDetect();
   }
 }
 
@@ -58,19 +73,10 @@ export async function openUrlInFarcaster(url: string, fallbackToNewTab: boolean 
     throw new Error("URL opening is only supported in browser environments.");
   }
 
-  const isMiniApp = await isInFarcasterMiniApp();
-  
-  if (isMiniApp) {
+  if (await isInFarcasterMiniApp()) {
     try {
-      // Use the official Farcaster SDK
-      const { sdk } = await import('@farcaster/miniapp-sdk');
-      
-      // Signal that the app is ready before any navigation
+      const sdk = await loadFarcasterSdk();
       await sdk.actions.ready();
-      
-      // Use the official openUrl method for external URLs
-      // This handles deeplinking and proper navigation in Farcaster context
-      // According to docs: can pass URL as string or object
       await sdk.actions.openUrl(url);
       return;
     } catch (error) {
@@ -78,12 +84,8 @@ export async function openUrlInFarcaster(url: string, fallbackToNewTab: boolean 
     }
   }
 
-  // Fallback to standard navigation for non-Farcaster environments
-  if (fallbackToNewTab) {
-    window.open(url, "_blank");
-  } else {
-    window.location.href = url;
-  }
+  // Fallback to standard navigation
+  fallbackToNewTab ? window.open(url, "_blank") : (window.location.href = url);
 }
 
 /**
@@ -96,16 +98,29 @@ export function handleVerificationResponse(url?: string): {
   params: URLSearchParams;
   verified?: string;
 } {
-  const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
-  const urlObj = new URL(targetUrl);
-  const params = urlObj.searchParams;
-  const verified = params.get("verified");
-  
-  return {
-    isVerified: verified === "true",
-    verified: verified || undefined,
-    params
+  const defaultResult = {
+    isVerified: false,
+    params: new URLSearchParams(),
+    verified: undefined,
   };
+
+  try {
+    const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
+    if (!targetUrl) return defaultResult;
+
+    const urlObj = new URL(targetUrl);
+    const params = urlObj.searchParams;
+    const verified = params.get("verified");
+    
+    return {
+      isVerified: verified === "true",
+      verified: verified || undefined,
+      params
+    };
+  } catch (error) {
+    console.warn('Failed to parse verification response URL:', error);
+    return defaultResult;
+  }
 }
 
 /**

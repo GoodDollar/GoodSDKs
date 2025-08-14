@@ -287,26 +287,9 @@ export class IdentitySDK {
     chainId?: number,
     forceFarcasterNavigation?: boolean,
   ): Promise<void> {
-    const { isInFarcasterMiniApp, openUrlInFarcaster } = await import("../utils/auth")
+    const { farcasterNavigation } = await import("../utils/farcaster-navigation")
     
     const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
-    const shouldUseFarcaster = forceFarcasterNavigation ?? await isInFarcasterMiniApp()
-    
-    if (shouldUseFarcaster) {
-      await openUrlInFarcaster(fvLink, !popupMode)
-    } else {
-      // Standard navigation
-      if (typeof window !== "undefined") {
-        if (popupMode) {
-          window.open(fvLink, "_blank")
-        } else {
-          window.location.href = fvLink
-        }
-      } else {
-        throw new Error(
-          "Face verification navigation is only supported in browser environments.",
-        )
-      }
-    }
+    await farcasterNavigation.navigateToFaceVerification(fvLink, popupMode, callbackUrl)
   }
 }
