@@ -17,7 +17,7 @@ export const REWARDS_CONTRACT = prod?.[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
 
-const BLOCKS_AGO = BigInt(100000)
+const BLOCKS_AGO = BigInt(50000)
 const WAIT_DELAY = 5000 // 1 second delay
 
 //TODO:
