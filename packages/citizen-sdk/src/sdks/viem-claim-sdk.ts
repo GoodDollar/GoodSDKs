@@ -19,6 +19,7 @@ import {
 } from "../constants"
 import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
+import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -58,7 +59,7 @@ export class ClaimSDK {
     publicClient,
     walletClient,
     identitySDK,
-    rdu = window.location.href,
+    rdu = typeof window !== "undefined" ? window.location.href : "",
     env = "production",
   }: ClaimSDKOptions) {
     if (!walletClient.account) {
@@ -330,25 +331,29 @@ export class ClaimSDK {
   /**
    * Triggers a faucet request to top up the user's balance.
    * @throws If the faucet request fails.
+   *
+   * NOTE: Upgraded to contract-first flow:
+   *  - Try on-chain faucet call (user signs) via `faucet.topWallet(address)`
+   *  - Guard against gas>topping griefing and low native balance for publishing the tx
+   *  - If on-chain path fails (or cannot sign/publish), fallback to backend `/verify/topWallet`
+   *  - Throttled to at most once per hour per chain (localStorage)
    */
   async triggerFaucet(): Promise<void> {
-    const { env } = this
-    const { backend } = Envs[env as keyof typeof Envs]
-
-    const body = JSON.stringify({
-      chainId: this.walletClient.chain?.id,
+    // Delegate to shared utility to keep SDK lean while preserving this docstring.
+    const chainId = this.walletClient.chain?.id!
+    const result = await triggerFaucetUtil({
+      chainId,
       account: this.account,
+      publicClient: this.publicClient,
+      walletClient: this.walletClient,
+      faucetAddress: this.faucetAddress,
+      env: this.env,
+      throttleMs: 60 * 60 * 1000, // 1 hour
     })
 
-    const response = await fetch(`${backend}/verify/topWallet`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    })
-
-    if (!response.ok) {
-      const errorMessage = await response.text()
-      throw new Error(`Faucet request failed: ${errorMessage}`)
+    // Optional: you can surface `result` to UI via an event/callback if desired.
+    if (result === "error") {
+      throw new Error("Faucet request failed")
     }
   }
 
