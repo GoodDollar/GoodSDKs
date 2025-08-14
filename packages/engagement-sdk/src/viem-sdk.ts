@@ -18,7 +18,7 @@ export const REWARDS_CONTRACT = prod?.[
 ] as `0x${string}`
 
 const BLOCKS_RANGE = BigInt(10000)
-const BLOCKS_AGO = BigInt(100000)
+const BLOCKS_AGO = BigInt(500000)
 const WAIT_DELAY = 5000 // 1 second delay
 
 //TODO:
@@ -301,14 +301,15 @@ export class EngagementRewardsSDK {
     return flatten(
       await Promise.all(
         ranges.map((toBlock, i) =>
-          promiseCreator(toBlock - Number(batchSize), toBlock),
+          promiseCreator(toBlock - Number(batchSize), toBlock).catch((e) => {
+            console.log("failed logs batch", { batchSize, toBlock, e })
+            return []
+          }),
         ),
       ),
     ) as Awaited<ReturnType<P>>
   }
   async getPendingApps() {
-    const curBlock = await this.publicClient.getBlockNumber()
-
     const approvedApps = new Set<string>(await this.getRegisteredApps())
     const appliedApps = await this.getAppliedApps()
     return appliedApps.filter((app) => !approvedApps.has(app))
@@ -344,7 +345,6 @@ export class EngagementRewardsSDK {
           toBlock: BigInt(endBlock),
         }),
     )
-
     return applyEvents.map((_) => _.args.app).filter((_) => _ !== undefined)
   }
 
