@@ -79,6 +79,7 @@ contract EngagementRewards is
     mapping(address => AppStats) public appsStats;
     mapping(address => mapping(address => UserInfo)) public userRegistrations;
     mapping(address => UserGlobalInfo) public userPeriodClaims;
+    address[] public appliedApps;
 
     event AppApplied(
         address indexed app,
@@ -197,6 +198,7 @@ contract EngagementRewards is
             existingApp.email = email;
             existingApp.registeredAt = uint32(block.timestamp);
         } else {
+            appliedApps.push(app);
             // New registration
             registeredApps[app] = AppInfo({
                 isRegistered: true,
@@ -230,6 +232,9 @@ contract EngagementRewards is
         require(registeredApps[app].isRegistered, "App not registered");
         require(!registeredApps[app].isApproved, "App already approved");
 
+        if (registeredApps[app].registeredAt < 175517674) {
+            appliedApps.push(app);
+        }
         registeredApps[app].isApproved = true;
 
         emit AppApproved(app);
@@ -582,6 +587,14 @@ contract EngagementRewards is
 
     function getDomainSeparator() external view returns (bytes32) {
         return _domainSeparatorV4();
+    }
+
+    function getAppliedApps() external view returns (AppInfo[] memory apps) {
+        uint256 length = appliedApps.length;
+        apps = new AppInfo[](length);
+        for (uint256 i = 0; i < length; i++) {
+            apps[i] = registeredApps[appliedApps[i]];
+        }
     }
 
     function _authorizeUpgrade(

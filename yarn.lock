@@ -1868,7 +1868,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/engagement-contracts@workspace:packages/engagement-contracts":
+"@goodsdks/engagement-contracts@npm:*, @goodsdks/engagement-contracts@workspace:packages/engagement-contracts":
   version: 0.0.0-use.local
   resolution: "@goodsdks/engagement-contracts@workspace:packages/engagement-contracts"
   dependencies:
@@ -1906,6 +1906,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@goodsdks/engagement-sdk@workspace:packages/engagement-sdk"
   dependencies:
+    "@goodsdks/engagement-contracts": "npm:*"
     "@repo/typescript-config": "workspace:*"
     tsup: "npm:^8.3.5"
     typescript: "npm:latest"
