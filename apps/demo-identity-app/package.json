@@ -11,6 +11,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@farcaster/miniapp-sdk": "^0.1.8",
     "@goodsdks/citizen-sdk": "*",
     "@goodsdks/react-hooks": "*",
     "@reown/appkit": "^1.7.2",

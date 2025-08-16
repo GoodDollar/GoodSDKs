@@ -58,6 +58,7 @@ export class IdentityCustodialSDK extends IdentitySDK {
         popupMode: boolean = false,
         callbackUrl?: string,
         chainId?: number,
+        useFarcasterNavigation?: boolean,
     ): Promise<string> {
         try {
             const account = this.walletClient.account
@@ -108,7 +109,15 @@ export class IdentityCustodialSDK extends IdentitySDK {
             }
 
             if (callbackUrl) {
-                params[popupMode ? "cbu" : "rdu"] = callbackUrl
+                // Import utility functions for universal link support
+                const { createUniversalLinkCallback } = await import("../utils/auth")
+                
+                // Create universal link compatible callback for mobile/native support
+                const universalCallbackUrl = createUniversalLinkCallback(callbackUrl, {
+                    source: "gooddollar_identity_verification"
+                })
+                
+                params[popupMode ? "cbu" : "rdu"] = universalCallbackUrl
             }
 
             url.searchParams.append(

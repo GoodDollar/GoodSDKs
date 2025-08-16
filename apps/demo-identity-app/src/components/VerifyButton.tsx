@@ -4,7 +4,7 @@ import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
 interface VerifyButtonProps {
-  onVerificationSuccess: () => void
+  onVerificationSuccess?: () => void
 }
 
 export const VerifyButton: React.FC<VerifyButtonProps> = ({
@@ -17,13 +17,13 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
     if (!identitySDK || !address) return
 
     try {
-      const fvLink = await identitySDK.generateFVLink(
+      // Use the SDK's navigation method which now uses the shared utility
+      await identitySDK.navigateToFaceVerification(
         false,
         window.location.href,
-        42220,
+        42220
       )
-
-      window.location.href = fvLink
+      onVerificationSuccess?.()
     } catch (error) {
       console.error("Verification failed:", error)
       // Handle error (e.g., show toast)

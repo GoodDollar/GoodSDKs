@@ -12,6 +12,8 @@ if (process.env.HTTPS === "true") {
   https = false
 }
 
+
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -23,6 +25,12 @@ export default defineConfig({
   },
   define: {
     "process.browser": true,
-    "process.env": process.env,
+    // Only define specific env vars instead of the entire process.env object
+    "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "development"),
   },
+  build: {
+    rollupOptions: {
+      external: ["@goodsdks/citizen-sdk"]
+    }
+  }
 })
