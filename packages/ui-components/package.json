@@ -22,10 +22,5 @@
     "@reown/appkit-adapter-ethers": "^1.7.2",
     "ethers": "6.13.5",
     "lit": "^3.2.1"
-  },
-  "peerDependencies": {
-    "@goodsdks/citizen-sdk": "*",
-    "@farcaster/miniapp-sdk": "^0.1.0",
-    "viem": "^1.0.0"
   }
 }

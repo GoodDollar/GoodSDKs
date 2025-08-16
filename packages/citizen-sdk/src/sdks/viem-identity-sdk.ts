@@ -20,6 +20,8 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
+import { createUniversalLinkCallback } from "../utils/auth"
+import { farcasterNavigation } from "../utils/farcaster-navigation"
 
 import type {
   IdentityContract,
@@ -228,9 +230,6 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        // Import utility functions for universal link support
-        const { createUniversalLinkCallback } = await import("../utils/auth")
-        
         // Create universal link compatible callback for mobile/native support
         const universalCallbackUrl = createUniversalLinkCallback(callbackUrl, {
           source: "gooddollar_identity_verification"
@@ -287,9 +286,7 @@ export class IdentitySDK {
     chainId?: number,
     forceFarcasterNavigation?: boolean,
   ): Promise<void> {
-    const { farcasterNavigation } = await import("../utils/farcaster-navigation")
-    
     const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
-    await farcasterNavigation.navigateToFaceVerification(fvLink, popupMode, callbackUrl)
+    await farcasterNavigation.navigateToFaceVerification(fvLink, popupMode, callbackUrl, forceFarcasterNavigation)
   }
 }

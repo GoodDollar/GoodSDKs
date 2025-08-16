@@ -39,7 +39,8 @@ export class FarcasterNavigationHelper {
   async navigateToFaceVerification(
     fvLink: string,
     popupMode: boolean = false,
-    callbackUrl?: string
+    callbackUrl?: string,
+    forceFarcasterNavigation?: boolean
   ): Promise<void> {
     // Enhance the link with universal link callback if provided
     let enhancedLink = fvLink;
@@ -54,7 +55,9 @@ export class FarcasterNavigationHelper {
     }
 
     // Use smart navigation based on environment
-    if (await isInFarcasterMiniApp()) {
+    const shouldUseFarcaster = forceFarcasterNavigation ?? await isInFarcasterMiniApp();
+    
+    if (shouldUseFarcaster) {
       await this.openUrlInFarcaster(enhancedLink, !popupMode);
     } else {
       // Standard navigation
@@ -97,3 +100,4 @@ export class FarcasterNavigationHelper {
 
 // Export a singleton instance for convenience
 export const farcasterNavigation = new FarcasterNavigationHelper();
+
