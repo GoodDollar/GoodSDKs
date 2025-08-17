@@ -2,14 +2,15 @@ import {
   type Account,
   type Address,
   type Chain,
+  type Hash,
+  type LocalAccount,
   type PublicClient,
   type SimulateContractParameters,
   type WalletClient,
   ContractFunctionExecutionError,
+  encodeFunctionData,
   TransactionReceipt,
 } from "viem"
-
-import { waitForTransactionReceipt } from "viem/actions"
 
 import { IdentitySDK } from "./viem-identity-sdk"
 import {
@@ -21,7 +22,8 @@ import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
 
 export interface ClaimSDKOptions {
-  account: Address
+  account: Account | undefined
+  address: Address
   publicClient: PublicClient
   walletClient: WalletClient<any, Chain | undefined, Account | undefined>
   identitySDK: IdentitySDK
@@ -48,13 +50,15 @@ export class ClaimSDK {
   private readonly ubiSchemeAddress: Address
   private readonly ubiSchemeAltAddress: Address
   private readonly faucetAddress: Address
-  private readonly account: Address
+  private readonly account: Account
+  private readonly address: Address
   private readonly altChain: SupportedChains
   private readonly env: contractEnv
   public readonly rdu: string
 
   constructor({
     account,
+    address,
     publicClient,
     walletClient,
     identitySDK,
@@ -67,7 +71,8 @@ export class ClaimSDK {
     this.publicClient = publicClient
     this.walletClient = walletClient
     this.identitySDK = identitySDK
-    this.account = account ?? walletClient.account.address
+    this.account = account ?? walletClient.account
+    this.address = address ?? this.account.address
 
     this.rdu = rdu
     this.env = env
@@ -86,10 +91,14 @@ export class ClaimSDK {
   }
 
   static async init(
-    props: Omit<ClaimSDKOptions, "account">,
+    props: Omit<ClaimSDKOptions, "account" | "address">,
   ): Promise<ClaimSDK> {
-    const [account] = await props.walletClient.getAddresses()
-    return new ClaimSDK({ account, ...props })
+    const [address] = await props.walletClient.getAddresses()
+    return new ClaimSDK({
+      account: props.walletClient?.account,
+      address,
+      ...props,
+    })
   }
 
   /**
@@ -114,7 +123,7 @@ export class ClaimSDK {
         abi: params.abi,
         functionName: params.functionName,
         args: params.args || [],
-        account: this.account,
+        account: this.address,
       })) as T
     } catch (error: any) {
       throw new Error(
@@ -132,28 +141,78 @@ export class ClaimSDK {
    */
   async submitAndWait(
     params: SimulateContractParameters,
-    onHash?: (hash: `0x${string}`) => void,
-  ): Promise<TransactionReceipt> {
-    if (!this.account) {
+    onHash?: (hash: Hash) => void,
+  ): Promise<TransactionReceipt | null> {
+    const account = this.walletClient.account
+    if (!account?.address) {
       throw new Error("No active wallet address found.")
     }
 
     const { request } = await this.publicClient.simulateContract({
-      account: this.account,
+      account: account.address,
       ...params,
     })
 
-    const hash = await this.walletClient.writeContract(request)
-    onHash?.(hash)
+    try {
+      let hash: Hash
 
-    // we wait one block
-    // to prevent waitFor... to immediately throw an error
-    await new Promise((res) => setTimeout(res, 5000))
+      if ("signMessage" in this.account) {
+        const callData = encodeFunctionData({
+          abi: params.abi,
+          functionName: params.functionName,
+          args: params.args,
+        })
 
-    return waitForTransactionReceipt(this.publicClient, {
-      hash,
-      retryDelay: 5000,
-    })
+        // Local signing path (works on RPCs that block eth_sendTransaction)
+        hash = await this.walletClient.request({
+          // Pass the LocalAccount, not just the address
+          account: account as LocalAccount,
+          to: request.address!,
+          data: callData,
+          value: request.value,
+          gas: request.gas,
+          ...(request.maxFeePerGas
+            ? {
+                maxFeePerGas: request.maxFeePerGas,
+                maxPriorityFeePerGas: request.maxPriorityFeePerGas,
+              }
+            : { gasPrice: request.gasPrice }),
+        } as any)
+      } else {
+        // RPC signing path (may fail on some Celo RPCs)
+        hash = await this.walletClient.writeContract(request)
+      }
+
+      onHash?.(hash)
+
+      // Wait one block to prevent immediate errors
+      await new Promise((res) => setTimeout(res, 5000))
+
+      return this.publicClient.waitForTransactionReceipt({
+        hash,
+        pollingInterval: 5_000,
+      })
+    } catch (error: any) {
+      if (
+        error?.message?.includes("rpc method is not whitelisted") ||
+        error?.message?.includes("eth_sendTransaction") ||
+        error?.code === -32601
+      ) {
+        throw new Error(
+          "Transaction failed: RPC does not support eth_sendTransaction. " +
+            "Attach a LocalAccount (privateKeyToAccount) or set submitStrategy: 'local'.",
+        )
+      }
+      if (error?.message?.toLowerCase().includes("insufficient funds")) {
+        throw new Error("Transaction failed: Insufficient funds for gas fees.")
+      }
+      if (error?.message?.toLowerCase().includes("nonce")) {
+        throw new Error("Transaction failed: Nonce error. Please try again.")
+      }
+      throw new Error(
+        `Transaction submission failed: ${error?.message ?? String(error)}`,
+      )
+    }
   }
 
   /**
@@ -170,7 +229,7 @@ export class ClaimSDK {
         address: !pClient ? this.ubiSchemeAddress : this.ubiSchemeAltAddress,
         abi: ubiSchemeV2ABI,
         functionName: "checkEntitlement",
-        args: [this.account],
+        args: [this.address],
       },
       pClient,
     )
@@ -183,11 +242,10 @@ export class ClaimSDK {
    * @throws If unable to check wallet status or fetch required data.
    */
   async getWalletClaimStatus(): Promise<WalletClaimStatus> {
-    const userAddress = this.account
-
     // 1. Check whitelisting status
-    const { isWhitelisted } =
-      await this.identitySDK.getWhitelistedRoot(userAddress)
+    const { isWhitelisted } = await this.identitySDK.getWhitelistedRoot(
+      this.address,
+    )
 
     if (!isWhitelisted) {
       return {
@@ -227,11 +285,10 @@ export class ClaimSDK {
    * @throws If the user is not whitelisted, not entitled to claim, balance check fails, or claim transaction fails.
    */
   async claim(): Promise<TransactionReceipt | any> {
-    const userAddress = this.account
-
     // 1. Check whitelisting status
-    const { isWhitelisted } =
-      await this.identitySDK.getWhitelistedRoot(userAddress)
+    const { isWhitelisted } = await this.identitySDK.getWhitelistedRoot(
+      this.address,
+    )
     if (!isWhitelisted) {
       await this.fvRedirect()
       throw new Error("User requires identity verification.")
@@ -337,7 +394,7 @@ export class ClaimSDK {
 
     const body = JSON.stringify({
       chainId: this.walletClient.chain?.id,
-      account: this.account,
+      account: this.address,
     })
 
     const response = await fetch(`${backend}/verify/topWallet`, {
@@ -373,7 +430,7 @@ export class ClaimSDK {
       (toppingAmount * (100n - BigInt(minTopping))) / 100n || minBalance
 
     const balance = await this.publicClient.getBalance({
-      address: this.account,
+      address: this.address,
     })
 
     return balance >= minThreshold

@@ -2,6 +2,7 @@ import {
   type Account,
   Address,
   type Chain,
+  type LocalAccount,
   PublicClient,
   WalletClient,
   SimulateContractParameters,
@@ -42,7 +43,8 @@ export const initializeIdentityContract = (
 })
 
 export interface IdentitySDKOptions {
-  account?: Address
+  account?: Account
+  address?: Address
   publicClient: PublicClient
   walletClient: WalletClient<any, Chain | undefined, Account | undefined>
   env: contractEnv
@@ -52,7 +54,8 @@ export interface IdentitySDKOptions {
  * Handles interactions with the Identity Contract.
  */
 export class IdentitySDK {
-  public account: Address
+  public account: Account
+  public address: Address
   publicClient: PublicClient
   walletClient: WalletClient & WalletActions
   public contract: IdentityContract
@@ -66,6 +69,7 @@ export class IdentitySDK {
    */
   constructor({
     account,
+    address,
     publicClient,
     walletClient,
     env,
@@ -76,7 +80,8 @@ export class IdentitySDK {
     this.publicClient = publicClient
     this.walletClient = walletClient
     this.env = env
-    this.account = account ?? walletClient.account.address
+    this.account = account ?? walletClient.account
+    this.address = address ?? walletClient.account.address
 
     const { contractEnvAddresses } = resolveChainAndContract(walletClient, env)
 
@@ -89,8 +94,12 @@ export class IdentitySDK {
   static async init(
     props: Omit<IdentitySDKOptions, "account">,
   ): Promise<IdentitySDK> {
-    const [account] = await props.walletClient.getAddresses()
-    return new IdentitySDK({ account, ...props })
+    const [address] = await props.walletClient.getAddresses()
+    return new IdentitySDK({
+      account: props.walletClient?.account,
+      address,
+      ...props,
+    })
   }
 
   /**
@@ -105,10 +114,10 @@ export class IdentitySDK {
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
     try {
-      if (!this.account) throw new Error("No active wallet address found.")
+      if (!this.address) throw new Error("No active wallet address found.")
 
       const { request } = await this.publicClient.simulateContract({
-        account: this.account,
+        account: this.address,
         ...params,
       })
 
@@ -193,16 +202,31 @@ export class IdentitySDK {
     chainId?: number,
   ): Promise<string> {
     try {
-      const address = this.account
-      if (!address) throw new Error("No wallet address found.")
-
       const nonce = Math.floor(Date.now() / 1000).toString()
 
-      const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", address)
-      const fvSig = await this.walletClient.signMessage({
-        account: address,
-        message: fvSigMessage,
-      })
+      const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", this.address)
+
+      // For self-provisioned wallets, sign locally to avoid Celo RPC limitations
+      let fvSig: string
+
+      if ("signMessage" in this.account) {
+        // Local account - sign directly
+        fvSig = await (this.account as LocalAccount).signMessage({
+          message: fvSigMessage,
+        })
+      } else {
+        // Fallback to wallet client signing (might fail on Celo RPC)
+        try {
+          fvSig = await this.walletClient.signMessage({
+            account: this.address,
+            message: fvSigMessage,
+          })
+        } catch (rpcError: any) {
+          throw new Error(
+            `Message signing failed: Celo RPC doesn't support personal_sign. Use a local account instead. ${rpcError.message}`,
+          )
+        }
+      }
 
       const { identityUrl } = Envs[this.env]
       if (!identityUrl) {
@@ -219,7 +243,7 @@ export class IdentitySDK {
 
       const url = new URL(identityUrl)
       const params: Record<string, string | number> = {
-        account: address,
+        account: this.address,
         nonce,
         fvsig: fvSig,
         chain: chainId || (await this.publicClient.getChainId()),
