@@ -14,7 +14,7 @@ import { config } from "@tamagui/config/v3"
 import { useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
-import { handleVerificationResponse, isInFarcasterMiniApp, isInFarcasterMiniAppSync } from "@goodsdks/citizen-sdk"
+import { handleVerificationResponseSync, isInFarcasterMiniApp, isInFarcasterMiniAppSync } from "@goodsdks/citizen-sdk"
 
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
@@ -56,8 +56,8 @@ const App: React.FC = () => {
     
     checkFarcasterMode()
     
-    // Use the new verification response handler
-    const verificationResult = handleVerificationResponse()
+    // Use the sync version for initial URL check
+    const verificationResult = handleVerificationResponseSync()
     
     if (verificationResult.isVerified) {
       setIsVerified(true)

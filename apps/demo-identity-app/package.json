@@ -11,7 +11,6 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@farcaster/miniapp-sdk": "^0.1.8",
     "@goodsdks/citizen-sdk": "*",
     "@goodsdks/react-hooks": "*",
     "@reown/appkit": "^1.7.2",
@@ -51,6 +50,7 @@
     "prettier": "^3.5.3",
     "sass": "^1.85.1",
     "typescript": "^5.8.2",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "@farcaster/miniapp-sdk": "^0.1.8"
   }
 }

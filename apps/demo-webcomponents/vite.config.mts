@@ -24,13 +24,11 @@ export default defineConfig({
     https,
   },
   define: {
-    "process.browser": true,
-    // Only define specific env vars instead of the entire process.env object
-    "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "development"),
+    "process.env": process.env,
   },
   build: {
     rollupOptions: {
-      external: ["@goodsdks/citizen-sdk"]
+      external: ["@goodsdks/citizen-sdk", "viem"]
     }
   }
 })

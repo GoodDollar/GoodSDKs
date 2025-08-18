@@ -1,34 +1,11 @@
-import { loadFarcasterSdk, isInFarcasterMiniApp } from "./auth";
+import { loadFarcasterSdk, isInFarcasterMiniApp, createUniversalLinkCallback } from "./auth";
 
 /**
  * Shared navigation utility for Farcaster miniapp integration
  * Combines universal link generation and smart navigation logic
  */
 export class FarcasterNavigationHelper {
-  /**
-   * Create a universal link compatible callback URL
-   */
-  private createUniversalLinkCallback(
-    baseUrl: string, 
-    additionalParams?: Record<string, string>
-  ): string {
-    const url = new URL(baseUrl);
-    
-    // Add universal link indicators
-    if (!url.protocol.startsWith("http")) {
-      // If it's already a custom scheme, return as-is
-      return baseUrl;
-    }
-    
-    // Add additional parameters if provided
-    if (additionalParams) {
-      Object.entries(additionalParams).forEach(([key, value]) => {
-        url.searchParams.set(key, value);
-      });
-    }
-    
-    return url.toString();
-  }
+
 
   /**
    * Navigate to face verification with automatic Farcaster detection
@@ -42,35 +19,31 @@ export class FarcasterNavigationHelper {
     callbackUrl?: string,
     forceFarcasterNavigation?: boolean
   ): Promise<void> {
+    // Force popup mode for Farcaster since it always opens in new tab/window
+    const shouldUseFarcaster = forceFarcasterNavigation ?? await isInFarcasterMiniApp();
+    const effectivePopupMode = shouldUseFarcaster ? true : popupMode;
+    
     // Enhance the link with universal link callback if provided
     let enhancedLink = fvLink;
     if (callbackUrl) {
-      const universalCallbackUrl = this.createUniversalLinkCallback(callbackUrl, {
+      const universalCallbackUrl = createUniversalLinkCallback(callbackUrl, {
         source: "gooddollar_identity_verification"
       });
       
       const url = new URL(fvLink);
-      url.searchParams.set(popupMode ? "cbu" : "rdu", universalCallbackUrl);
+      url.searchParams.set(effectivePopupMode ? "cbu" : "rdu", universalCallbackUrl);
       enhancedLink = url.toString();
     }
 
     // Use smart navigation based on environment
-    const shouldUseFarcaster = forceFarcasterNavigation ?? await isInFarcasterMiniApp();
-    
     if (shouldUseFarcaster) {
-      await this.openUrlInFarcaster(enhancedLink, !popupMode);
+      await this.openUrlInFarcaster(enhancedLink);
     } else {
       // Standard navigation
-      if (typeof window !== "undefined") {
-        if (popupMode) {
-          window.open(enhancedLink, "_blank");
-        } else {
-          window.location.href = enhancedLink;
-        }
+      if (effectivePopupMode) {
+        window.open(enhancedLink, "_blank");
       } else {
-        throw new Error(
-          "Face verification navigation is only supported in browser environments."
-        );
+        window.location.href = enhancedLink;
       }
     }
   }
@@ -78,22 +51,15 @@ export class FarcasterNavigationHelper {
   /**
    * Open URL using Farcaster SDK with fallback
    */
-  private async openUrlInFarcaster(
-    url: string, 
-    fallbackToNewTab: boolean = true
-  ): Promise<void> {
-    if (typeof window === "undefined") {
-      throw new Error("URL opening is only supported in browser environments.");
-    }
-
+  private async openUrlInFarcaster(url: string): Promise<void> {
     try {
       const sdk = await loadFarcasterSdk();
       await sdk.actions.ready();
       await sdk.actions.openUrl(url);
     } catch (error) {
       console.warn("Failed to use Farcaster SDK openUrl, falling back:", error);
-      // Fallback to standard navigation
-      fallbackToNewTab ? window.open(url, "_blank") : (window.location.href = url);
+      // Fallback to popup since Farcaster context expects new window
+      window.open(url, "_blank");
     }
   }
 }

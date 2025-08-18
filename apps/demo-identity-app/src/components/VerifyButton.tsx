@@ -17,9 +17,9 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
     if (!identitySDK || !address) return
 
     try {
-      // Use the SDK's navigation method which now uses the shared utility
+      // Force popup mode for better Farcaster compatibility
       await identitySDK.navigateToFaceVerification(
-        false,
+        true, // Force popup mode
         window.location.href,
         42220
       )
