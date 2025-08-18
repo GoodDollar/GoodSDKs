@@ -358,33 +358,6 @@ export class ClaimSDK {
   }
 
   /**
-   * Checks if the user has sufficient balance to claim UBI.
-   * @returns True if the user can claim, false otherwise.
-   * @throws If gas price cannot be determined or balance check fails.
-   */
-  async canClaim(): Promise<boolean> {
-    const { minTopping, toppingAmount } = await this.getFaucetParameters()
-    const chainId = this.walletClient.chain?.id
-
-    const gasPrice = getGasPrice(chainId)
-    if (!gasPrice) {
-      throw new Error(
-        "Cannot determine gasPrice for the current connected chain.",
-      )
-    }
-
-    const minBalance = (chainId === 42220 ? 250000n : 150000n) * gasPrice
-    const minThreshold =
-      (toppingAmount * (100n - BigInt(minTopping))) / 100n || minBalance
-
-    const balance = await this.publicClient.getBalance({
-      address: this.account,
-    })
-
-    return balance >= minThreshold
-  }
-
-  /**
    * Fetches faucet parameters (minTopping and toppingAmount).
    * @returns Faucet configuration parameters.
    * @throws If unable to fetch faucet parameters.
@@ -418,11 +391,30 @@ export class ClaimSDK {
     const retryDelay = 5000
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const canClaim = await this.canClaim()
-      if (canClaim) return true
+      const result = await triggerFaucetUtil({
+        chainId: this.walletClient.chain?.id!,
+        account: this.account,
+        publicClient: this.publicClient,
+        walletClient: this.walletClient,
+        faucetAddress: this.faucetAddress,
+        env: this.env,
+        throttleMs: 60 * 60 * 1000, // 1 hour
+      })
 
-      await this.triggerFaucet()
-      await new Promise((resolve) => setTimeout(resolve, retryDelay))
+      // If we got "skipped" it means balance is sufficient or already topped recently
+      if (result === "skipped") return true
+      
+      // If we successfully topped up, return true
+      if (result === "topped_via_contract" || result === "topped_via_api") return true
+      
+      // If error and not last attempt, wait and retry
+      if (result === "error" && attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelay))
+        continue
+      }
+      
+      // If error on last attempt, return false
+      if (result === "error") return false
     }
 
     return false
