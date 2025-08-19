@@ -1,5 +1,245 @@
-import { Account, createWalletClient, http } from "viem";
-import { Envs, FV_IDENTIFIER_MSG2 } from "../constants";
+import { Account, createWalletClient, http, PublicClient, Address } from "viem";
+import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractAddresses, contractEnv } from "../constants";
+import { sdk } from '@farcaster/miniapp-sdk';
+
+/**
+ * Fallback detection using context check
+ */
+async function fallbackDetect(): Promise<boolean> {
+  try {
+    const context = await sdk.context;
+    return !!(context.location && context.location.type !== undefined);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detects if the SDK is running inside a Farcaster miniapp using the official SDK
+ */
+export async function isInFarcasterMiniApp(timeoutMs: number = 100): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  
+  try {
+    return await sdk.isInMiniApp();
+  } catch (error) {
+    console.warn('Farcaster SDK detection failed, using fallback:', error);
+    return fallbackDetect();
+  }
+}
+
+/**
+ * Synchronous version for backwards compatibility
+ * Note: This uses basic detection and should be replaced with async version when possible
+ */
+export function isInFarcasterMiniAppSync(): boolean {
+  if (typeof window === "undefined") return false;
+  
+  try {
+    // Basic detection without the async SDK call
+    return (
+      window.location.href.includes("farcaster") ||
+      window.location.href.includes("miniapp") ||
+      // Check if we're in an iframe which is common for miniapps
+      window.self !== window.top
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Opens a URL using Farcaster's official SDK capabilities
+ * @param url - The URL to open
+ * @param fallbackToNewTab - Whether to open in new tab as fallback (default: true)
+ */
+export async function openUrlInFarcaster(url: string, fallbackToNewTab: boolean = true): Promise<void> {
+  if (typeof window === "undefined") {
+    throw new Error("URL opening is only supported in browser environments.");
+  }
+
+  if (await isInFarcasterMiniApp()) {
+    try {
+      await sdk.actions.ready();
+      await sdk.actions.openUrl(url);
+      return;
+    } catch (error) {
+      console.warn("Failed to use Farcaster SDK openUrl, falling back:", error);
+    }
+  }
+
+  // Fallback to standard navigation
+  fallbackToNewTab ? window.open(url, "_blank") : (window.location.href = url);
+}
+
+/**
+ * Checks if a wallet address is whitelisted on-chain
+ * @param address - The wallet address to check
+ * @param publicClient - The viem public client for blockchain queries
+ * @param chainId - Optional chain ID (defaults to client's chain)
+ * @param env - Environment to determine contract address
+ * @returns Promise<boolean> - true if address is whitelisted
+ */
+export async function isAddressWhitelisted(
+  address: Address,
+  publicClient: PublicClient,
+  chainId?: number,
+  env: contractEnv = "production"
+): Promise<boolean> {
+  try {
+    const targetChainId = chainId || await publicClient.getChainId();
+    const identityContract = contractAddresses[targetChainId as keyof typeof contractAddresses]?.[env]?.identityContract;
+    
+    if (!identityContract) {
+      console.warn('Identity contract not found for chain:', targetChainId, 'env:', env);
+      return false;
+    }
+    
+    const result = await publicClient.readContract({
+      address: identityContract as Address,
+      abi: identityV2ABI,
+      functionName: "lastAuthenticated",
+      args: [address],
+    });
+    
+    // If lastAuthenticated returns a timestamp > 0, the address is whitelisted
+    return result ? BigInt(result) > 0n : false;
+  } catch (error) {
+    console.warn('Failed to check address whitelist status:', error);
+    return false;
+  }
+}
+
+/**
+ * Enhanced verification response handler that supports both URL params and on-chain verification
+ * @param url - The current URL or callback URL to parse
+ * @param address - Optional wallet address to check on-chain verification
+ * @param publicClient - Optional viem public client for on-chain checks
+ * @param chainId - Optional chain ID for on-chain checks
+ * @param env - Environment for contract resolution
+ * @returns Object containing verification status and any additional parameters
+ */
+export async function handleVerificationResponse(
+  url?: string,
+  address?: Address,
+  publicClient?: PublicClient,
+  chainId?: number,
+  env: contractEnv = "production"
+): Promise<{
+  isVerified: boolean;
+  params: URLSearchParams;
+  verified?: string;
+  onChainVerified?: boolean;
+}> {
+  const defaultResult = {
+    isVerified: false,
+    params: new URLSearchParams(),
+    verified: undefined,
+    onChainVerified: undefined,
+  };
+
+  try {
+    const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
+    if (!targetUrl) {
+      // If no URL, check on-chain only
+      if (address && publicClient) {
+        const onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
+        return {
+          ...defaultResult,
+          isVerified: onChainVerified,
+          onChainVerified,
+        };
+      }
+      return defaultResult;
+    }
+
+    const urlObj = new URL(targetUrl);
+    const params = urlObj.searchParams;
+    const verified = params.get("verified");
+    const urlVerified = verified === "true";
+    
+    // For popup mode (cbu), check on-chain verification since no redirect occurs
+    let onChainVerified: boolean | undefined;
+    if (address && publicClient) {
+      onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
+    }
+    
+    // Verification is true if either URL param says so OR on-chain check passes
+    const isVerified = urlVerified || (onChainVerified ?? false);
+    
+    return {
+      isVerified,
+      verified: verified || undefined,
+      params,
+      onChainVerified
+    };
+  } catch (error) {
+    console.warn('Failed to parse verification response URL:', error);
+    return defaultResult;
+  }
+}
+
+/**
+ * Legacy synchronous version for backwards compatibility
+ * @deprecated Use the async handleVerificationResponse instead for better verification support
+ */
+export function handleVerificationResponseSync(url?: string): {
+  isVerified: boolean;
+  params: URLSearchParams;
+  verified?: string;
+} {
+  const defaultResult = {
+    isVerified: false,
+    params: new URLSearchParams(),
+    verified: undefined,
+  };
+
+  try {
+    const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
+    if (!targetUrl) return defaultResult;
+
+    const urlObj = new URL(targetUrl);
+    const params = urlObj.searchParams;
+    const verified = params.get("verified");
+    
+    return {
+      isVerified: verified === "true",
+      verified: verified || undefined,
+      params
+    };
+  } catch (error) {
+    console.warn('Failed to parse verification response URL:', error);
+    return defaultResult;
+  }
+}
+
+/**
+ * Creates a universal link compatible callback URL for mobile/native app support
+ * @param baseUrl - The base callback URL
+ * @param additionalParams - Additional parameters to include
+ * @returns A universal link compatible URL
+ */
+export function createUniversalLinkCallback(
+  baseUrl: string, 
+  additionalParams?: Record<string, string>
+): string {
+  const url = new URL(baseUrl);
+  
+  // Add universal link indicators
+  if (!url.protocol.startsWith("http")) {
+    // If it's already a custom scheme, return as-is
+    return baseUrl;
+  }
+  
+  // Add additional parameters if provided
+  if (additionalParams) {
+    Object.entries(additionalParams).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+  }
+  
+  return url.toString();
+}
 
 async function signMessageWithViem(
   account: Account,

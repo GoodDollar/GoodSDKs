@@ -20,6 +20,8 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
+import { createUniversalLinkCallback } from "../utils/auth"
+import { farcasterNavigation } from "../utils/farcaster-navigation"
 
 import type {
   IdentityContract,
@@ -181,16 +183,18 @@ export class IdentitySDK {
   }
 
   /**
-   * Generates a Face Verification Link.
+   * Generates a Face Verification Link with Farcaster miniapp support.
    * @param popupMode - Whether to generate a popup link.
    * @param callbackUrl - The URL to callback after verification.
    * @param chainId - The blockchain network ID.
+   * @param useFarcasterNavigation - Whether to use Farcaster-specific navigation (auto-detected if not specified).
    * @returns The generated Face Verification link.
    */
   async generateFVLink(
     popupMode: boolean = false,
     callbackUrl?: string,
     chainId?: number,
+    useFarcasterNavigation?: boolean,
   ): Promise<string> {
     try {
       const address = this.account
@@ -226,7 +230,12 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        params[popupMode ? "cbu" : "rdu"] = callbackUrl
+        // Create universal link compatible callback for mobile/native support
+        const universalCallbackUrl = createUniversalLinkCallback(callbackUrl, {
+          source: "gooddollar_identity_verification"
+        })
+        
+        params[popupMode ? "cbu" : "rdu"] = universalCallbackUrl
       }
 
       url.searchParams.append(
@@ -262,5 +271,22 @@ export class IdentitySDK {
     return {
       expiryTimestamp,
     }
+  }
+
+  /**
+   * Navigates to face verification with automatic Farcaster miniapp support.
+   * @param popupMode - Whether to use popup mode.
+   * @param callbackUrl - The URL to callback after verification.
+   * @param chainId - The blockchain network ID.
+   * @param forceFarcasterNavigation - Force use of Farcaster navigation (auto-detected if not specified).
+   */
+  async navigateToFaceVerification(
+    popupMode: boolean = false,
+    callbackUrl?: string,
+    chainId?: number,
+    forceFarcasterNavigation?: boolean,
+  ): Promise<void> {
+    const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
+    await farcasterNavigation.navigateToFaceVerification(fvLink, popupMode, callbackUrl, forceFarcasterNavigation)
   }
 }

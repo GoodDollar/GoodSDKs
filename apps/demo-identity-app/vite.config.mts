@@ -13,6 +13,8 @@ if (process.env.HTTPS === "true") {
   https = false;
 }
 
+
+
 export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom", "wagmi", "viem"],
@@ -28,7 +30,11 @@ export default defineConfig({
   },
   plugins: [react()],
   define: {
-    "process.browser": true,
     "process.env": process.env,
   },
+  build: {
+    rollupOptions: {
+      external: ["@goodsdks/citizen-sdk", "viem"]
+    }
+  }
 });
