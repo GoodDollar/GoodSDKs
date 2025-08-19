@@ -1,26 +1,12 @@
 import { Account, createWalletClient, http, PublicClient, Address } from "viem";
 import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractAddresses, contractEnv } from "../constants";
-
-// Cache for the Farcaster SDK to avoid repeated dynamic imports
-let _cachedSdk: typeof import('@farcaster/miniapp-sdk').sdk | null = null;
-
-/**
- * Lazy-load and cache the Farcaster SDK
- */
-export async function loadFarcasterSdk() {
-  if (!_cachedSdk) {
-    const { sdk } = await import('@farcaster/miniapp-sdk');
-    _cachedSdk = sdk;
-  }
-  return _cachedSdk;
-}
+import { sdk } from '@farcaster/miniapp-sdk';
 
 /**
  * Fallback detection using context check
  */
 async function fallbackDetect(): Promise<boolean> {
   try {
-    const sdk = await loadFarcasterSdk();
     const context = await sdk.context;
     return !!(context.location && context.location.type !== undefined);
   } catch {
@@ -35,7 +21,6 @@ export async function isInFarcasterMiniApp(timeoutMs: number = 100): Promise<boo
   if (typeof window === "undefined") return false;
   
   try {
-    const sdk = await loadFarcasterSdk();
     return await sdk.isInMiniApp();
   } catch (error) {
     console.warn('Farcaster SDK detection failed, using fallback:', error);
@@ -75,7 +60,6 @@ export async function openUrlInFarcaster(url: string, fallbackToNewTab: boolean 
 
   if (await isInFarcasterMiniApp()) {
     try {
-      const sdk = await loadFarcasterSdk();
       await sdk.actions.ready();
       await sdk.actions.openUrl(url);
       return;

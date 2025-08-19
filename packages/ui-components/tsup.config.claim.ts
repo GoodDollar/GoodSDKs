@@ -2,7 +2,7 @@ import { defineConfig } from "tsup"
 
 export default defineConfig({
   entry: ["src/index.ts"],
-  format: ["esm"],
+  format: ["esm", "iife"],
   platform: "browser",
   globalName: "ClaimButton",
   splitting: false,
@@ -12,6 +12,4 @@ export default defineConfig({
   minify: true,
   target: "ESNext",
   outDir: "dist",
-  external: ["@goodsdks/citizen-sdk", "viem"],
-
 })

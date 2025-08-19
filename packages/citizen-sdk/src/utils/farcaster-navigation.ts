@@ -1,4 +1,5 @@
-import { loadFarcasterSdk, isInFarcasterMiniApp, createUniversalLinkCallback } from "./auth";
+import { isInFarcasterMiniApp, createUniversalLinkCallback } from "./auth";
+import { sdk } from '@farcaster/miniapp-sdk';
 
 /**
  * Shared navigation utility for Farcaster miniapp integration
@@ -53,7 +54,6 @@ export class FarcasterNavigationHelper {
    */
   private async openUrlInFarcaster(url: string): Promise<void> {
     try {
-      const sdk = await loadFarcasterSdk();
       await sdk.actions.ready();
       await sdk.actions.openUrl(url);
     } catch (error) {
