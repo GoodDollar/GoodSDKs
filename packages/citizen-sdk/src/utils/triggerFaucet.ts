@@ -81,6 +81,8 @@ export async function triggerFaucet({
 }: TriggerFaucetParams): Promise<TriggerFaucetResult> {
   // Throttle via localStorage (browser env only)
   if (typeof localStorage !== "undefined") {
+    alert("TX needs to be signed in order to claim.")
+
     const key = `goodDollarFaucetLastToppedUtcMs_${chainId}`
     const last = localStorage.getItem(key)
     if (last && Date.now() < Number(last) + throttleMs) {
