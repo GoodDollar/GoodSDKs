@@ -81,44 +81,9 @@ export async function triggerFaucet({
 }: TriggerFaucetParams): Promise<TriggerFaucetResult> {
   // Throttle via localStorage (browser env only)
   if (typeof localStorage !== "undefined") {
-    alert("TX needs to be signed in order to claim.")
-
     const key = `goodDollarFaucetLastToppedUtcMs_${chainId}`
     const last = localStorage.getItem(key)
     if (last && Date.now() < Number(last) + throttleMs) {
-      // Still check if balance is sufficient even if throttled
-      try {
-        const [canTop, toppingAmount, minTopping] = await Promise.all([
-          publicClient.readContract({
-            address: faucetAddress,
-            abi: faucetABI,
-            functionName: "canTop",
-            args: [account],
-            account,
-          } as any) as Promise<boolean>,
-          publicClient.readContract({
-            address: faucetAddress,
-            abi: faucetABI,
-            functionName: "getToppingAmount",
-            args: [],
-            account,
-          }) as Promise<bigint>,
-          publicClient.readContract({
-            address: faucetAddress,
-            abi: faucetABI,
-            functionName: "minTopping",
-            args: [],
-            account,
-          } as any) as Promise<number>,
-        ])
-        
-        const hasGoodBalance = await canClaim(chainId, account, publicClient, faucetAddress, toppingAmount, minTopping)
-        if (hasGoodBalance) {
-          return "skipped"
-        }
-      } catch {
-        // If we can't check balance, just return skipped due to throttling
-      }
       return "skipped"
     }
   }
