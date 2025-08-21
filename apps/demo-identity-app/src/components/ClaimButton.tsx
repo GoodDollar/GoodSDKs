@@ -45,7 +45,14 @@ export const ClaimButton: React.FC = () => {
     setTxHash(null)
 
     try {
-      const tx = await sdk.claim()
+
+      const callBackExample = async () => {
+        console.log("waiting for claim for 2 seconds...");
+        await new Promise(resolve => setTimeout(resolve, 2000)); // wait 2 seconds
+        console.log("tx start");
+      };
+
+      const tx = await sdk.claim(callBackExample)
       if (!tx) return
 
       setTxHash(tx.transactionHash)
