@@ -126,7 +126,6 @@ Agents may …
 Agents must **not** …
 
 - Introduce heavy UI libs (keep bundle light).
-- Break workspace versioning (always bump package.json via `changeset`).
 
 ---
 
