@@ -13,7 +13,7 @@ import {
 import { config } from "@tamagui/config/v3"
 import { useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
-import { useIdentitySDK } from "@goodsdks/citizen-sdk"
+import { useIdentitySDK } from "@goodsdks/react-hooks"
 
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
@@ -37,7 +37,7 @@ const App: React.FC = () => {
   const [connectedAccount, setConnectedAccount] = useState<string | undefined>(
     undefined,
   )
-  const identitySDK = useIdentitySDK("development")
+  const { sdk: identitySDK } = useIdentitySDK("development")
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search)

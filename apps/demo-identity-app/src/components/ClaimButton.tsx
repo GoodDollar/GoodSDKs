@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react"
 import { Button, Text, XStack, YStack, Spacer } from "tamagui"
-import { ClaimSDK, useClaimSDK } from "@goodsdks/citizen-sdk" // Adjust the import path as needed
+import { useClaimSDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
 export const ClaimButton: React.FC = () => {
@@ -8,15 +8,14 @@ export const ClaimButton: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const [sdk, setSdk] = useState<ClaimSDK | null>(null)
-  const claimSDK = useClaimSDK("development")
+  const { sdk: claimSDK, loading, error: sdkError } = useClaimSDK("development")
+  const [sdk, setSdk] = useState<typeof claimSDK | null>(null)
   const [claimAmount, setClaimAmount] = useState<Number | null>(null)
 
   // Initialize ClaimSDK on component mount
   useEffect(() => {
     const initializeSDK = async () => {
-      const sdk = await claimSDK?.()
-      console.log("ClaimSDK initialized:", { sdk })
+      const sdk = claimSDK
       if (!sdk) return
 
       const amount = await sdk.checkEntitlement()
@@ -27,10 +26,13 @@ export const ClaimButton: React.FC = () => {
 
       setSdk(sdk)
     }
-    if (!sdk) {
+
+    if (sdkError) {
+      setError(sdkError)
+    } else if (!sdk && !loading) {
       initializeSDK()
     }
-  }, [address, claimSDK])
+  }, [address, claimSDK, loading])
 
   const handleClaim = useCallback(async () => {
     if (!sdk) {

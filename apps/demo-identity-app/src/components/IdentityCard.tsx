@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react"
-import { View, Text } from "tamagui"
-import { useIdentitySDK } from "@goodsdks/citizen-sdk"
+import { View, Text, Spinner } from "tamagui"
+import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
 export const IdentityCard: React.FC = () => {
   const { address } = useAccount()
-  const identitySDK = useIdentitySDK("development")
+  const { sdk: identitySDK, loading, error } = useIdentitySDK("development")
   const [expiry, setExpiry] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -31,7 +31,9 @@ export const IdentityCard: React.FC = () => {
       }
     }
 
-    fetchExpiry()
+    if (identitySDK) {
+      fetchExpiry()
+    }
   }, [address, identitySDK])
 
   if (!address) return null
@@ -44,13 +46,21 @@ export const IdentityCard: React.FC = () => {
       borderRadius="$small"
       shadowOpacity={0.2}
     >
-      <Text color="$text" fontSize="$medium" mb="$small">
-        Wallet Address: {address}
-      </Text>
-      <Text color="$text" fontSize="$medium">
-        {expiry && new Date(expiry) < new Date() ? "Expired" : "Expiry"}:{" "}
-        {expiry || "Not Verified"}
-      </Text>
+      {loading ? (
+        <Spinner size="large" color="$primary" />
+      ) : error ? (
+        <Text>{error}</Text>
+      ) : (
+        <>
+          <Text color="$text" fontSize="$medium" mb="$small">
+            Wallet Address: {address}
+          </Text>
+          <Text color="$text" fontSize="$medium">
+            {expiry && new Date(expiry) < new Date() ? "Expired" : "Expiry"}:{" "}
+            {expiry || "Not Verified"}
+          </Text>
+        </>
+      )}
     </View>
   )
 }

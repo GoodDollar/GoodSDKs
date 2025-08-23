@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@goodsdks/citizen-sdk": "*",
+    "@goodsdks/react-hooks": "*",
     "@reown/appkit": "^1.7.2",
     "@reown/appkit-adapter-wagmi": "^1.7.2",
     "@reown/appkit-wallet": "^1.7.2",

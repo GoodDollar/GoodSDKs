@@ -18,6 +18,7 @@ import {
   contractAddresses,
 } from "../constants"
 import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
+import { resolveChainAndContract } from "../utils/chains"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -37,8 +38,8 @@ export interface WalletClaimStatus {
 }
 
 export class ClaimSDK {
-  private readonly publicClient: PublicClient
-  private readonly walletClient: WalletClient<
+  readonly publicClient: PublicClient
+  readonly walletClient: WalletClient<
     any,
     Chain | undefined,
     Account | undefined
@@ -71,16 +72,12 @@ export class ClaimSDK {
     this.rdu = rdu
     this.env = env
 
-    const chainId = this.walletClient.chain?.id as SupportedChains
+    const { chainId, contractEnvAddresses } = resolveChainAndContract(
+      walletClient,
+      env,
+    )
+
     this.altChain = chainId === 42220 ? 122 : 42220
-
-    const contractEnvAddresses = contractAddresses[chainId][env]
-
-    if (!contractEnvAddresses) {
-      throw new Error(
-        `ClaimSDK: Contract addresses not found for configured env: '${env}'`,
-      )
-    }
 
     this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
     this.ubiSchemeAltAddress = contractAddresses[this.altChain][env]
@@ -191,7 +188,7 @@ export class ClaimSDK {
     // 1. Check whitelisting status
     const { isWhitelisted } =
       await this.identitySDK.getWhitelistedRoot(userAddress)
-    
+
     if (!isWhitelisted) {
       return {
         status: "not_whitelisted",
@@ -201,7 +198,7 @@ export class ClaimSDK {
 
     // 2. Check entitlement (if 0, user has already claimed or can't claim)
     const entitlement = await this.checkEntitlement()
-    
+
     if (entitlement > 0n) {
       return {
         status: "can_claim",
@@ -334,7 +331,7 @@ export class ClaimSDK {
    * Triggers a faucet request to top up the user's balance.
    * @throws If the faucet request fails.
    */
-  private async triggerFaucet(): Promise<void> {
+  async triggerFaucet(): Promise<void> {
     const { env } = this
     const { backend } = Envs[env as keyof typeof Envs]
 
@@ -360,7 +357,7 @@ export class ClaimSDK {
    * @returns True if the user can claim, false otherwise.
    * @throws If gas price cannot be determined or balance check fails.
    */
-  private async canClaim(): Promise<boolean> {
+  async canClaim(): Promise<boolean> {
     const { minTopping, toppingAmount } = await this.getFaucetParameters()
     const chainId = this.walletClient.chain?.id
 
@@ -387,7 +384,7 @@ export class ClaimSDK {
    * @returns Faucet configuration parameters.
    * @throws If unable to fetch faucet parameters.
    */
-  private async getFaucetParameters(): Promise<{
+  async getFaucetParameters(): Promise<{
     minTopping: number
     toppingAmount: bigint
   }> {
@@ -411,7 +408,7 @@ export class ClaimSDK {
    * @returns True if the balance meets the threshold, false otherwise.
    * @throws If the maximum retries are exceeded or faucet request fails.
    */
-  private async checkBalanceWithRetry(): Promise<boolean> {
+  async checkBalanceWithRetry(): Promise<boolean> {
     const maxRetries = 5
     const retryDelay = 5000
 

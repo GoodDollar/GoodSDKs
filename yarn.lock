@@ -1836,6 +1836,7 @@ __metadata:
     "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
     "@tanstack/react-query": "npm:^5.64.2"
+    "@types/lodash": "npm:^4"
     "@types/prismjs": "npm:^1"
     "@types/react": "npm:^18.3.18"
     "@types/react-dom": "npm:^18.3.5"
@@ -1847,6 +1848,7 @@ __metadata:
     eslint-plugin-react-hooks: "npm:^5.0.0"
     eslint-plugin-react-refresh: "npm:^0.4.16"
     globals: "npm:^15.14.0"
+    lodash: "npm:^4.17.21"
     lucide-react: "npm:^0.473.0"
     postcss: "npm:^8.5.1"
     prismjs: "npm:^1.29.0"
@@ -1906,6 +1908,25 @@ __metadata:
   dependencies:
     "@repo/typescript-config": "workspace:*"
     tsup: "npm:^8.3.5"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+    wagmi: "npm:latest"
+  peerDependencies:
+    viem: "*"
+    wagmi: "*"
+  languageName: unknown
+  linkType: soft
+
+"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
+  dependencies:
+    "@goodsdks/citizen-sdk": "npm:*"
+    "@repo/typescript-config": "workspace:*"
+    "@types/react": "npm:^19"
+    lz-string: "npm:^1.5.0"
+    react: "npm:^19.1.1"
+    tsup: "npm:^8.4.0"
     typescript: "npm:latest"
     viem: "npm:latest"
     wagmi: "npm:latest"
@@ -7062,6 +7083,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/lodash@npm:^4":
+  version: 4.17.20
+  resolution: "@types/lodash@npm:4.17.20"
+  checksum: 10c0/98cdd0faae22cbb8079a01a3bb65aa8f8c41143367486c1cbf5adc83f16c9272a2a5d2c1f541f61d0d73da543c16ee1d21cf2ef86cb93cd0cc0ac3bced6dd88f
+  languageName: node
+  linkType: hard
+
 "@types/lru-cache@npm:^5.1.0":
   version: 5.1.1
   resolution: "@types/lru-cache@npm:5.1.1"
@@ -7154,6 +7182,15 @@ __metadata:
     "@types/prop-types": "npm:*"
     csstype: "npm:^3.0.2"
   checksum: 10c0/8fb2b00672072135d0858dc9db07873ea107cc238b6228aaa2a9afd1ef7a64a7074078250db38afbeb19064be8ea6af5eac32d404efdd5f45e093cc4829d87f8
+  languageName: node
+  linkType: hard
+
+"@types/react@npm:^19":
+  version: 19.1.9
+  resolution: "@types/react@npm:19.1.9"
+  dependencies:
+    csstype: "npm:^3.0.2"
+  checksum: 10c0/b418da4aaf18fbc6df4f1b7096dda7ee152d697cac00d729ffd855b2b44a3a9cfb2ecb017ed20979ea3a7d98a5ce5fcf01ac1a3614d4a3e4d7069a0c45e49b0f
   languageName: node
   linkType: hard
 
@@ -9643,6 +9680,7 @@ __metadata:
   resolution: "demo-identity-app@workspace:apps/demo-identity-app"
   dependencies:
     "@goodsdks/citizen-sdk": "npm:*"
+    "@goodsdks/react-hooks": "npm:*"
     "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
     "@reown/appkit-wallet": "npm:^1.7.2"
@@ -14765,6 +14803,13 @@ __metadata:
   dependencies:
     loose-envify: "npm:^1.1.0"
   checksum: 10c0/283e8c5efcf37802c9d1ce767f302dd569dd97a70d9bb8c7be79a789b9902451e0d16334b05d73299b20f048cbc3c7d288bbbde10b701fa194e2089c237dbea3
+  languageName: node
+  linkType: hard
+
+"react@npm:^19.1.1":
+  version: 19.1.1
+  resolution: "react@npm:19.1.1"
+  checksum: 10c0/8c9769a2dfd02e603af6445058325e6c8a24b47b185d0e461f66a6454765ddcaecb3f0a90184836c68bb509f3c38248359edbc42f0d07c23eb500a5c30c87b4e
   languageName: node
   linkType: hard
 

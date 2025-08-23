@@ -1,6 +1,6 @@
 {
-  "name": "@goodsdks/citizen-sdk",
-  "version": "1.2.0",
+  "name": "@goodsdks/react-hooks",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
@@ -26,6 +26,7 @@
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@types/react": "^19",
     "typescript": "latest",
     "viem": "latest",
     "wagmi": "latest"
@@ -35,7 +36,9 @@
     "wagmi": "*"
   },
   "dependencies": {
+    "@goodsdks/citizen-sdk": "*",
     "lz-string": "^1.5.0",
+    "react": "^19.1.1",
     "tsup": "^8.4.0"
   },
   "keywords": [],

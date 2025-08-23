@@ -1,22 +1,25 @@
 import {
+  type Account,
   Address,
+  type Chain,
   PublicClient,
   WalletClient,
   SimulateContractParameters,
   WalletActions,
   zeroAddress,
 } from "viem"
+
 import { waitForTransactionReceipt } from "viem/actions"
 import { compressToEncodedURIComponent } from "lz-string"
 
 import {
-  contractAddresses,
   contractEnv,
   Envs,
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
-  SupportedChains,
 } from "../constants"
+
+import { resolveChainAndContract } from "../utils/chains"
 
 import type {
   IdentityContract,
@@ -38,14 +41,22 @@ export const initializeIdentityContract = (
   contractAddress,
 })
 
+export interface IdentitySDKOptions {
+  account?: Address
+  publicClient: PublicClient
+  walletClient: WalletClient<any, Chain | undefined, Account | undefined>
+  env: contractEnv
+}
+
 /**
  * Handles interactions with the Identity Contract.
  */
 export class IdentitySDK {
-  private publicClient: PublicClient
-  private walletClient: WalletClient & WalletActions
-  private contract: IdentityContract
-  private env: contractEnv
+  public account: Address
+  publicClient: PublicClient
+  walletClient: WalletClient & WalletActions
+  public contract: IdentityContract
+  public env: contractEnv = "production"
 
   /**
    * Initializes the IdentitySDK.
@@ -53,26 +64,33 @@ export class IdentitySDK {
    * @param walletClient - The WalletClient with WalletActions.
    * @param env - The environment to use ("production" | "staging" | "development").
    */
-  constructor(
-    publicClient: PublicClient,
-    walletClient: WalletClient & WalletActions,
-    env: contractEnv = "production",
-  ) {
+  constructor({
+    account,
+    publicClient,
+    walletClient,
+    env,
+  }: IdentitySDKOptions) {
+    if (!walletClient.account) {
+      throw new Error("ClaimSDK: WalletClient must have an account attached.")
+    }
     this.publicClient = publicClient
     this.walletClient = walletClient
     this.env = env
+    this.account = account ?? walletClient.account.address
 
-    const chainId = this.walletClient.chain?.id as SupportedChains
-
-    const contractAddress = contractAddresses[chainId][env]?.identityContract
-    if (!contractAddress) {
-      throw new Error(`Contract address for environment "${env}" not found.`)
-    }
+    const { contractEnvAddresses } = resolveChainAndContract(walletClient, env)
 
     this.contract = initializeIdentityContract(
       this.publicClient,
-      contractAddress,
+      contractEnvAddresses.identityContract,
     )
+  }
+
+  static async init(
+    props: Omit<IdentitySDKOptions, "account">,
+  ): Promise<IdentitySDK> {
+    const [account] = await props.walletClient.getAddresses()
+    return new IdentitySDK({ account, ...props })
   }
 
   /**
@@ -87,13 +105,10 @@ export class IdentitySDK {
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
     try {
-      const [account = this.walletClient?.account?.address] =
-        await this.walletClient.getAddresses()
-
-      if (!account) throw new Error("No active wallet address found.")
+      if (!this.account) throw new Error("No active wallet address found.")
 
       const { request } = await this.publicClient.simulateContract({
-        account,
+        account: this.account,
         ...params,
       })
 
@@ -178,8 +193,7 @@ export class IdentitySDK {
     chainId?: number,
   ): Promise<string> {
     try {
-      const [address = this.walletClient?.account?.address] =
-        await this.walletClient.getAddresses()
+      const address = this.account
       if (!address) throw new Error("No wallet address found.")
 
       const nonce = Math.floor(Date.now() / 1000).toString()
