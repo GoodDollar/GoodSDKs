@@ -59,9 +59,10 @@ Accelerate developer adoption by keeping the SDKs easy to extend, test, and ship
 
 ```
 packages/
-├─ citizen-sdk/           # Identity & Claim hooks/classes
+├─ citizen-sdk/           # Identity & Claim classes
 ├─ engagement-sdk/        # Engagement-Rewards helpers
 ├─ ui-components/         # Lit web-components (e.g., <claim-button>)
+├─ react-hooks            # Identity & Claim (wagmi) hooks
 ├─ engagement-contracts/  # Solidity + Hardhat tests (demo only)
 apps/
 ├─ demo-identity-app/     # React demo using citizen-sdk
