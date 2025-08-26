@@ -150,6 +150,13 @@ contract EngagementRewards is
         _grantRole(ADMIN_ROLE, msg.sender);
     }
 
+    function upgrade(address[] memory apps) external reinitializer(2) {
+        for (uint256 i = 0; i < apps.length; i++) {
+            appliedApps.push(apps[i]);
+            registeredApps[apps[i]].app = apps[i];
+        }
+    }
+
     function applyApp(
         address app,
         address rewardReceiver,
