@@ -402,7 +402,7 @@ export class ClaimSDK {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // Call the txConfirm callback before each faucet attempt if needed
       if (txConfirm && attempt === 1) {
-        const message = "A manual transaction needs to be signed in order to claim UBI. Please confirm the transaction in your wallet to proceed with the faucet request."
+        const message = "You might have to sign two transactions if you need additional gas to perform your UBI claim. "
         await txConfirm(message)
       }
 
