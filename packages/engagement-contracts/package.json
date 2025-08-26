@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "echo 'Add dev script here'",
-    "build": "hardhat compile",
+    "build": "hardhat compile && yarn export-abis",
+    "export-abis": "bash -c 'echo \"// Auto-generated\" > ../engagement-sdk/src/abi/abis.ts && for f in artifacts/contracts/**/*.json; do name=$(basename \"$f\" .json); if jq -e \".abi\" \"$f\" > /dev/null; then jq -r --arg name \"$name\" \".abi | \\\"export const $name = \\\" + (tojson) + \\\" as const;\\\"\" \"$f\" >> ../engagement-sdk/src/abi/abis.ts; fi; done'",
     "test": "hardhat test",
     "lint": "echo 'Add lint script here'",
     "verify:dev": "yarn hardhat ignition verify development-celo --include-unrelated-contracts",
@@ -21,7 +22,7 @@
     "@nomicfoundation/hardhat-ignition-ethers": "^0.15.9",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "@nomicfoundation/hardhat-verify": "^2.0.12",
+    "@nomicfoundation/hardhat-verify": "^2",
     "@nomicfoundation/ignition-core": "^0.15.9",
     "@openzeppelin/contracts": "^5.2.0",
     "@openzeppelin/contracts-upgradeable": "^5.2.0",
