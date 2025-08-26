@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react"
 import { useAccount } from "wagmi"
-import { useEngagementRewards } from "@goodsdks/engagement-sdk"
+import {
+  useEngagementRewards,
+  type EngagementRewardsSDK,
+} from "@goodsdks/engagement-sdk"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import {
   Table,
@@ -16,34 +19,23 @@ import { useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { TruncatedAddress } from "./ui/TruncatedAddress"
 
+// Derive AppInfo type from EngagementRewardsSDK type
+type AppInfo = Awaited<
+  ReturnType<EngagementRewardsSDK["getRegisteredApps"]>
+>[number]
+
 const PendingAppsPage: React.FC = () => {
   const { isConnected } = useAccount()
   const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
 
-  const [pendingApps, setPendingApps] = useState<
-    Array<{
-      owner: string
-      rewardReceiver: string
-      totalRewardsClaimed: bigint
-      registeredAt: number
-      lastResetAt: number
-      userAndInviterPercentage: number
-      userPercentage: number
-      isRegistered: boolean
-      isApproved: boolean
-      description: string
-      url: string
-      email: string
-    }>
-  >([])
+  const [pendingApps, setPendingApps] = useState<Array<AppInfo>>([])
 
   useEffect(() => {
     const fetchPendingApps = async () => {
       if (!engagementRewards) return
       const apps = await engagementRewards.getPendingApps()
-
       setPendingApps(apps)
       setLoading(false)
     }
@@ -107,9 +99,9 @@ const PendingAppsPage: React.FC = () => {
           </TableHeader>
           <TableBody>
             {pendingApps.map((app) => (
-              <TableRow key={app.address}>
+              <TableRow key={app.app}>
                 <TableCell>
-                  <TruncatedAddress address={app.address} />
+                  <TruncatedAddress address={app.app} />
                 </TableCell>
                 <TableCell>
                   <TruncatedAddress address={app.owner} />
@@ -136,7 +128,7 @@ const PendingAppsPage: React.FC = () => {
                   </a>
                 </TableCell>
                 <TableCell>
-                  <Button onClick={() => handleApprove(app.address)}>
+                  <Button onClick={() => handleApprove(app.app)}>
                     Approve
                   </Button>
                 </TableCell>

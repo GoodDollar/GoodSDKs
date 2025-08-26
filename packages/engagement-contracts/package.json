@@ -12,7 +12,7 @@
     "verify": "yarn hardhat ignition verify production-celo --include-unrelated-contracts",
     "deploy:prod": "hardhat ignition deploy --network production-celo --deployment-id production-celo ignition/modules/EngagementRewardsProxy.ts",
     "deploy:dev": "hardhat ignition  deploy --network development-celo --deployment-id development-celo ignition/modules/EngagementRewardsProxy.ts",
-    "upgrade:prod": "hardhat ignition wipe production-celo EngagementRewardsUpgrade#EngagementRewards.upgradeToAndCall &&hardhat ignition wipe production-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe production-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network production-celo --deployment-id production-celo ignition/modules/EngagementRewardsUpgrade.ts",
+    "upgrade:prod": "hardhat ignition wipe production-celo EngagementRewardsUpgrade#EngagementRewards.upgradeToAndCall && hardhat ignition wipe production-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe production-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network production-celo --deployment-id production-celo ignition/modules/EngagementRewardsUpgrade.ts",
     "upgrade:dev": "hardhat ignition wipe development-celo EngagementRewardsUpgrade#EngagementRewards.upgradeToAndCall && hardhat ignition wipe development-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe development-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network development-celo --deployment-id development-celo ignition/modules/EngagementRewardsUpgrade.ts"
   },
   "devDependencies": {
