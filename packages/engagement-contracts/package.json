@@ -4,15 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "echo 'Add dev script here'",
-    "build": "hardhat compile",
+    "build": "hardhat compile && yarn export-abis",
+    "export-abis": "bash -c 'echo \"// Auto-generated\" > ../engagement-sdk/src/abi/abis.ts && for f in artifacts/contracts/**/*.json; do name=$(basename \"$f\" .json); if jq -e \".abi\" \"$f\" > /dev/null; then jq -r --arg name \"$name\" \".abi | \\\"export const $name = \\\" + (tojson) + \\\" as const;\\\"\" \"$f\" >> ../engagement-sdk/src/abi/abis.ts; fi; done'",
     "test": "hardhat test",
     "lint": "echo 'Add lint script here'",
     "verify:dev": "yarn hardhat ignition verify development-celo --include-unrelated-contracts",
     "verify": "yarn hardhat ignition verify production-celo --include-unrelated-contracts",
     "deploy:prod": "hardhat ignition deploy --network production-celo --deployment-id production-celo ignition/modules/EngagementRewardsProxy.ts",
     "deploy:dev": "hardhat ignition  deploy --network development-celo --deployment-id development-celo ignition/modules/EngagementRewardsProxy.ts",
-    "upgrade:prod": "hardhat ignition wipe production-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe production-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network production-celo --deployment-id production-celo ignition/modules/EngagementRewardsUpgrade.ts",
-    "upgrade:dev": "hardhat ignition wipe development-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe development-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network development-celo --deployment-id development-celo ignition/modules/EngagementRewardsUpgrade.ts"
+    "upgrade:prod": "hardhat ignition wipe production-celo EngagementRewardsUpgrade#EngagementRewards.upgradeToAndCall && hardhat ignition wipe production-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe production-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network production-celo --deployment-id production-celo ignition/modules/EngagementRewardsUpgrade.ts",
+    "upgrade:dev": "hardhat ignition wipe development-celo EngagementRewardsUpgrade#EngagementRewards.upgradeToAndCall && hardhat ignition wipe development-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe development-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network development-celo --deployment-id development-celo ignition/modules/EngagementRewardsUpgrade.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
@@ -21,7 +22,7 @@
     "@nomicfoundation/hardhat-ignition-ethers": "^0.15.9",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "@nomicfoundation/hardhat-verify": "^2.0.12",
+    "@nomicfoundation/hardhat-verify": "^2",
     "@nomicfoundation/ignition-core": "^0.15.9",
     "@openzeppelin/contracts": "^5.2.0",
     "@openzeppelin/contracts-upgradeable": "^5.2.0",

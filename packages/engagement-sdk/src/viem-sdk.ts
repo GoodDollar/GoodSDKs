@@ -9,7 +9,7 @@ import { waitForTransactionReceipt } from "viem/actions"
 import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json"
 import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json"
 import { range, flatten } from "lodash"
-
+import { EngagementRewards as engagementRewardsABI } from "./abi/abis"
 export const DEV_REWARDS_CONTRACT = devdeployments[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
@@ -20,28 +20,6 @@ export const REWARDS_CONTRACT = prod?.[
 const BLOCKS_RANGE = BigInt(10000)
 const BLOCKS_AGO = BigInt(500000)
 const WAIT_DELAY = 5000 // 1 second delay
-
-//TODO:
-// create guide how to integrate claiming with/without signature
-// allow update app details screen with all the details
-//
-const engagementRewardsABI = parseAbi([
-  "function applyApp(address app, address rewardReceiver, uint8 userInviterPercentage, uint8 userPercentage, string description, string url, string email) external",
-  "function approve(address app) external",
-  "function canClaim(address app, address user) external view returns(bool)",
-  "function updateAppSettings(address app, address rewardReceiver, uint8 userInviterPercentage, uint8 userPercentage) external",
-  "function registeredApps(address) external view returns (address owner, address rewardReceiver, uint96 totalRewardsClaimed, uint32 registeredAt, uint32 lastResetAt, uint8 userAndInviterPercentage, uint8 userPercentage, bool isRegistered, bool isApproved, string description, string url, string email)",
-  "function appsStats(address) external view returns (uint96 numberOfRewards, uint96 totalAppRewards, uint96 totalUserRewards, uint96 totalInviterRewards)",
-  "function appClaim(address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
-  "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint8 userAndInviterPercentage, uint8 userPercentage) external returns (bool)",
-  "function eoaClaim(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
-  "function nonContractAppClaim(address app, address inviter, uint256 nonce, bytes memory userSignature, bytes memory appSignature) external returns (bool)",
-  "event AppApplied(address indexed app, address indexed owner, address rewardReceiver, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
-  "event AppApproved(address indexed app)",
-  "event AppSettingsUpdated(address indexed app, uint256 userAndInviterPercentage, uint256 userPercentage)",
-  "event RewardClaimed(address indexed app, address indexed user, address indexed inviter, uint256 appReward, uint256 userAmount, uint256 inviterAmount)",
-  "event RewardAmountUpdated(uint256 newAmount)",
-])
 
 export interface AppInfo {
   rewardReceiver: Address
@@ -309,43 +287,23 @@ export class EngagementRewardsSDK {
       ),
     ) as Awaited<ReturnType<P>>
   }
+
   async getPendingApps() {
-    const approvedApps = new Set<string>(await this.getRegisteredApps())
-    const appliedApps = await this.getAppliedApps()
-    return appliedApps.filter((app) => !approvedApps.has(app))
+    return (await this.getAppliedApps()).filter((_) => _.isApproved === false)
   }
 
   async getRegisteredApps() {
-    const approvedEvents = await this.getLogsBatches(
-      BLOCKS_RANGE,
-      BLOCKS_AGO,
-      (startBlock, endBlock) =>
-        this.publicClient.getContractEvents({
-          address: this.contractAddress,
-          abi: engagementRewardsABI,
-          eventName: "AppApproved",
-          fromBlock: BigInt(startBlock),
-          toBlock: BigInt(endBlock),
-        }),
-    )
-
-    return approvedEvents.map((_) => _.args.app).filter((_) => _ !== undefined)
+    return (await this.getAppliedApps()).filter((_) => _.isApproved === true)
   }
 
   async getAppliedApps() {
-    const applyEvents = await this.getLogsBatches(
-      BLOCKS_RANGE,
-      BLOCKS_AGO,
-      (startBlock, endBlock) =>
-        this.publicClient.getContractEvents({
-          address: this.contractAddress,
-          abi: engagementRewardsABI,
-          eventName: "AppApplied",
-          fromBlock: BigInt(startBlock),
-          toBlock: BigInt(endBlock),
-        }),
-    )
-    return applyEvents.map((_) => _.args.app).filter((_) => _ !== undefined)
+    const apps = await this.publicClient.readContract({
+      address: this.contractAddress,
+      abi: engagementRewardsABI,
+      functionName: "getAppliedApps",
+    })
+
+    return apps
   }
 
   async getAppRewards(app: Address) {

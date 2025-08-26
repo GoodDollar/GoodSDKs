@@ -144,6 +144,11 @@ const IntegrationGuide: React.FC = () => {
                     https://docs.gooddollar.org/for-developers/apis-and-sdks/identity-sybil-resistance
                   </a>
                 </li>
+                <li>
+                  <b>Note:</b> Only the user claiming the reward must be
+                  whitelisted. The inviter does <b>not</b> need to be
+                  whitelisted.
+                </li>
               </ul>
             </li>
             <li>
@@ -260,29 +265,36 @@ const IntegrationGuide: React.FC = () => {
         </CardContent>
       </Card>
 
+      <p className="text-base text-muted-foreground mb-4">
+        <b>Choose one integration method:</b> You must implement <b>either</b>{" "}
+        the Smart Contract Integration <b>or</b> the Client-Side Integration in
+        your app. Both methods are supported, but only one is required.
+      </p>
+
       <Tabs defaultValue="smart-contract">
         <TabsList className="border-b-0 bg-transparent flex justify-start gap-4 mb-6">
           <TabsTrigger
             value="smart-contract"
             className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
           >
-            Smart Contract Integration
+            Smart Contract + Client Side Integration
           </TabsTrigger>
           <TabsTrigger
             value="client"
             className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
           >
-            Client-Side Integration
+            Client-Side Only Integration
           </TabsTrigger>
           <TabsTrigger
             value="invite"
             className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
           >
-            Invite Link
+            Invite Link Example Integration
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="smart-contract" className="space-y-6">
+          {/* Integration-specific explanation */}
           <Card>
             <CardHeader>
               <CardTitle>Smart Contract Integration</CardTitle>
@@ -290,7 +302,46 @@ const IntegrationGuide: React.FC = () => {
                 Integrate directly through your smart contract
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <b>How it works:</b> Your app's smart contract calls the{" "}
+                <span className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-100 font-mono">
+                  appClaim
+                </span>{" "}
+                function on the EngagementRewards contract when a user completes
+                an action (e.g., wins a game or achieves something). The
+                contract verifies the action and submits the claim on-chain.
+                <br />
+                <b>Key points:</b>
+                <ul className="list-disc pl-6 mt-2">
+                  <li>
+                    <b>
+                      All reward logic and eligibility checks are enforced
+                      on-chain in your contract.
+                    </b>
+                  </li>
+                  <li>
+                    <b>User signatures</b> are only required for first-time
+                    registration or after re-applying your app.
+                  </li>
+                  <li>
+                    <b>Custom reward percentages</b> can be set dynamically by
+                    your contract logic
+                  </li>
+                  <li>
+                    <b>Gas fees</b> are paid by the user for each claim.
+                  </li>
+                  <li>
+                    <b>Frontend</b> only needs to call your contract; it does
+                    not interact with EngagementRewards directly.
+                  </li>
+                  <li>
+                    <b>Best for:</b> On-chain games, dApps with custom logic, or
+                    when you want all logic to be transparent and trustless.
+                  </li>
+                </ul>
+              </div>
+
               <div>
                 <h3 className="text-lg font-semibold mb-2">
                   1. Interface Definition
@@ -550,6 +601,7 @@ const GameComponent = () => {
         </TabsContent>
 
         <TabsContent value="client" className="space-y-6">
+          {/* Integration-specific explanation */}
           <Card>
             <CardHeader>
               <CardTitle>Client-Side Integration</CardTitle>
@@ -557,7 +609,46 @@ const GameComponent = () => {
                 Integrate using the engagement-sdk directly in your dApp
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <b>How it works:</b> Your frontend and backend use the
+                EngagementRewards SDK to check eligibility and submit claims
+                directly, without any custom smart contract. The backend signs
+                claims as the app.
+                <br />
+                <b>Key points:</b>
+                <ul className="list-disc pl-6 mt-2">
+                  <li>
+                    <b>
+                      All reward logic and eligibility checks happen off-chain
+                    </b>{" "}
+                    in your frontend/backend using the SDK.
+                  </li>
+                  <li>
+                    <b>User signatures</b> are required for first-time
+                    registration or after re-applying your app, and are
+                    generated in the frontend.
+                  </li>
+                  <li>
+                    <b>App signatures</b> are generated by your backend using
+                    your app's private key.
+                  </li>
+                  <li>
+                    <b>No custom smart contract is needed</b>; you interact
+                    directly with the EngagementRewards contract via the SDK.
+                  </li>
+                  <li>
+                    <b>Gas fees</b> are still paid by the user for the claim
+                    transaction, but all business logic is off-chain.
+                  </li>
+                  <li>
+                    <b>Best for:</b> Apps without custom on-chain logic,
+                    web2-style apps, or when you want to minimize smart contract
+                    development.
+                  </li>
+                </ul>
+              </div>
+
               <div>
                 <h3 className="text-lg font-semibold mb-2">1. SDK Setup</h3>
                 <CodeBlock

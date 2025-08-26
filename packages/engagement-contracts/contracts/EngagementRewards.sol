@@ -56,6 +56,8 @@ contract EngagementRewards is
         string description;
         string url;
         string email;
+        address app;
+        address signer; // 20 bytes
     }
 
     struct AppStats {
@@ -148,6 +150,13 @@ contract EngagementRewards is
         _grantRole(ADMIN_ROLE, msg.sender);
     }
 
+    function upgrade(address[] memory apps) external reinitializer(2) {
+        for (uint256 i = 0; i < apps.length; i++) {
+            appliedApps.push(apps[i]);
+            registeredApps[apps[i]].app = apps[i];
+        }
+    }
+
     function applyApp(
         address app,
         address rewardReceiver,
@@ -200,6 +209,7 @@ contract EngagementRewards is
         } else {
             appliedApps.push(app);
             // New registration
+            appliedApps.push(app);
             registeredApps[app] = AppInfo({
                 isRegistered: true,
                 isApproved: false,
@@ -212,7 +222,9 @@ contract EngagementRewards is
                 userPercentage: uint8(userPercentage),
                 description: description,
                 url: url,
-                email: email
+                email: email,
+                app: app,
+                signer: address(0)
             });
         }
 
@@ -238,6 +250,12 @@ contract EngagementRewards is
         registeredApps[app].isApproved = true;
 
         emit AppApproved(app);
+    }
+
+    function setAppSigner(address app, address signer) external {
+        require(msg.sender == registeredApps[app].owner, "Not app owner");
+        require(signer != address(0), "Invalid signer address");
+        registeredApps[app].signer = signer;
     }
 
     function updateAppSettings(
@@ -354,7 +372,18 @@ contract EngagementRewards is
         bytes32 hash = _hashTypedDataV4(structHash);
 
         // Change ECDSA recover to SignatureChecker
-        return SignatureChecker.isValidSignatureNow(app, hash, signature);
+        return
+            SignatureChecker.isValidSignatureNow(app, hash, signature) ||
+            SignatureChecker.isValidSignatureNow(
+                registeredApps[app].signer,
+                hash,
+                signature
+            ) ||
+            SignatureChecker.isValidSignatureNow(
+                registeredApps[app].owner,
+                hash,
+                signature
+            );
     }
 
     function _validateSignature(
@@ -595,6 +624,12 @@ contract EngagementRewards is
         for (uint256 i = 0; i < length; i++) {
             apps[i] = registeredApps[appliedApps[i]];
         }
+    }
+
+    function overwriteAppDetails(
+        AppInfo memory app
+    ) external onlyRole(ADMIN_ROLE) {
+        registeredApps[app.app] = app;
     }
 
     function _authorizeUpgrade(
