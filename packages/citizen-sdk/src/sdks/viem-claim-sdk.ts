@@ -19,6 +19,7 @@ import {
 } from "../constants"
 import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
+import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -58,7 +59,7 @@ export class ClaimSDK {
     publicClient,
     walletClient,
     identitySDK,
-    rdu = window.location.href,
+    rdu = typeof window !== "undefined" ? window.location.href : "",
     env = "production",
   }: ClaimSDKOptions) {
     if (!walletClient.account) {
@@ -223,10 +224,11 @@ export class ClaimSDK {
    * 4. If whitelisted and can claim, checks if the user has sufficient balance.
    * 5. If the user cannot claim due to low balance, triggers a faucet request and waits.
    * 6. If whitelisted and can claim, proceeds to call the claim function on the UBIScheme contract.
+   * @param txConfirm - Optional callback to confirm transactions before execution.
    * @returns The transaction receipt if the claim is successful.
    * @throws If the user is not whitelisted, not entitled to claim, balance check fails, or claim transaction fails.
    */
-  async claim(): Promise<TransactionReceipt | any> {
+  async claim(txConfirm?: (message: string) => void | Promise<void>): Promise<TransactionReceipt | any> {
     const userAddress = this.account
 
     // 1. Check whitelisting status
@@ -244,7 +246,7 @@ export class ClaimSDK {
     }
 
     // 3. Ensure the user has sufficient balance to claim
-    const canClaim = await this.checkBalanceWithRetry()
+    const canClaim = await this.checkBalanceWithRetry(txConfirm)
     if (!canClaim) {
       throw new Error("Failed to meet balance threshold after faucet request.")
     }
@@ -328,55 +330,39 @@ export class ClaimSDK {
   }
 
   /**
-   * Triggers a faucet request to top up the user's balance.
-   * @throws If the faucet request fails.
-   */
-  async triggerFaucet(): Promise<void> {
-    const { env } = this
-    const { backend } = Envs[env as keyof typeof Envs]
+    * Triggers a faucet request to top up the user's balance.
+    * @param txConfirm - Optional callback to confirm transactions before execution.
+    * @throws If the faucet request fails.
+    *
+    * NOTE: Upgraded to contract-first flow:
+    *  - Try on-chain faucet call (user signs) via `faucet.topWallet(address)`
+    *  - Guard against gas>topping griefing and low native balance for publishing the tx
+    *  - If on-chain path fails (or cannot sign/publish), fallback to backend `/verify/topWallet`
+    *  - Throttled to at most once per hour per chain (localStorage)
+    */
+  async triggerFaucet(txConfirm?: (message: string) => void | Promise<void>): Promise<void> {
+    // Call the txConfirm callback before executing the faucet transaction
+    if (txConfirm) {
+      const message = "A manual transaction needs to be signed in order to claim UBI. Please confirm the transaction in your wallet to proceed with the faucet request."
+      await txConfirm(message)
+    }
 
-    const body = JSON.stringify({
-      chainId: this.walletClient.chain?.id,
+    // Delegate to shared utility to keep SDK lean while preserving this docstring.
+    const chainId = this.walletClient.chain?.id!
+    const result = await triggerFaucetUtil({
+      chainId,
       account: this.account,
+      publicClient: this.publicClient,
+      walletClient: this.walletClient,
+      faucetAddress: this.faucetAddress,
+      env: this.env,
+      throttleMs: 60 * 60 * 1000, // 1 hour
     })
 
-    const response = await fetch(`${backend}/verify/topWallet`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    })
-
-    if (!response.ok) {
-      const errorMessage = await response.text()
-      throw new Error(`Faucet request failed: ${errorMessage}`)
+    // Optional: you can surface `result` to UI via an event/callback if desired.
+    if (result === "error") {
+      throw new Error("Faucet request failed")
     }
-  }
-
-  /**
-   * Checks if the user has sufficient balance to claim UBI.
-   * @returns True if the user can claim, false otherwise.
-   * @throws If gas price cannot be determined or balance check fails.
-   */
-  async canClaim(): Promise<boolean> {
-    const { minTopping, toppingAmount } = await this.getFaucetParameters()
-    const chainId = this.walletClient.chain?.id
-
-    const gasPrice = getGasPrice(chainId)
-    if (!gasPrice) {
-      throw new Error(
-        "Cannot determine gasPrice for the current connected chain.",
-      )
-    }
-
-    const minBalance = (chainId === 42220 ? 250000n : 150000n) * gasPrice
-    const minThreshold =
-      (toppingAmount * (100n - BigInt(minTopping))) / 100n || minBalance
-
-    const balance = await this.publicClient.getBalance({
-      address: this.account,
-    })
-
-    return balance >= minThreshold
   }
 
   /**
@@ -405,19 +391,45 @@ export class ClaimSDK {
 
   /**
    * Checks the user's balance with retries, triggering a faucet request if needed.
+   * @param txConfirm - Optional callback to confirm transactions before execution.
    * @returns True if the balance meets the threshold, false otherwise.
    * @throws If the maximum retries are exceeded or faucet request fails.
    */
-  async checkBalanceWithRetry(): Promise<boolean> {
+  async checkBalanceWithRetry(txConfirm?: (message: string) => void | Promise<void>): Promise<boolean> {
     const maxRetries = 5
     const retryDelay = 5000
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const canClaim = await this.canClaim()
-      if (canClaim) return true
+      // Call the txConfirm callback before each faucet attempt if needed
+      if (txConfirm && attempt === 1) {
+        const message = "You might have to sign two transactions if you need additional gas to perform your UBI claim. "
+        await txConfirm(message)
+      }
 
-      await this.triggerFaucet()
-      await new Promise((resolve) => setTimeout(resolve, retryDelay))
+      const result = await triggerFaucetUtil({
+        chainId: this.walletClient.chain?.id!,
+        account: this.account,
+        publicClient: this.publicClient,
+        walletClient: this.walletClient,
+        faucetAddress: this.faucetAddress,
+        env: this.env,
+        throttleMs: 60 * 60 * 1000, // 1 hour
+      })
+
+      // If we got "skipped" it means balance is sufficient or already topped recently
+      if (result === "skipped") return true
+
+      // If we successfully topped up, return true
+      if (result === "topped_via_contract" || result === "topped_via_api") return true
+
+      // If error and not last attempt, wait and retry
+      if (result === "error" && attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelay))
+        continue
+      }
+
+      // If error on last attempt, return false
+      if (result === "error") return false
     }
 
     return false
