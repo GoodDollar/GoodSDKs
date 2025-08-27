@@ -20,7 +20,7 @@ import { Loader2 } from "lucide-react"
 import { TruncatedAddress } from "./ui/TruncatedAddress"
 
 // Derive AppInfo type from EngagementRewardsSDK type
-type AppInfo = Awaited<
+export type AppInfo = Awaited<
   ReturnType<EngagementRewardsSDK["getRegisteredApps"]>
 >[number]
 
