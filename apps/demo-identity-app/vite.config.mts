@@ -13,8 +13,6 @@ if (process.env.HTTPS === "true") {
   https = false;
 }
 
-
-
 export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom", "wagmi", "viem"],
@@ -27,6 +25,9 @@ export default defineConfig({
   },
   server: {
     https,
+    allowedHosts: [
+      "specifies-governmental-bryant-signals.trycloudflare.com" 
+    ],
   },
   plugins: [react()],
   define: {
@@ -34,7 +35,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: ["@goodsdks/citizen-sdk", "viem"]
-    }
-  }
+      external: ["@goodsdks/citizen-sdk", "viem"],
+    },
+  },
 });
