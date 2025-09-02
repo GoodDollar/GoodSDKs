@@ -1,29 +1,23 @@
 import { Account, createWalletClient, http, PublicClient, Address } from "viem";
 import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractAddresses, contractEnv } from "../constants";
-import { sdk } from '@farcaster/miniapp-sdk';
+import { sdk } from "@farcaster/miniapp-sdk";
 
-/**
- * Fallback detection using context check
- */
+// new helper for the fallback context check
 async function fallbackDetect(): Promise<boolean> {
   try {
-    const context = await sdk.context;
-    return !!(context.location && context.location.type !== undefined);
+    const ctx = await sdk.context;
+    return !!(ctx.location && ctx.location.type != null);
   } catch {
     return false;
   }
 }
 
-/**
- * Detects if the SDK is running inside a Farcaster miniapp using the official SDK
- */
-export async function isInFarcasterMiniApp(timeoutMs: number = 100): Promise<boolean> {
-  if (typeof window === "undefined") return false;
-  
+export async function isInFarcasterMiniApp(timeoutMs = 100): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
   try {
     return await sdk.isInMiniApp();
-  } catch (error) {
-    console.warn('Farcaster SDK detection failed, using fallback:', error);
+  } catch {
+    console.warn('SDK failed, trying context fallback…');
     return fallbackDetect();
   }
 }
@@ -37,25 +31,19 @@ export function isInFarcasterMiniAppSync(): boolean {
   
   try {
     // Basic detection without the async SDK call
-    return (
-      window.location.href.includes("farcaster") ||
-      window.location.href.includes("miniapp") ||
-      // Check if we're in an iframe which is common for miniapps
-      window.self !== window.top
-    );
+    // Only check if we're in an iframe which is common for miniapps
+    return window.self !== window.top;
   } catch (error) {
     return false;
   }
 }
 
-/**
- * Opens a URL using Farcaster's official SDK capabilities
- * @param url - The URL to open
- * @param fallbackToNewTab - Whether to open in new tab as fallback (default: true)
- */
-export async function openUrlInFarcaster(url: string, fallbackToNewTab: boolean = true): Promise<void> {
-  if (typeof window === "undefined") {
-    throw new Error("URL opening is only supported in browser environments.");
+export async function openUrlInFarcaster(
+  url: string,
+  fallbackToNewTab = true
+): Promise<void> {
+  if (typeof window === 'undefined') {
+    throw new Error('Browser only');
   }
 
   if (await isInFarcasterMiniApp()) {
@@ -63,13 +51,12 @@ export async function openUrlInFarcaster(url: string, fallbackToNewTab: boolean 
       await sdk.actions.ready();
       await sdk.actions.openUrl(url);
       return;
-    } catch (error) {
-      console.warn("Failed to use Farcaster SDK openUrl, falling back:", error);
+    } catch {
+      console.warn('SDK.openUrl failed, falling back…');
     }
   }
 
-  // Fallback to standard navigation
-  fallbackToNewTab ? window.open(url, "_blank") : (window.location.href = url);
+  fallbackToNewTab ? window.open(url, '_blank') : (window.location.href = url);
 }
 
 /**

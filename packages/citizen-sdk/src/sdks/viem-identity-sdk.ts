@@ -21,8 +21,7 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
-import { createUniversalLinkCallback } from "../utils/auth"
-import { farcasterNavigation } from "../utils/farcaster-navigation"
+import { createUniversalLinkCallback, isInFarcasterMiniApp, openUrlInFarcaster } from "../utils/auth"
 
 import type {
   IdentityContract,
@@ -308,6 +307,33 @@ export class IdentitySDK {
     forceFarcasterNavigation?: boolean,
   ): Promise<void> {
     const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
-    await farcasterNavigation.navigateToFaceVerification(fvLink, popupMode, callbackUrl, forceFarcasterNavigation)
+    
+    // Force popup mode for Farcaster since it always opens in new tab/window
+    const shouldUseFarcaster = forceFarcasterNavigation ?? await isInFarcasterMiniApp();
+    const effectivePopupMode = shouldUseFarcaster ? true : popupMode;
+    
+    // Enhance the link with universal link callback if provided
+    let enhancedLink = fvLink;
+    if (callbackUrl) {
+      const universalCallbackUrl = createUniversalLinkCallback(callbackUrl, {
+        source: "gooddollar_identity_verification"
+      });
+      
+      const url = new URL(fvLink);
+      url.searchParams.set(effectivePopupMode ? "cbu" : "rdu", universalCallbackUrl);
+      enhancedLink = url.toString();
+    }
+
+    // Use smart navigation based on environment
+    if (shouldUseFarcaster) {
+      await openUrlInFarcaster(enhancedLink, true);
+    } else {
+      // Standard navigation
+      if (effectivePopupMode) {
+        window.open(enhancedLink, "_blank");
+      } else {
+        window.location.href = enhancedLink;
+      }
+    }
   }
 }
