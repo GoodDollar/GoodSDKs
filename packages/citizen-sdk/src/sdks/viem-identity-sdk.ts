@@ -6,6 +6,7 @@ import {
   WalletClient,
   SimulateContractParameters,
   WalletActions,
+  LocalAccount,
   zeroAddress,
 } from "viem"
 
@@ -97,6 +98,7 @@ export class IdentitySDK {
 
   /**
    * Submits a transaction and waits for its receipt.
+   * Handles both regular and custodial wallet cases.
    * @param params - Parameters for simulating the contract call.
    * @param onHash - Optional callback to receive the transaction hash.
    * @returns The transaction receipt.
@@ -107,17 +109,19 @@ export class IdentitySDK {
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
     try {
-      if (!this.account) throw new Error("No active wallet address found.")
+      // Handle both regular and custodial wallet cases
+      const account = this.walletClient.account?.address || this.account
+      if (!account) throw new Error("No active wallet address found.")
 
       const { request } = await this.publicClient.simulateContract({
-        account: this.account,
+        account,
         ...params,
       })
 
       const hash = await this.walletClient.writeContract(request)
       onHash?.(hash)
 
-      return waitForTransactionReceipt(this.publicClient, { hash })
+      return waitForTransactionReceipt(this.publicClient as any, { hash })
     } catch (error: any) {
       console.error("submitAndWait Error:", error)
       throw new Error(`Failed to submit transaction: ${error.message}`)
@@ -203,10 +207,27 @@ export class IdentitySDK {
       const nonce = Math.floor(Date.now() / 1000).toString()
 
       const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", address)
-      const fvSig = await this.walletClient.signMessage({
-        account: address,
-        message: fvSigMessage,
-      })
+      
+      // Handle both regular and LocalAccount signing for Celo RPC compatibility
+      let fvSig: string;
+      const account = this.walletClient.account;
+      
+      if (account && 'signMessage' in account) {
+        // Local account - sign directly to avoid Celo RPC limitations
+        fvSig = await (account as LocalAccount).signMessage({
+          message: fvSigMessage,
+        })
+      } else {
+        // Fallback to wallet client signing (might fail on Celo RPC)
+        try {
+          fvSig = await this.walletClient.signMessage({
+            account: address,
+            message: fvSigMessage,
+          })
+        } catch (rpcError: any) {
+          throw new Error(`Message signing failed: Celo RPC doesn't support personal_sign. Use a local account instead. ${rpcError.message}`)
+        }
+      }
 
       const { identityUrl } = Envs[this.env]
       if (!identityUrl) {

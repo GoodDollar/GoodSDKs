@@ -233,7 +233,8 @@ export class ClaimSDK {
     const { isWhitelisted } =
       await this.identitySDK.getWhitelistedRoot(userAddress)
     if (!isWhitelisted) {
-      await this.fvRedirect()
+      // Use the new navigation method that handles Farcaster automatically
+      await this.identitySDK.navigateToFaceVerification(false, this.rdu, 42220)
       throw new Error("User requires identity verification.")
     }
 
@@ -263,15 +264,6 @@ export class ClaimSDK {
       }
       throw new Error(`Claim failed: ${error.message}`)
     }
-  }
-
-  /**
-   * Redirects the user through the face-verification flow with Farcaster support.
-   * @throws If face verification redirect fails.
-   */
-  private async fvRedirect(): Promise<void> {
-    // Use the new navigation method that handles Farcaster automatically
-    await this.identitySDK.navigateToFaceVerification(false, this.rdu, 42220)
   }
 
   /**

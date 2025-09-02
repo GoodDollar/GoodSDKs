@@ -12,7 +12,6 @@ if (process.env.HTTPS === "true") {
 } else {
   https = false;
 }
-
 export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom", "wagmi", "viem"],
@@ -26,7 +25,7 @@ export default defineConfig({
   server: {
     https,
     allowedHosts: [
-      "specifies-governmental-bryant-signals.trycloudflare.com" 
+      "mess-gather-nearby-tough.trycloudflare.com" // I Added this for farcaster preview to allow the url
     ],
   },
   plugins: [react()],

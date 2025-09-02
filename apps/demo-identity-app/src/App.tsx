@@ -14,12 +14,13 @@ import { config } from "@tamagui/config/v3"
 import { useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
-import { handleVerificationResponseSync, isInFarcasterMiniApp, isInFarcasterMiniAppSync } from "@goodsdks/citizen-sdk"
+import { handleVerificationResponse, handleVerificationResponseSync, isInFarcasterMiniApp, isInFarcasterMiniAppSync } from "@goodsdks/citizen-sdk"
 
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
 import { SigningModal } from "./components/SigningModal"
 import { ClaimButton } from "./components/ClaimButton"
+import { sdk } from '@farcaster/miniapp-sdk'
 
 const tamaguiConfig = createTamagui(config)
 
@@ -42,6 +43,16 @@ const App: React.FC = () => {
   const { sdk: identitySDK } = useIdentitySDK("development")
 
   useEffect(() => {
+    // Initialize Farcaster SDK
+    const initializeFarcasterSDK = async () => {
+      try {
+        await sdk.actions.ready()
+        console.log('Farcaster SDK initialized successfully')
+      } catch (error) {
+        console.warn('Failed to initialize Farcaster SDK:', error)
+      }
+    }
+
     // Check if running in Farcaster miniapp mode (async)
     const checkFarcasterMode = async () => {
       try {
@@ -54,22 +65,49 @@ const App: React.FC = () => {
       }
     }
     
+    initializeFarcasterSDK()
     checkFarcasterMode()
     
-    // Use the sync version for initial URL check
-    const verificationResult = handleVerificationResponseSync()
-    
-    if (verificationResult.isVerified) {
-      setIsVerified(true)
-      // Clean up URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname)
+    // Enhanced verification check with on-chain support for popup mode (CBU)
+    const checkVerification = async () => {
+      try {
+        // Use async version for on-chain verification support (needed for popup mode)
+        const verificationResult = await handleVerificationResponse(
+          undefined, // Use current URL
+          address, // Pass wallet address for on-chain verification
+          identitySDK?.publicClient, // Pass public client for on-chain checks
+          undefined, // Use default chain
+          "development" // Use development environment
+        )
+        
+        if (verificationResult.isVerified) {
+          setIsVerified(true)
+          // Clean up URL parameters
+          window.history.replaceState({}, document.title, window.location.pathname)
+        }
+        
+        // Log additional verification parameters for debugging
+        if (verificationResult.params.size > 0) {
+          console.log("Verification response parameters:", Object.fromEntries(verificationResult.params))
+        }
+        
+        // Log on-chain verification status for debugging
+        if (verificationResult.onChainVerified !== undefined) {
+          console.log("On-chain verification status:", verificationResult.onChainVerified)
+        }
+      } catch (error) {
+        console.warn("Verification check failed:", error)
+        // Fallback to sync version if async fails
+        const syncResult = handleVerificationResponseSync()
+        if (syncResult.isVerified) {
+          setIsVerified(true)
+          window.history.replaceState({}, document.title, window.location.pathname)
+        }
+      }
     }
     
-    // Log additional verification parameters for debugging
-    if (verificationResult.params.size > 0) {
-      console.log("Verification response parameters:", Object.fromEntries(verificationResult.params))
-    }
-  }, [location.search])
+    checkVerification()
+  }, [location.search, address, identitySDK])
 
   //ref: https://github.com/wevm/wagmi/discussions/1806#discussioncomment-12130996
   // does not react to switch account when triggered from metamask.

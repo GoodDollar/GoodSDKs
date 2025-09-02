@@ -1,13 +1,10 @@
-import { isInFarcasterMiniApp, createUniversalLinkCallback } from "./auth";
-import { sdk } from '@farcaster/miniapp-sdk';
+import { isInFarcasterMiniApp, createUniversalLinkCallback, openUrlInFarcaster } from "./auth";
 
 /**
  * Shared navigation utility for Farcaster miniapp integration
  * Combines universal link generation and smart navigation logic
  */
 export class FarcasterNavigationHelper {
-
-
   /**
    * Navigate to face verification with automatic Farcaster detection
    * @param fvLink - The face verification link to navigate to
@@ -38,7 +35,7 @@ export class FarcasterNavigationHelper {
 
     // Use smart navigation based on environment
     if (shouldUseFarcaster) {
-      await this.openUrlInFarcaster(enhancedLink);
+      await openUrlInFarcaster(enhancedLink, true);
     } else {
       // Standard navigation
       if (effectivePopupMode) {
@@ -46,20 +43,6 @@ export class FarcasterNavigationHelper {
       } else {
         window.location.href = enhancedLink;
       }
-    }
-  }
-
-  /**
-   * Open URL using Farcaster SDK with fallback
-   */
-  private async openUrlInFarcaster(url: string): Promise<void> {
-    try {
-      await sdk.actions.ready();
-      await sdk.actions.openUrl(url);
-    } catch (error) {
-      console.warn("Failed to use Farcaster SDK openUrl, falling back:", error);
-      // Fallback to popup since Farcaster context expects new window
-      window.open(url, "_blank");
     }
   }
 }
