@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import path from "path";
 import react from "@vitejs/plugin-react";
 import fs from "fs";
+import { getExternalDependencies, getGlobalsConfig } from "../../packages/build-config";
 
 let https: any;
 if (process.env.HTTPS === "true") {
@@ -34,7 +35,16 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: ["@goodsdks/citizen-sdk", "viem"],
+      external: getExternalDependencies([
+        "@goodsdks/citizen-sdk",
+        "viem"
+      ]),
+      output: {
+        globals: getGlobalsConfig({
+          "@goodsdks/citizen-sdk": "GoodSDKs",
+          "viem": "viem"
+        })
+      }
     },
   },
 });
