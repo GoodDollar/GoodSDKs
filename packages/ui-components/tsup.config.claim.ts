@@ -1,5 +1,4 @@
 import { defineConfig } from "tsup"
-import { getExternalDependencies } from "../build-config"
 
 export default defineConfig({
   entry: ["src/index.ts"],
@@ -13,8 +12,5 @@ export default defineConfig({
   minify: true,
   target: "ESNext",
   outDir: "dist",
-  external: getExternalDependencies([
-    "@goodsdks/citizen-sdk",
-    "viem"
-  ]),
+
 })
