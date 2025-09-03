@@ -1936,10 +1936,26 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@goodsdks/savings-sdk@npm:*, @goodsdks/savings-sdk@workspace:packages/savings-sdk":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/savings-sdk@workspace:packages/savings-sdk"
+  dependencies:
+    "@repo/typescript-config": "workspace:*"
+    tsup: "npm:^8.3.5"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+    wagmi: "npm:latest"
+  peerDependencies:
+    viem: "*"
+    wagmi: "*"
+  languageName: unknown
+  linkType: soft
+
 "@goodsdks/savings-widget@workspace:packages/savings-widget":
   version: 0.0.0-use.local
   resolution: "@goodsdks/savings-widget@workspace:packages/savings-widget"
   dependencies:
+    "@goodsdks/savings-sdk": "npm:*"
     "@repo/typescript-config": "workspace:*"
     lit: "npm:^3.1.0"
     tsup: "npm:^8.3.5"

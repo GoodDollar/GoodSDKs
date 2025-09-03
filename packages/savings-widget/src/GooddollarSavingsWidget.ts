@@ -1,25 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { createWalletClient, createPublicClient, parseAbi, custom, PublicClient, Transport, WalletClient, http, formatEther, parseEther } from 'viem'
+import { createWalletClient, createPublicClient, custom, PublicClient, WalletClient, http, formatEther, parseEther } from 'viem'
 import { celo } from 'viem/chains';
-
-const STAKING_CONTRACT_ABI = parseAbi([
-  'function balanceOf(address account) view returns (uint256)',
-  'function earned(address account) view returns (uint256)',
-  'function totalSupply() view returns (uint256)',
-  'function periodFinish() view returns (uint256)',
-  'function getEffectiveRewardRate() view returns (uint256)',
-  'function stake(uint256 amount)',
-  'function withdraw(uint256 amount)',
-  'function getReward()'
-]);
-
-const STAKING_CONTRACT_ADDRESS = '0x799a23dA264A157Db6F9c02BE62F82CE8d602A45' as const;
-const GDOLLAR_CONTRACT_ADDRESS = '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A' as const;
-const stakingContract = {
-  address: STAKING_CONTRACT_ADDRESS,
-  abi: STAKING_CONTRACT_ABI,
-} as const;
+import { GooddollarSavingsSDK } from '@goodsdks/savings-sdk';
 
 @customElement('gooddollar-savings-widget')
 export class GooddollarSavingsWidget extends LitElement {
@@ -297,9 +280,6 @@ export class GooddollarSavingsWidget extends LitElement {
   userWeeklyRewards: bigint = BigInt(0);
 
   @state()
-  rewardRate: bigint = BigInt(0);
-
-  @state()
   annualAPR: number = 0;
 
   @state()
@@ -318,7 +298,8 @@ export class GooddollarSavingsWidget extends LitElement {
   inputError: string = '';
 
   private walletClient: WalletClient | null = null;
-  private publicClient: PublicClient<Transport, typeof celo> | null = null;
+  private publicClient: PublicClient | null = null;
+  private sdk: GooddollarSavingsSDK | null = null;
   private userAddress: string | null = null;
 
   connectedCallback(): void {
@@ -459,15 +440,16 @@ export class GooddollarSavingsWidget extends LitElement {
       this.publicClient = createPublicClient({
         chain: celo,
         transport: http()
-      });
+      }) as unknown as PublicClient;
     }
-    await this.loadStats();
 
     if (this.web3Provider && this.web3Provider.isConnected) {
       this.walletClient = createWalletClient({
         chain: celo,
         transport: custom(this.web3Provider)
       });
+      this.sdk = new GooddollarSavingsSDK(this.publicClient!, this.walletClient);
+      await this.loadStats();
 
       const accounts = await this.web3Provider.request({ method: 'eth_accounts' });
       if (accounts.length > 0) {
@@ -476,45 +458,33 @@ export class GooddollarSavingsWidget extends LitElement {
       } else {
         this.resetUserStats();
       }
+    } else {
+      this.sdk = new GooddollarSavingsSDK(this.publicClient);
+      await this.loadStats();
     }
   }
 
   private async loadStats() {
-    if (!this.publicClient) return;
-
+    if (!this.sdk) return;
     try {
-      const [totalSupply, periodFinish, effectiveRewardRate] = await Promise.all([
-        this.publicClient.readContract({...stakingContract, functionName: 'totalSupply'}),
-        this.publicClient.readContract({...stakingContract, functionName: 'periodFinish'}),
-        this.publicClient.readContract({...stakingContract, functionName: 'getEffectiveRewardRate'}),
-      ]);
-
-      this.totalStaked = totalSupply;
-      const isFinished = periodFinish > 0 && periodFinish < Math.floor(Date.now() / 1000);
-      this.rewardRate = isFinished ? 0n : effectiveRewardRate;
-      const secondsInYear = BigInt(365 * 24 * 60 * 60);
-      this.annualAPR = this.toEtherNumber(this.rewardRate * secondsInYear) * 100 / this.toEtherNumber(totalSupply);
+      const globalStats = await this.sdk.getGlobalStats();
+      this.totalStaked = globalStats.totalStaked;
+      this.annualAPR = globalStats.annualAPR;
     } catch (error) {
-      console.error('Error loading contract data:', error);
+      console.error('Error loading global stats:', error);
     }
   }
 
   private async loadUserStats() {
-    if (!this.publicClient || !this.userAddress) return;
-
+    if (!this.sdk || !this.userAddress) return;
     try {
-      const [balance, staked, earned] = await Promise.all([
-        this.publicClient.readContract({address: GDOLLAR_CONTRACT_ADDRESS, abi: STAKING_CONTRACT_ABI, functionName: 'balanceOf', args: [this.userAddress as `0x${string}`]}),
-        this.publicClient.readContract({...stakingContract, functionName: 'balanceOf', args: [this.userAddress as `0x${string}`]}),
-        this.publicClient.readContract({...stakingContract, functionName: 'earned', args: [this.userAddress as `0x${string}`]}),
-      ]);
-
-      this.walletBalance = balance;
-      this.currentStake = staked;
-      this.unclaimedRewards = earned;
-      this.userWeeklyRewards = this.rewardRate * BigInt(7 * 24 * 60 * 60) * this.currentStake / this.totalStaked;
+      const userStats = await this.sdk.getUserStats()
+      this.walletBalance = userStats.walletBalance;
+      this.currentStake = userStats.currentStake;
+      this.unclaimedRewards = userStats.unclaimedRewards;
+      this.userWeeklyRewards = userStats.userWeeklyRewards;
     } catch (error) {
-      console.error('Error loading contract data:', error);
+      console.error('Error loading user stats:', error);
     }
   }
   private resetUserStats() {
@@ -549,7 +519,7 @@ export class GooddollarSavingsWidget extends LitElement {
   }
 
   handleInputChange(e: Event) {
-     const input = e.target as HTMLInputElement;
+    const input = e.target as HTMLInputElement;
     this.inputAmount = input.value;
     this.validateInput();
   }
@@ -601,7 +571,7 @@ export class GooddollarSavingsWidget extends LitElement {
   }
 
   async handleStake() {
-    if (!this.walletClient || !this.userAddress || !this.publicClient) return;
+    if (!this.sdk || !this.userAddress) return;
     this.validateInput(true);
     if (this.inputError) {
       return;
@@ -609,17 +579,8 @@ export class GooddollarSavingsWidget extends LitElement {
 
     try {
       this.txLoading = true;
-
       const amount = parseEther(this.inputAmount);
-      const { request } = await this.publicClient.simulateContract({
-        ...stakingContract,
-        account: this.userAddress as `0x${string}`,
-        functionName: 'stake',
-        args: [amount],
-      })
-      const hash = await this.walletClient.writeContract(request)
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
-
+      const receipt = await this.sdk.stake(amount);
       if (receipt.status === 'success') {
         await this.refreshData();
         this.inputAmount = '0.0';
@@ -633,7 +594,7 @@ export class GooddollarSavingsWidget extends LitElement {
   }
 
   async handleUnstake() {
-    if (!this.walletClient || !this.userAddress || !this.publicClient) return;
+    if (!this.sdk || !this.userAddress) return;
     this.validateInput(true);
     if (this.inputError) {
       return;
@@ -641,18 +602,8 @@ export class GooddollarSavingsWidget extends LitElement {
 
     try {
       this.txLoading = true;
-
       const amount = parseEther(this.inputAmount);
-      const { request } = await this.publicClient.simulateContract({
-        ...stakingContract,
-        account: this.userAddress as `0x${string}`,
-        functionName: 'withdraw',
-        args: [amount],
-      })
-      const hash = await this.walletClient.writeContract(request)
-
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
-
+      const receipt = await this.sdk.unstake(amount);
       if (receipt.status === 'success') {
         await this.refreshData();
         this.inputAmount = '0.0';
@@ -666,20 +617,11 @@ export class GooddollarSavingsWidget extends LitElement {
   }
 
   async handleClaim() {
-    if (!this.walletClient || !this.userAddress || !this.publicClient) return;
+    if (!this.sdk || !this.userAddress) return;
 
     try {
       this.isClaiming = true;
-
-      const { request } = await this.publicClient.simulateContract({
-        ...stakingContract,
-        account: this.userAddress as `0x${string}`,
-        functionName: 'getReward',
-      })
-      const hash = await this.walletClient.writeContract(request)
-
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
-
+      const receipt = await this.sdk.claimReward();
       if (receipt.status === 'success') {
         await this.refreshData();
       }

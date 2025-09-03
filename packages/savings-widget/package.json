@@ -11,6 +11,7 @@
   "main": "./dist/index.global.js",
   "module": "./dist/index.js",
   "devDependencies": {
+    "@goodsdks/savings-sdk": "*",
     "@repo/typescript-config": "workspace:*",
     "tsup": "^8.3.5",
     "typescript": "latest"
