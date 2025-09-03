@@ -22,6 +22,11 @@ Can be used in any website, for a quick setup:
     <gooddollar-savings-widget id="savingsWidget"></gooddollar-savings-widget>
     <script src="path/to/gooddollar-savings-widget.global.js"></script>
     <script type="module">
+      /*
+      // initialize appKit
+      const appKit = createAppKit({
+        ...
+      });*/
       customElements.whenDefined("gooddollar-savings-widget").then(() => {
         const savingsWidget = document.getElementById("savingsWidget")
 
@@ -30,10 +35,19 @@ Can be used in any website, for a quick setup:
             //appKit.open();
         };
 
-        //set web3Provider when it is ready
-        savingsWidget.web3Provider = web3Provider;
+        // Subscribe to account changes to wire provider
+        appKit.subscribeAccount((accountState: any) => {
+            const isConnected = !!accountState?.isConnected;
+            if (!savingsWidget) return;
+            if (isConnected) {
+                const provider = (appKit.getProvider as any)('eip155') || appKit.getWalletProvider();
+                savingsWidget.web3Provider = provider as any;
+            } else {
+                savingsWidget.web3Provider = null;
+            }
+        }, 'eip155');
 
-      })
+      });
     </script>
   </body>
 </html>
