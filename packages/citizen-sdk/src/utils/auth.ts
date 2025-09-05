@@ -202,6 +202,7 @@ export function handleVerificationResponseSync(url?: string): {
 
 /**
  * Creates a universal link compatible callback URL for mobile/native app support
+ * Enhanced for Farcaster miniapp compatibility with proper sub-path handling
  * @param baseUrl - The base callback URL
  * @param additionalParams - Additional parameters to include
  * @returns A universal link compatible URL
@@ -218,6 +219,14 @@ export function createUniversalLinkCallback(
     return baseUrl;
   }
   
+  // For Farcaster miniapps, ensure the URL structure is compatible
+  // Add a sub-path for verification callback if not already present
+  if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
+    url.pathname = url.pathname.endsWith('/') 
+      ? `${url.pathname}verify` 
+      : `${url.pathname}/verify`;
+  }
+  
   // Add additional parameters if provided
   if (additionalParams) {
     Object.entries(additionalParams).forEach(([key, value]) => {
@@ -225,6 +234,7 @@ export function createUniversalLinkCallback(
     });
   }
   
+  // Ensure the URL is properly formatted for Farcaster Universal Links
   return url.toString();
 }
 
