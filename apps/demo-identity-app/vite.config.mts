@@ -25,7 +25,7 @@ export default defineConfig({
   server: {
     https,
     allowedHosts: [
-      "mess-gather-nearby-tough.trycloudflare.com" // I Added this for farcaster preview to allow the url
+      "sizes-funny-nursing-bacon.trycloudflare.com" // I Added this for farcaster preview to allow the url
     ],
   },
   plugins: [react()],

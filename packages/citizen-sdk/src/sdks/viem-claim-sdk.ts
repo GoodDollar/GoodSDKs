@@ -12,7 +12,7 @@ import {
 import { waitForTransactionReceipt } from "viem/actions"
 
 import { IdentitySDK } from "./viem-identity-sdk"
-import { createUniversalLinkCallback, isInFarcasterMiniApp, openUrlInFarcaster } from "../utils/auth"
+import { createUniversalLinkCallback } from "../utils/auth"
 import {
   type contractEnv,
   type SupportedChains,
@@ -234,36 +234,12 @@ export class ClaimSDK {
     const { isWhitelisted } =
       await this.identitySDK.getWhitelistedRoot(userAddress)
     if (!isWhitelisted) {
-      // Navigate to face verification with Farcaster support
-      const fvLink = await this.identitySDK.generateFVLink(false, this.rdu, 42220)
-      
-      // Force popup mode for Farcaster since it always opens in new tab/window
-      const shouldUseFarcaster = await isInFarcasterMiniApp();
-      const effectivePopupMode = shouldUseFarcaster ? true : false;
-      
-      // Enhance the link with universal link callback
-      let enhancedLink = fvLink;
-      if (this.rdu) {
-        const universalCallbackUrl = createUniversalLinkCallback(this.rdu, {
-          source: "gooddollar_identity_verification"
-        });
-        
-        const url = new URL(fvLink);
-        url.searchParams.set(effectivePopupMode ? "cbu" : "rdu", universalCallbackUrl);
-        enhancedLink = url.toString();
-      }
-
-      // Use smart navigation based on environment
-      if (shouldUseFarcaster) {
-        await openUrlInFarcaster(enhancedLink, true);
-      } else {
-        // Standard navigation
-        if (effectivePopupMode) {
-          window.open(enhancedLink, "_blank");
-        } else {
-          window.location.href = enhancedLink;
-        }
-      }
+      // Use IdentitySDK's navigation method to eliminate code duplication
+      await this.identitySDK.navigateToFaceVerification(
+        false, // popupMode
+        this.rdu, // callbackUrl
+        42220 // chainId
+      );
       
       throw new Error("User requires identity verification.")
     }

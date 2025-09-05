@@ -12,7 +12,7 @@ const projectId = "623053d87821b073962eeccee706e643" // i added a new one and en
 const metadata = {
   name: "AppKit",
   description: "AppKit Example",
-  url: "https://mess-gather-nearby-tough.trycloudflare.com", // origin must match your domain & subdomain
+  url: "https://sizes-funny-nursing-bacon.trycloudflare.com", // origin must match your domain & subdomain
   icons: ["https://avatars.githubusercontent.com/u/179229932"],
 }
 

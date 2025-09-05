@@ -64,49 +64,53 @@ const App: React.FC = () => {
         setIsFarcasterMode(isInFarcasterMiniAppSync())
       }
     }
-    
-    initializeFarcasterSDK()
-    checkFarcasterMode()
-    
-    // Enhanced verification check with on-chain support for popup mode (CBU)
-    const checkVerification = async () => {
+
+    // Handle verification response with proper async support and error handling
+    const handleVerification = async () => {
       try {
-        // Use async version for on-chain verification support (needed for popup mode)
-        const verificationResult = await handleVerificationResponse(
-          undefined, // Use current URL
-          address, // Pass wallet address for on-chain verification
-          identitySDK?.publicClient, // Pass public client for on-chain checks
-          undefined, // Use default chain
-          "development" // Use development environment
-        )
+        const result = await handleVerificationResponse(
+          window.location.href,
+          address,
+          identitySDK?.publicClient,
+          42220,
+          "development"
+        );
         
-        if (verificationResult.isVerified) {
-          setIsVerified(true)
+        if (result.isVerified) {
+          setIsVerified(true);
           // Clean up URL parameters
-          window.history.replaceState({}, document.title, window.location.pathname)
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
         
         // Log additional verification parameters for debugging
-        if (verificationResult.params.size > 0) {
-          console.log("Verification response parameters:", Object.fromEntries(verificationResult.params))
+        if (result.params.size > 0) {
+          console.log("Verification response parameters:", Object.fromEntries(result.params));
         }
         
-        // Log on-chain verification status for debugging
-        if (verificationResult.onChainVerified !== undefined) {
-          console.log("On-chain verification status:", verificationResult.onChainVerified)
-        }
+        // Log verification details for debugging
+        console.log("Verification result:", {
+          isVerified: result.isVerified,
+          verified: result.verified,
+          onChainVerified: result.onChainVerified
+        });
       } catch (error) {
-        console.warn("Verification check failed:", error)
+        console.error('Verification response error:', error);
         // Fallback to sync version if async fails
-        const syncResult = handleVerificationResponseSync()
-        if (syncResult.isVerified) {
-          setIsVerified(true)
-          window.history.replaceState({}, document.title, window.location.pathname)
+        try {
+          const syncResult = handleVerificationResponseSync();
+          if (syncResult.isVerified) {
+            setIsVerified(true);
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } catch (syncError) {
+          console.error('Sync verification fallback failed:', syncError);
         }
       }
-    }
+    };
     
-    checkVerification()
+    initializeFarcasterSDK()
+    checkFarcasterMode()
+    handleVerification()
   }, [location.search, address, identitySDK])
 
   //ref: https://github.com/wevm/wagmi/discussions/1806#discussioncomment-12130996
