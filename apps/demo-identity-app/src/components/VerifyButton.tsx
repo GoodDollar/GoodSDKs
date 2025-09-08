@@ -2,7 +2,6 @@ import React, { useState } from "react"
 import { Button, Spinner } from "tamagui"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
-import { FARCASTER_UNIVERSAL_CALLBACK } from "../config"
 
 interface VerifyButtonProps {
   onVerificationSuccess?: () => void
@@ -26,7 +25,7 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
       // Force popup mode for better Farcaster compatibility
       await identitySDK.navigateToFaceVerification(
         true, // Force popup mode
-        FARCASTER_UNIVERSAL_CALLBACK,
+        window.location.href,
         42220
       )
       onVerificationSuccess?.()
