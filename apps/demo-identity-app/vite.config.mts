@@ -25,7 +25,7 @@ export default defineConfig({
   server: {
     https,
     allowedHosts: [
-      "casio-thompson-keyboards-measured.trycloudflare.com" // I Added this for farcaster preview to allow the url
+      "phases-financial-defence-equipment.trycloudflare.com" // I Added this for farcaster preview to allow the url
     ],
   },
   plugins: [react()],

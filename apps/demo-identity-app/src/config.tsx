@@ -12,7 +12,7 @@ const projectId = "623053d87821b073962eeccee706e643" // i added a new one and en
 const metadata = {
   name: "AppKit",
   description: "AppKit Example",
-  url: "https://casio-thompson-keyboards-measured.trycloudflare.com", // origin must match your domain & subdomain
+  url: "https://phases-financial-defence-equipment.trycloudflare.com", // origin must match your domain & subdomain
   icons: ["https://avatars.githubusercontent.com/u/179229932"],
 }
 
@@ -44,6 +44,8 @@ createAppKit({
   enableEIP6963: true,
   enableCoinbase: true,
 })
+
+export const FARCASTER_UNIVERSAL_CALLBACK = "https://phases-financial-defence-equipment.trycloudflare.com/verify"
 
 type ComponentProps = {
   children: ReactNode
