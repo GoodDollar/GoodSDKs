@@ -7,7 +7,7 @@ import React, { ReactNode } from "react"
 
 const queryClient = new QueryClient()
 
-const projectId = "623053d87821b073962eeccee706e643" // i added a new one and enabled mobile
+const projectId = "71dd03d057d89d0af68a4c627ec59694" // i added a new one and enabled mobile
 
 const metadata = {
   name: "AppKit",
