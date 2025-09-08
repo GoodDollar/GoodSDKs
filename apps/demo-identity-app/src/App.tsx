@@ -47,17 +47,17 @@ const App: React.FC = () => {
     const initializeFarcasterSDK = async () => {
       try {
         await sdk.actions.ready()
-        console.log('Farcaster SDK initialized successfully')
+        //console.log('Farcaster SDK initialized successfully')
         
         // Enable back navigation for Farcaster miniapp
         try {
           await sdk.back.enableWebNavigation()
-          console.log('Farcaster back navigation enabled')
+          //console.log('Farcaster back navigation enabled')
         } catch (backError) {
-          console.warn('Failed to enable Farcaster back navigation:', backError)
+          //console.warn('Failed to enable Farcaster back navigation:', backError)
         }
       } catch (error) {
-        console.warn('Failed to initialize Farcaster SDK:', error)
+        //console.warn('Failed to initialize Farcaster SDK:', error)
       }
     }
 
@@ -68,7 +68,7 @@ const App: React.FC = () => {
         setIsFarcasterMode(isFarcaster)
       } catch (error) {
         // Fallback to sync version if async fails
-        console.warn('Async Farcaster detection failed, using sync fallback:', error)
+        //console.warn('Async Farcaster detection failed, using sync fallback:', error)
         setIsFarcasterMode(isInFarcasterMiniAppSync())
       }
     }
@@ -92,17 +92,17 @@ const App: React.FC = () => {
         
         // Log additional verification parameters for debugging
         if (result.params.size > 0) {
-          console.log("Verification response parameters:", Object.fromEntries(result.params));
+          //console.log("Verification response parameters:", Object.fromEntries(result.params));
         }
         
         // Log verification details for debugging
-        console.log("Verification result:", {
-          isVerified: result.isVerified,
-          verified: result.verified,
-          onChainVerified: result.onChainVerified
-        });
+        // console.log("Verification result:", {
+        //   isVerified: result.isVerified,
+        //   verified: result.verified,
+        //   onChainVerified: result.onChainVerified
+        // });
       } catch (error) {
-        console.error('Verification response error:', error);
+        //console.error('Verification response error:', error);
         // Fallback to sync version if async fails
         try {
           const syncResult = handleVerificationResponseSync();
@@ -111,7 +111,7 @@ const App: React.FC = () => {
             window.history.replaceState({}, document.title, window.location.pathname);
           }
         } catch (syncError) {
-          console.error('Sync verification fallback failed:', syncError);
+          //console.error('Sync verification fallback failed:', syncError);
         }
       }
     };
@@ -125,7 +125,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleBackNavigation = () => {
       if (isFarcasterMode) {
-        console.log('Back navigation triggered in Farcaster mode')
+        //console.log('Back navigation triggered in Farcaster mode')
         // Handle back navigation logic here if needed
         // For now, just log the event
       }
@@ -150,7 +150,7 @@ const App: React.FC = () => {
                                    urlParams.has('fvsig');
       
       if (hasVerificationParams) {
-        console.log('Verification parameters detected in URL:', Object.fromEntries(urlParams));
+        //console.log('Verification parameters detected in URL:', Object.fromEntries(urlParams));
         
         // Process verification response
         const handleCallback = async () => {
@@ -163,11 +163,11 @@ const App: React.FC = () => {
               "development"
             );
             
-            console.log('Verification result:', result);
+            //console.log('Verification result:', result);
             
             if (result.isVerified) {
               setIsVerified(true);
-              console.log('Verification successful via Farcaster Universal Link');
+              //console.log('Verification successful via Farcaster Universal Link');
               
               // Clean up URL parameters but keep the path
               const cleanUrl = window.location.origin + window.location.pathname;
@@ -178,22 +178,22 @@ const App: React.FC = () => {
                 try {
                   // Set up back navigation handler
                   sdk.back.onback = () => {
-                    console.log('Back navigation triggered - returning to Farcaster');
+                    //console.log('Back navigation triggered - returning to Farcaster');
                     // Farcaster will handle the actual navigation
                   }
                   
                   // Show the back control
                   await sdk.back.show()
-                  console.log('Back control shown in Farcaster');
+                  //console.log('Back control shown in Farcaster');
                 } catch (navError) {
-                  console.warn('Failed to show back control in Farcaster:', navError)
+                  //console.warn('Failed to show back control in Farcaster:', navError)
                 }
               }
             } else {
-              console.log('Verification failed or not completed');
+              //console.log('Verification failed or not completed');
             }
           } catch (error) {
-            console.error('Verification callback error:', error)
+            //console.error('Verification callback error:', error)
           }
         };
         
@@ -227,7 +227,7 @@ const App: React.FC = () => {
           setIsWhitelisted(isWhitelisted)
           setIsVerified(isWhitelisted ?? false)
         } catch (error) {
-          console.error("Error checking whitelist:", error)
+          //console.error("Error checking whitelist:", error)
         } finally {
           setLoadingWhitelist(false)
         }

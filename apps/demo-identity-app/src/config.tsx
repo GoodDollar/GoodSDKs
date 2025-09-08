@@ -7,12 +7,11 @@ import React, { ReactNode } from "react"
 
 const queryClient = new QueryClient()
 
-const projectId = "71dd03d057d89d0af68a4c627ec59694" // i added a new one and enabled mobile
-
+const projectId = "71dd03d057d89d0af68a4c627ec59694" 
 const metadata = {
   name: "AppKit",
   description: "AppKit Example",
-  url: "https://casio-thompson-keyboards-measured.trycloudflare.com", // origin must match your domain & subdomain
+  url: "http://localhost:3000",
   icons: ["https://avatars.githubusercontent.com/u/179229932"],
 }
 
