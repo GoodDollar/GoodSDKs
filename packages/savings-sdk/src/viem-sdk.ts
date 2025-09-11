@@ -51,7 +51,10 @@ export class GooddollarSavingsSDK {
       throw new Error('Public client must be connected to Celo mainnet')
     }
     this.publicClient = publicClient
-    this.walletClient = walletClient || null
+    this.walletClient = null
+    if (walletClient) {
+      this.setWalletClient(walletClient)
+    }
   }
 
   setWalletClient(walletClient: WalletClient) {
