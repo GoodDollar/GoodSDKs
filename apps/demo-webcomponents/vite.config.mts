@@ -12,8 +12,6 @@ if (process.env.HTTPS === "true") {
   https = false
 }
 
-
-
 export default defineConfig({
   resolve: {
     alias: {
@@ -24,7 +22,7 @@ export default defineConfig({
     https,
   },
   define: {
+    "process.browser": true,
     "process.env": process.env,
   },
-
 })

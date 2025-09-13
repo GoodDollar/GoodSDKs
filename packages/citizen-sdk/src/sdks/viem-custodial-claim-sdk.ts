@@ -12,7 +12,7 @@ import {
 
 import { waitForTransactionReceipt } from "viem/actions"
 import { ClaimSDK, type ClaimSDKOptions } from "./viem-claim-sdk" // Import the base ClaimSDK
-import type { WalletClaimStatus } from "./viem-claim-sdk"
+import type { WalletClaimStatus } from "../types"
 
 interface ClaimCustodialSDKOptions extends Omit<ClaimSDKOptions, 'account'> {
     // Remove account from the options since we'll get it from walletClient

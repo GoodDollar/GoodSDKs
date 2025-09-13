@@ -1,3 +1,4 @@
+
 import {
   type Account,
   Address,
@@ -21,7 +22,6 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
-import { createUniversalLinkCallback, isInFarcasterMiniApp, openUrlInFarcaster } from "../utils/auth"
 
 import type {
   IdentityContract,
@@ -97,7 +97,6 @@ export class IdentitySDK {
 
   /**
    * Submits a transaction and waits for its receipt.
-   * Handles both regular and custodial wallet cases.
    * @param params - Parameters for simulating the contract call.
    * @param onHash - Optional callback to receive the transaction hash.
    * @returns The transaction receipt.
@@ -108,19 +107,17 @@ export class IdentitySDK {
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
     try {
-      // Handle both regular and custodial wallet cases
-      const account = this.walletClient.account?.address || this.account
-      if (!account) throw new Error("No active wallet address found.")
+      if (!this.account) throw new Error("No active wallet address found.")
 
       const { request } = await this.publicClient.simulateContract({
-        account,
+        account: this.account,
         ...params,
       })
 
       const hash = await this.walletClient.writeContract(request)
       onHash?.(hash)
 
-      return waitForTransactionReceipt(this.publicClient as any, { hash })
+      return waitForTransactionReceipt(this.publicClient, { hash })
     } catch (error: any) {
       console.error("submitAndWait Error:", error)
       throw new Error(`Failed to submit transaction: ${error.message}`)
@@ -186,18 +183,16 @@ export class IdentitySDK {
   }
 
   /**
-   * Generates a Face Verification Link with Farcaster miniapp support.
+   * Generates a Face Verification Link.
    * @param popupMode - Whether to generate a popup link.
    * @param callbackUrl - The URL to callback after verification.
    * @param chainId - The blockchain network ID.
-   * @param useFarcasterNavigation - Whether to use Farcaster-specific navigation (auto-detected if not specified).
    * @returns The generated Face Verification link.
    */
   async generateFVLink(
     popupMode: boolean = false,
     callbackUrl?: string,
     chainId?: number,
-    useFarcasterNavigation?: boolean,
   ): Promise<string> {
     try {
       const address = this.account
@@ -206,27 +201,10 @@ export class IdentitySDK {
       const nonce = Math.floor(Date.now() / 1000).toString()
 
       const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", address)
-      
-      // Handle both regular and LocalAccount signing for Celo RPC compatibility
-      let fvSig: string;
-      const account = this.walletClient.account;
-      
-      if (account && 'signMessage' in account) {
-        // Local account - sign directly to avoid Celo RPC limitations
-        fvSig = await (account as LocalAccount).signMessage({
-          message: fvSigMessage,
-        })
-      } else {
-        // Fallback to wallet client signing (might fail on Celo RPC)
-        try {
-          fvSig = await this.walletClient.signMessage({
-            account: address,
-            message: fvSigMessage,
-          })
-        } catch (rpcError: any) {
-          throw new Error(`Message signing failed: Celo RPC doesn't support personal_sign. Use a local account instead. ${rpcError.message}`)
-        }
-      }
+      const fvSig = await this.walletClient.signMessage({
+        account: address,
+        message: fvSigMessage,
+      })
 
       const { identityUrl } = Envs[this.env]
       if (!identityUrl) {
@@ -250,12 +228,7 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        // Create universal link compatible callback for mobile/native support
-        const universalCallbackUrl = createUniversalLinkCallback(callbackUrl, {
-          source: "gooddollar_identity_verification"
-        })
-        
-        params[popupMode ? "cbu" : "rdu"] = universalCallbackUrl
+        params[popupMode ? "cbu" : "rdu"] = callbackUrl
       }
 
       url.searchParams.append(
@@ -294,46 +267,28 @@ export class IdentitySDK {
   }
 
   /**
-   * Navigates to face verification with automatic Farcaster miniapp support.
+   * Navigates to face verification.
    * @param popupMode - Whether to use popup mode.
    * @param callbackUrl - The URL to callback after verification.
    * @param chainId - The blockchain network ID.
-   * @param forceFarcasterNavigation - Force use of Farcaster navigation (auto-detected if not specified).
    */
   async navigateToFaceVerification(
     popupMode: boolean = false,
     callbackUrl?: string,
     chainId?: number,
-    forceFarcasterNavigation?: boolean,
   ): Promise<void> {
     const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
     
-    // Force popup mode for Farcaster since it always opens in new tab/window
-    const shouldUseFarcaster = forceFarcasterNavigation ?? await isInFarcasterMiniApp();
-    const effectivePopupMode = shouldUseFarcaster ? true : popupMode;
-    
-    // Enhance the link with universal link callback if provided
-    let enhancedLink = fvLink;
-    if (callbackUrl) {
-      const universalCallbackUrl = createUniversalLinkCallback(callbackUrl, {
-        source: "gooddollar_identity_verification"
-      });
-      
-      const url = new URL(fvLink);
-      url.searchParams.set(effectivePopupMode ? "cbu" : "rdu", universalCallbackUrl);
-      enhancedLink = url.toString();
-    }
-
-    // Use smart navigation based on environment
-    if (shouldUseFarcaster) {
-      await openUrlInFarcaster(enhancedLink, true);
-    } else {
-      // Standard navigation
-      if (effectivePopupMode) {
-        window.open(enhancedLink, "_blank");
+    if (typeof window !== "undefined") {
+      if (popupMode) {
+        window.open(fvLink, "_blank")
       } else {
-        window.location.href = enhancedLink;
+        window.location.href = fvLink
       }
+    } else {
+      throw new Error(
+        "Face verification navigation is only supported in browser environments.",
+      )
     }
   }
 }

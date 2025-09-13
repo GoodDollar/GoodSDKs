@@ -12,6 +12,7 @@ if (process.env.HTTPS === "true") {
 } else {
   https = false;
 }
+
 export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom", "wagmi", "viem"],
@@ -24,17 +25,10 @@ export default defineConfig({
   },
   server: {
     https,
-    allowedHosts: [
-      "casio-thompson-keyboards-measured.trycloudflare.com" // Add your tunnel cloudflared url here
-    ],
   },
   plugins: [react()],
   define: {
+    "process.browser": true,
     "process.env": process.env,
-  },
-  build: {
-    rollupOptions: {
-      external: ["@goodsdks/citizen-sdk", "viem"],
-    },
   },
 });
