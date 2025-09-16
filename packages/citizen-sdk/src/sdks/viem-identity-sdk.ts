@@ -1,3 +1,4 @@
+
 import {
   type Account,
   Address,
@@ -6,6 +7,7 @@ import {
   WalletClient,
   SimulateContractParameters,
   WalletActions,
+  LocalAccount,
   zeroAddress,
 } from "viem"
 
@@ -261,6 +263,32 @@ export class IdentitySDK {
 
     return {
       expiryTimestamp,
+    }
+  }
+
+  /**
+   * Navigates to face verification.
+   * @param popupMode - Whether to use popup mode.
+   * @param callbackUrl - The URL to callback after verification.
+   * @param chainId - The blockchain network ID.
+   */
+  async navigateToFaceVerification(
+    popupMode: boolean = false,
+    callbackUrl?: string,
+    chainId?: number,
+  ): Promise<void> {
+    const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
+    
+    if (typeof window !== "undefined") {
+      if (popupMode) {
+        window.open(fvLink, "_blank")
+      } else {
+        window.location.href = fvLink
+      }
+    } else {
+      throw new Error(
+        "Face verification navigation is only supported in browser environments.",
+      )
     }
   }
 }
