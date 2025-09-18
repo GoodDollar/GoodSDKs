@@ -22,6 +22,7 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
+import { navigateToUrl, createFarcasterCallbackUrl } from "../utils/auth"
 
 import type {
   IdentityContract,
@@ -228,7 +229,11 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        params[popupMode ? "cbu" : "rdu"] = callbackUrl
+        // Create Farcaster-compatible callback URL
+        const farcasterCallbackUrl = createFarcasterCallbackUrl(callbackUrl, {
+          source: "gooddollar_identity_verification"
+        });
+        params[popupMode ? "cbu" : "rdu"] = farcasterCallbackUrl
       }
 
       url.searchParams.append(
@@ -267,7 +272,7 @@ export class IdentitySDK {
   }
 
   /**
-   * Navigates to face verification.
+   * Navigates to face verification with Farcaster miniapp support.
    * @param popupMode - Whether to use popup mode.
    * @param callbackUrl - The URL to callback after verification.
    * @param chainId - The blockchain network ID.
@@ -279,16 +284,7 @@ export class IdentitySDK {
   ): Promise<void> {
     const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
     
-    if (typeof window !== "undefined") {
-      if (popupMode) {
-        window.open(fvLink, "_blank")
-      } else {
-        window.location.href = fvLink
-      }
-    } else {
-      throw new Error(
-        "Face verification navigation is only supported in browser environments.",
-      )
-    }
+    // Use Farcaster-aware navigation
+    await navigateToUrl(fvLink, popupMode)
   }
 }

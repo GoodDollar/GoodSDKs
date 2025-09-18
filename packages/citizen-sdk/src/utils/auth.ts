@@ -23,6 +23,29 @@ export async function isInFarcasterMiniApp(timeoutMs = 100): Promise<boolean> {
 }
 
 /**
+ * Gets Farcaster SDK capabilities for the current miniapp
+ * @returns Promise<string[] | null> - Available capabilities or null if not in miniapp
+ */
+export async function getFarcasterCapabilities(): Promise<string[] | null> {
+  if (!await isInFarcasterMiniApp()) return null;
+  try {
+    return await sdk.getCapabilities();
+  } catch (error) {
+    console.warn('Failed to get Farcaster capabilities:', error);
+    return null;
+  }
+}
+
+/**
+ * Checks if Farcaster navigation is available
+ * @returns Promise<boolean> - true if openUrl action is supported
+ */
+export async function canUseFarcasterNavigation(): Promise<boolean> {
+  const capabilities = await getFarcasterCapabilities();
+  return capabilities?.includes('actions.openUrl') ?? false;
+}
+
+/**
  * Synchronous version for backwards compatibility
  * Note: This uses basic detection and should be replaced with async version when possible
  */
@@ -38,25 +61,40 @@ export function isInFarcasterMiniAppSync(): boolean {
   }
 }
 
-export async function openUrlInFarcaster(
-  url: string,
-  fallbackToNewTab = true
-): Promise<void> {
+/**
+ * Farcaster-aware URL navigation with capability detection
+ * @param url - The URL to navigate to
+ * @param fallbackToNewTab - Whether to open in new tab as fallback
+ */
+export async function navigateToUrl(url: string, fallbackToNewTab = true): Promise<void> {
   if (typeof window === 'undefined') {
-    throw new Error('Browser only');
+    throw new Error('Navigation not supported in this environment');
   }
 
-  if (await isInFarcasterMiniApp()) {
+  // Try Farcaster navigation first if available
+  if (await isInFarcasterMiniApp() && await canUseFarcasterNavigation()) {
     try {
       await sdk.actions.ready();
       await sdk.actions.openUrl(url);
       return;
-    } catch {
-      console.warn('SDK.openUrl failed, falling back…');
+    } catch (error) {
+      console.warn('Farcaster navigation failed, falling back to browser:', error);
     }
   }
 
-  fallbackToNewTab ? window.open(url, '_blank') : (window.location.href = url);
+  // Fallback to standard browser navigation
+  if (fallbackToNewTab) {
+    window.open(url, '_blank');
+  } else {
+    window.location.href = url;
+  }
+}
+
+export async function openUrlInFarcaster(
+  url: string,
+  fallbackToNewTab = true
+): Promise<void> {
+  return navigateToUrl(url, fallbackToNewTab);
 }
 
 /**
@@ -126,7 +164,29 @@ export async function handleVerificationResponse(
   };
 
   try {
-    const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
+    // Get URL from Farcaster context or provided parameter
+    let targetUrl = url;
+    
+    if (!targetUrl) {
+      if (await isInFarcasterMiniApp()) {
+        // Use Farcaster SDK to get current context
+        try {
+          const context = await sdk.context;
+          // Farcaster context doesn't have href, fallback to window
+          if (typeof window !== "undefined") {
+            targetUrl = window.location.href;
+          }
+        } catch (error) {
+          console.warn('Failed to get Farcaster context:', error);
+          if (typeof window !== "undefined") {
+            targetUrl = window.location.href;
+          }
+        }
+      } else if (typeof window !== "undefined") {
+        targetUrl = window.location.href;
+      }
+    }
+    
     if (!targetUrl) {
       // If no URL, check on-chain only
       if (address && publicClient) {
@@ -182,6 +242,7 @@ export function handleVerificationResponseSync(url?: string): {
   };
 
   try {
+    // For sync version, fallback to window.location.href
     const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
     if (!targetUrl) return defaultResult;
 
@@ -201,13 +262,12 @@ export function handleVerificationResponseSync(url?: string): {
 }
 
 /**
- * Creates a universal link compatible callback URL for mobile/native app support
- * Enhanced for Farcaster miniapp compatibility with proper sub-path handling
+ * Creates a Farcaster-compatible callback URL
  * @param baseUrl - The base callback URL
  * @param additionalParams - Additional parameters to include
- * @returns A universal link compatible URL
+ * @returns A Farcaster-compatible callback URL
  */
-export function createUniversalLinkCallback(
+export function createFarcasterCallbackUrl(
   baseUrl: string, 
   additionalParams?: Record<string, string>
 ): string {
@@ -236,6 +296,20 @@ export function createUniversalLinkCallback(
   
   // Ensure the URL is properly formatted for Farcaster Universal Links
   return url.toString();
+}
+
+/**
+ * Creates a universal link compatible callback URL for mobile/native app support
+ * Enhanced for Farcaster miniapp compatibility with proper sub-path handling
+ * @param baseUrl - The base callback URL
+ * @param additionalParams - Additional parameters to include
+ * @returns A universal link compatible URL
+ */
+export function createUniversalLinkCallback(
+  baseUrl: string, 
+  additionalParams?: Record<string, string>
+): string {
+  return createFarcasterCallbackUrl(baseUrl, additionalParams);
 }
 
 async function signMessageWithViem(

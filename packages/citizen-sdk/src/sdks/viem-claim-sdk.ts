@@ -20,6 +20,7 @@ import {
 } from "../constants"
 import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
+import { createFarcasterCallbackUrl } from "../utils/auth"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -59,7 +60,7 @@ export class ClaimSDK {
     publicClient,
     walletClient,
     identitySDK,
-    rdu = window.location.href,
+    rdu = typeof window !== "undefined" ? window.location.href : "",
     env = "production",
   }: ClaimSDKOptions) {
     if (!walletClient.account) {
@@ -70,7 +71,10 @@ export class ClaimSDK {
     this.identitySDK = identitySDK
     this.account = account ?? walletClient.account.address
 
-    this.rdu = rdu
+    // Create Farcaster-compatible callback URL
+    this.rdu = createFarcasterCallbackUrl(rdu, {
+      source: "gooddollar_claim_verification"
+    })
     this.env = env
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
