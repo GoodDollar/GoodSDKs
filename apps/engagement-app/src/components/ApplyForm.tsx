@@ -251,8 +251,8 @@ const ApplyForm: React.FC = () => {
                       />
                     </FormControl>
                     <FormDescription>
-                      Percentage of rewards allocated to users and inviters
-                      (0-100)
+                      Percentage of rewards allocated between dApp and
+                      user+inviter (0-100). 0% means all rewards go to the dApp
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

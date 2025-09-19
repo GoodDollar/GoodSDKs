@@ -2,13 +2,11 @@ import {
   Address,
   PublicClient,
   WalletClient,
-  parseAbi,
   type SimulateContractParameters,
 } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
 import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json"
 import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json"
-import { range, flatten } from "lodash"
 import { EngagementRewards as engagementRewardsABI } from "./abi/abis"
 export const DEV_REWARDS_CONTRACT = devdeployments[
   "EngagementRewardsProxy#ERC1967Proxy"
@@ -17,9 +15,17 @@ export const REWARDS_CONTRACT = prod?.[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
 
-const BLOCKS_RANGE = BigInt(10000)
-const BLOCKS_AGO = BigInt(500000)
+export const DEFAULT_EVENT_BATCH_SIZE = 10_000n
+export const DEFAULT_EVENT_LOOKBACK = 500_000n
 const WAIT_DELAY = 5000 // 1 second delay
+
+const EVENT_CACHE_PREFIX = "goodsdks:engagement-rewards"
+
+interface StorageLike {
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+  removeItem(key: string): void
+}
 
 export interface AppInfo {
   rewardReceiver: Address
@@ -52,10 +58,59 @@ export interface AppEvent {
   block: bigint
 }
 
+export interface GetAppRewardEventsOptions {
+  /** Optional inviter to filter server-side; skips local filtering. */
+  inviter?: Address
+  /**
+   * Number of blocks to request per batch when walking the chain.
+   * Defaults to {@link DEFAULT_EVENT_BATCH_SIZE}.
+   */
+  batchSize?: bigint
+  /**
+   * How many blocks to look back from the latest block.
+   * Defaults to {@link DEFAULT_EVENT_LOOKBACK}.
+   */
+  blocksAgo?: bigint
+  /** Override the default localStorage key derivation. */
+  cacheKey?: string
+  /** Skip storing progress in localStorage. */
+  disableCache?: boolean
+  /** Remove any stored progress before fetching. */
+  resetCache?: boolean
+}
+
 export class EngagementRewardsSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient
   private contractAddress: Address
+
+  private getCacheStorage(): StorageLike | undefined {
+    const globalObject = globalThis as {
+      localStorage?: StorageLike
+    }
+    if (!globalObject.localStorage) {
+      return undefined
+    }
+
+    try {
+      const key = `${EVENT_CACHE_PREFIX}:check`
+      globalObject.localStorage.setItem(key, key)
+      globalObject.localStorage.removeItem(key)
+      return globalObject.localStorage
+    } catch {
+      return undefined
+    }
+  }
+
+  private buildCacheKey(app: Address, inviter?: Address, customKey?: string) {
+    if (customKey) return customKey
+    return [
+      EVENT_CACHE_PREFIX,
+      this.contractAddress,
+      app,
+      inviter ?? "all",
+    ].join(":")
+  }
 
   constructor(
     publicClient: PublicClient,
@@ -262,30 +317,57 @@ export class EngagementRewardsSDK {
     return { domain, types, message }
   }
 
-  async getLogsBatches<
-    P extends (startBlock: number, endBlock: number) => Promise<any>,
-  >(
-    batchSize: bigint,
-    blocksAgo: bigint,
-    promiseCreator: P,
-  ): Promise<Awaited<ReturnType<P>>> {
-    const curBlock = await this.publicClient.getBlockNumber()
-    const startBlock = Number(curBlock - blocksAgo)
-    const ranges = range(
-      Number(startBlock),
-      Number(curBlock),
-      Number(batchSize),
+  private async getLogsBatches<T>({
+    batchSize,
+    fromBlock,
+    toBlock,
+    promiseCreator,
+  }: {
+    batchSize: bigint
+    fromBlock: bigint
+    toBlock: bigint
+    promiseCreator: (fromBlock: bigint, toBlock: bigint) => Promise<T[]>
+  }): Promise<T[]> {
+    if (batchSize <= 0n) {
+      throw new Error("batchSize must be greater than zero")
+    }
+    if (fromBlock < 0n) {
+      throw new Error("fromBlock must be zero or greater")
+    }
+    if (toBlock < fromBlock) {
+      throw new Error("toBlock must be greater than or equal to fromBlock")
+    }
+
+    const ranges: Array<{ from: bigint; to: bigint }> = []
+    let rangeStart = fromBlock
+
+    while (rangeStart <= toBlock) {
+      const tentativeEnd = rangeStart + batchSize - 1n
+      const rangeEnd = tentativeEnd > toBlock ? toBlock : tentativeEnd
+      ranges.push({ from: rangeStart, to: rangeEnd })
+      if (rangeEnd === toBlock) {
+        break
+      }
+      rangeStart = rangeEnd + 1n
+    }
+
+    const results = await Promise.all(
+      ranges.map(async ({ from, to }) => {
+        try {
+          return await promiseCreator(from, to)
+        } catch (e) {
+          console.log("failed logs batch", {
+            batchSize: batchSize.toString(),
+            fromBlock: from.toString(),
+            toBlock: to.toString(),
+            e,
+          })
+          return [] as T[]
+        }
+      }),
     )
-    return flatten(
-      await Promise.all(
-        ranges.map((toBlock, i) =>
-          promiseCreator(toBlock - Number(batchSize), toBlock).catch((e) => {
-            console.log("failed logs batch", { batchSize, toBlock, e })
-            return []
-          }),
-        ),
-      ),
-    ) as Awaited<ReturnType<P>>
+
+    return results.flat()
   }
 
   async getPendingApps() {
@@ -323,20 +405,108 @@ export class EngagementRewardsSDK {
     }
   }
 
-  async getAppRewardEvents(app: Address): Promise<RewardEvent[]> {
-    const rewardEvents = await this.getLogsBatches(
-      BLOCKS_RANGE,
-      BLOCKS_AGO,
-      (startBlock, endBlock) =>
+  async getCachedFromBlock(
+    app: Address,
+    inviter?: Address,
+    cacheKey?: string,
+    resetCache?: boolean,
+  ): Promise<bigint | undefined> {
+    const storage = this.getCacheStorage()
+    if (!storage) return undefined
+
+    const storageKey = this.buildCacheKey(app, inviter, cacheKey)
+    if (resetCache) {
+      storage.removeItem(storageKey)
+      return undefined
+    }
+
+    const raw = storage.getItem(storageKey)
+    if (!raw) return undefined
+
+    try {
+      return BigInt(raw) >= 0n ? BigInt(raw) : undefined
+    } catch {
+      storage.removeItem(storageKey)
+      return undefined
+    }
+  }
+
+  /**
+   * Fetch RewardClaimed logs for an app, optionally narrowed by inviter or
+   * custom log pagination parameters.
+   */
+  async getAppRewardEvents(
+    app: Address,
+    options: GetAppRewardEventsOptions = {},
+  ): Promise<RewardEvent[]> {
+    const {
+      inviter,
+      batchSize = DEFAULT_EVENT_BATCH_SIZE,
+      blocksAgo = DEFAULT_EVENT_LOOKBACK,
+      cacheKey,
+      disableCache = false,
+      resetCache = false,
+    } = options
+
+    if (blocksAgo < 0n) {
+      throw new Error("blocksAgo must be zero or greater")
+    }
+
+    const latestBlock = await this.publicClient.getBlockNumber()
+    let fromBlock =
+      blocksAgo === 0n
+        ? latestBlock
+        : blocksAgo >= latestBlock
+          ? 0n
+          : latestBlock - blocksAgo
+
+    const storedFromBlock = disableCache
+      ? undefined
+      : await this.getCachedFromBlock(app, inviter, cacheKey, resetCache)
+    if (storedFromBlock !== undefined && storedFromBlock > latestBlock) {
+      return []
+    }
+
+    fromBlock =
+      storedFromBlock && storedFromBlock > fromBlock
+        ? storedFromBlock
+        : fromBlock
+    if (fromBlock > latestBlock) {
+      return []
+    }
+
+    const rewardEvents = await this.getLogsBatches({
+      batchSize,
+      fromBlock,
+      toBlock: latestBlock,
+      promiseCreator: (rangeStart, rangeEnd) =>
         this.publicClient.getContractEvents({
           address: this.contractAddress,
           abi: engagementRewardsABI,
           eventName: "RewardClaimed",
-          args: { app },
-          fromBlock: BigInt(startBlock),
-          toBlock: BigInt(endBlock),
+          args: inviter ? { app, inviter } : { app },
+          fromBlock: rangeStart,
+          toBlock: rangeEnd,
         }),
-    )
+    })
+
+    if (!disableCache) {
+      try {
+        const storage = this.getCacheStorage()
+        storage?.setItem(
+          this.buildCacheKey(app, inviter, cacheKey),
+          (latestBlock + 1n).toString(),
+        )
+      } catch {
+        try {
+          this.getCacheStorage()?.removeItem(
+            this.buildCacheKey(app, inviter, cacheKey),
+          )
+        } catch {
+          // ignore storage errors
+        }
+      }
+    }
 
     return rewardEvents.map((log) => ({
       tx: log.transactionHash,
@@ -350,19 +520,26 @@ export class EngagementRewardsSDK {
   }
 
   async getAppHistory(app: Address): Promise<AppEvent[]> {
-    const events = await this.getLogsBatches(
-      BLOCKS_RANGE,
-      BLOCKS_AGO,
-      (startBlock, endBlock) =>
+    const latestBlock = await this.publicClient.getBlockNumber()
+    const earliestBlock =
+      DEFAULT_EVENT_LOOKBACK >= latestBlock
+        ? 0n
+        : latestBlock - DEFAULT_EVENT_LOOKBACK
+
+    const events = await this.getLogsBatches({
+      batchSize: DEFAULT_EVENT_BATCH_SIZE,
+      fromBlock: earliestBlock,
+      toBlock: latestBlock,
+      promiseCreator: (fromBlock, toBlock) =>
         this.publicClient.getContractEvents({
           address: this.contractAddress,
           abi: engagementRewardsABI,
           eventName: "AppApplied",
           args: { app },
-          fromBlock: BigInt(startBlock),
-          toBlock: BigInt(endBlock),
+          fromBlock,
+          toBlock,
         }),
-    )
+    })
 
     return events.map((log) => ({
       owner: log.args.owner as Address,
