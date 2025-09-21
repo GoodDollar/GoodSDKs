@@ -2,36 +2,51 @@ import { LitElement, html, css } from "lit"
 import { customElement, property, state } from "lit/decorators.js"
 import { createAppKit } from "@reown/appkit"
 import type { AppKit, AppKitOptions } from "@reown/appkit"
-import {
-  celo as reownCelo,
-  fuse as reownFuse,
-  type AppKitNetwork,
-} from "@reown/appkit/networks"
 import { EthersAdapter } from "@reown/appkit-adapter-ethers"
+import type { AppKitNetwork } from "@reown/appkit/networks"
 import type { Address, PublicClient, WalletClient } from "viem"
-import { celo, fuse } from "viem/chains"
 import {
   createPublicClient,
   createWalletClient,
   custom,
-  http,
   formatUnits,
+  defineChain,
 } from "viem"
+import { celo, fuse, xdc, type Chain } from "viem/chains"
 
-import { ClaimSDK, IdentitySDK } from "@goodsdks/citizen-sdk"
 import {
-  G$TokenAddresses,
+  ClaimSDK,
+  chainConfigs,
+  IdentitySDK,
+  isSupportedChain,
+} from "@goodsdks/citizen-sdk"
+import {
+  CHAIN_DECIMALS,
+  DEFAULT_SUPPORTED_CHAINS,
+  getG$TokenAddress,
   goodDollarABI,
-  rpcUrls,
   SupportedChains,
+  type ContractEnv,
 } from "./constants"
+
+const APPKIT_NETWORKS_BY_ID: Record<SupportedChains, AppKitNetwork> = {
+  [SupportedChains.CELO]: celo as AppKitNetwork,
+  [SupportedChains.FUSE]: fuse as AppKitNetwork,
+  [SupportedChains.XDC]: xdc as AppKitNetwork,
+}
+
+const VIEM_CHAINS: Record<SupportedChains, Chain> = {
+  [SupportedChains.CELO]: celo,
+  [SupportedChains.FUSE]: fuse,
+  [SupportedChains.XDC]: xdc,
+}
 
 @customElement("claim-button")
 export class ClaimButton extends LitElement {
   @property({ type: String })
-  environment: "production" | "development" | "staging" = "development"
+  environment: ContractEnv = "development"
   @property({ type: Array })
-  supportedChains: SupportedChains[] | number[] = [122, 42220]
+  supportedChains: (SupportedChains | number)[] = [...DEFAULT_SUPPORTED_CHAINS]
   @property({ type: Object })
   appkitConfig = {
     projectId: null,
@@ -48,6 +63,7 @@ export class ClaimButton extends LitElement {
   @state() private timeLeft: number | null = null
   @state() private decimals: number | null = null
   @state() private claimOnAlt: boolean = false
+  @state() private suggestedChain: SupportedChains | null = null
   @state() private claimState:
     | "idle"
     | "claiming"
@@ -66,6 +82,39 @@ export class ClaimButton extends LitElement {
   private publicClient: PublicClient | null = null
   private walletClient: WalletClient | null = null
   private claimSdk: ClaimSDK | null = null
+  private claimFallbackChains: SupportedChains[] = []
+
+  private getSupportedChainIds(): SupportedChains[] {
+    const uniqueIds = new Set(
+      this.supportedChains.map((chainId) => Number(chainId)),
+    )
+
+    return Array.from(uniqueIds).filter((chainId): chainId is SupportedChains =>
+      isSupportedChain(chainId),
+    )
+  }
+
+  private getViemChain(chainId: SupportedChains): Chain {
+    return VIEM_CHAINS[chainId]
+  }
+
+  private getAppKitNetworks(): [AppKitNetwork, ...AppKitNetwork[]] {
+    const configured = this.getSupportedChainIds()
+      .map((chainId) => APPKIT_NETWORKS_BY_ID[chainId])
+      .filter((network): network is AppKitNetwork => Boolean(network))
+
+    const networks = configured.length
+      ? configured
+      : DEFAULT_SUPPORTED_CHAINS.map(
+          (chainId) => APPKIT_NETWORKS_BY_ID[chainId],
+        ).filter((network): network is AppKitNetwork => Boolean(network))
+
+    if (!networks.length) {
+      throw new Error("No supported networks configured for AppKit")
+    }
+
+    return networks as [AppKitNetwork, ...AppKitNetwork[]]
+  }
 
   static styles = css`
     .claim-container {
@@ -245,12 +294,10 @@ export class ClaimButton extends LitElement {
   async initializeAppKit() {
     if (!this.appkitConfig.projectId || !this.appkitConfig.metadata) return
 
-    const networks: [AppKitNetwork, ...AppKitNetwork[]] = [reownCelo, reownFuse]
-
     this.appKit = createAppKit({
       adapters: [new EthersAdapter()],
       basic: true,
-      networks,
+      networks: this.getAppKitNetworks(),
       projectId: this.appkitConfig?.projectId,
       metadata: this.appkitConfig?.metadata,
     } as AppKitOptions)
@@ -274,7 +321,7 @@ export class ClaimButton extends LitElement {
     const provider = (await this.appKit?.getProvider("eip155")) as any
     const account = this.appKit?.getAccount()
 
-    let chainId: number | undefined
+    let chainId: SupportedChains | undefined
 
     // for providers other then injected, we need to use eth_chainId
     if (provider && typeof provider.request === "function") {
@@ -284,29 +331,35 @@ export class ClaimButton extends LitElement {
       chainId = Number(provider.chainId)
     }
 
-    if (
-      !chainId ||
-      !this.supportedChains.includes(chainId as SupportedChains)
-    ) {
+    if (!chainId || !isSupportedChain(chainId)) {
       this.error = `Unsupported chain ID: ${chainId}. Supported chains are: ${this.supportedChains.join(", ")}`
       return
     }
 
     if (!provider || !account) return
 
-    const isCelo = chainId === 42220
-    const chain = isCelo ? celo : fuse
-    this.chain = chainId as SupportedChains
-    this.decimals = isCelo ? 18 : 2
+    const typedChainId = chainId as SupportedChains
+    const supportedIds = this.getSupportedChainIds()
+
+    if (!supportedIds.includes(typedChainId)) {
+      this.error = `Unsupported chain ID: ${chainId}. Supported chains are: ${supportedIds.join(", ")}`
+      return
+    }
+
+    const viemChain = this.getViemChain(typedChainId)
+
+    this.chain = typedChainId
+    this.decimals = CHAIN_DECIMALS[typedChainId] ?? 18
+    this.suggestedChain = null
 
     const pClient = createPublicClient({
-      chain: chain,
+      chain: viemChain,
       transport: custom(provider),
     }) as unknown as PublicClient
 
     const wClient = createWalletClient({
       account: account?.address as `0x${string}`,
-      chain: chain,
+      chain: viemChain,
       transport: custom(provider),
     })
 
@@ -340,6 +393,10 @@ export class ClaimButton extends LitElement {
       })
 
       this.claimSdk = sdk
+      this.claimFallbackChains =
+        (this.chain && chainConfigs[this.chain]?.fallbackChains) ?? []
+      this.claimOnAlt = false
+      this.suggestedChain = null
       await this.fetchTokenBalance()
       this.fetchEntitlement(sdk)
     } catch (err: any) {
@@ -349,25 +406,20 @@ export class ClaimButton extends LitElement {
 
   async fetchEntitlement(sdk: ClaimSDK) {
     try {
-      const amount = await sdk.checkEntitlement()
-      this.claimAmount = Number(amount) / 10 ** this.decimals!
+      const { amount, altClaimAvailable, altChainId } =
+        await sdk.checkEntitlement()
+      const decimals = this.decimals ?? 18
+      this.claimAmount = Number(amount) / 10 ** decimals
 
       if (this.claimAmount === 0) {
-        const altChainId = this.chain === 122 ? 42220 : 122
-        const altChain = altChainId === 122 ? fuse : celo
-
-        const tempPublicClient = createPublicClient({
-          chain: altChain,
-          transport: http(rpcUrls[altChainId]),
-        }) as PublicClient
-
-        const claimOnAlt = await sdk.checkEntitlement(tempPublicClient)
-        this.claimOnAlt = Number(claimOnAlt) > 0
-
         const nextTime = await sdk.nextClaimTime()
         this.startCountdownTimer(nextTime)
+        this.claimOnAlt = altClaimAvailable
+        this.suggestedChain = altClaimAvailable ? altChainId : null
         this.claimState = "timer"
       } else {
+        this.claimOnAlt = false
+        this.suggestedChain = null
         this.claimState = "idle"
       }
     } catch (err: any) {
@@ -410,7 +462,6 @@ export class ClaimButton extends LitElement {
     if (
       !this.publicClient ||
       !this.walletAddress ||
-      !G$TokenAddresses ||
       !this.chain ||
       !this.decimals
     ) {
@@ -421,10 +472,16 @@ export class ClaimButton extends LitElement {
     }
 
     try {
+      const tokenAddress = getG$TokenAddress(this.chain, this.environment)
+
+      if (!tokenAddress) {
+        this.error = `G$ token address not configured for chain ${this.chain} (${this.environment}).`
+        this.tokenBalance = null
+        return
+      }
+
       const balanceResult = await this.publicClient.readContract({
-        address: G$TokenAddresses[this.chain][
-          this.environment
-        ] as `0x${string}`,
+        address: tokenAddress,
         abi: goodDollarABI,
         functionName: "balanceOf",
         args: [this.walletAddress as `0x${string}`],
@@ -442,10 +499,21 @@ export class ClaimButton extends LitElement {
     }
   }
 
-  async switchChain() {
+  async switchChain(targetChainId?: SupportedChains) {
     try {
       this.claimState = "switching"
-      const targetChain = this.chain === 122 ? celo : fuse
+      const nextChainId =
+        targetChainId ??
+        this.suggestedChain ??
+        this.claimFallbackChains[0] ??
+        this.chain
+
+      if (!nextChainId) {
+        throw new Error("No alternative chain available for switching")
+      }
+
+      const targetChain = this.getViemChain(nextChainId)
+
       await this.walletClient?.switchChain(targetChain)
 
       setTimeout(async () => {
@@ -475,6 +543,9 @@ export class ClaimButton extends LitElement {
     this.claimAmount = null
     this.txHash = null
     this.error = null
+    this.claimOnAlt = false
+    this.suggestedChain = null
+    this.claimFallbackChains = []
     this.clearCountdownTimer()
   }
 
@@ -606,6 +677,12 @@ export class ClaimButton extends LitElement {
   }
 
   render() {
+    const explorer = this.chain ? chainConfigs[this.chain]?.explorer : null
+    const txUrl = explorer && this.txHash ? explorer.tx(this.txHash) : null
+    const suggestionLabel = this.suggestedChain
+      ? chainConfigs[this.suggestedChain]?.label
+      : null
+
     return html`
       <div class="claim-container">
         ${!this.walletAddress
@@ -643,6 +720,14 @@ export class ClaimButton extends LitElement {
                     G$</span
                   >
                 </div>
+                <div class="detail-item">
+                  <span class="label">Network:</span>
+                  <span class="value"
+                    >${this.chain
+                      ? chainConfigs[this.chain]?.label
+                      : "Unknown"}</span
+                  >
+                </div>
               </div>
               ${this.claimState === "claiming"
                 ? html` <div class="state-claiming">
@@ -662,13 +747,15 @@ export class ClaimButton extends LitElement {
                         <div class="countdown">
                           ${this.formatTimeLeft(this.timeLeft)}
                         </div>
-                        ${this.claimOnAlt
+                        ${this.claimOnAlt && suggestionLabel
                           ? html`<p
                               class="chain-suggestion"
-                              @click="${this.switchChain}"
+                              @click="${() =>
+                                this.switchChain(
+                                  this.suggestedChain ?? undefined,
+                                )}"
                             >
-                              Switch to ${this.chain === 122 ? "Celo" : "Fuse"}
-                              to claim more G$</p
+                              Switch to ${suggestionLabel} to claim more G$
                             </p>`
                           : null}
                       </div>`
@@ -688,14 +775,10 @@ export class ClaimButton extends LitElement {
                             `
                           : html` Claim UBI G$ ${this.claimAmount} `}
                       </button>`}
-              ${this.txHash
+              ${this.txHash && txUrl
                 ? html`<div class="message success">
                     Transaction sent:
-                    <a
-                      href="https://celoscan.io/tx/${this.txHash}"
-                      target="_blank"
-                      class="tx-link"
-                    >
+                    <a href="${txUrl}" target="_blank" class="tx-link">
                       ${this.txHash.slice(0, 6)}...${this.txHash.slice(-4)}
                     </a>
                   </div>`

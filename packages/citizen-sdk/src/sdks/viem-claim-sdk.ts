@@ -2,10 +2,12 @@ import {
   type Account,
   type Address,
   type Chain,
+  createPublicClient,
   type PublicClient,
   type SimulateContractParameters,
   type WalletClient,
   ContractFunctionExecutionError,
+  http,
   TransactionReceipt,
 } from "viem"
 
@@ -13,11 +15,15 @@ import { waitForTransactionReceipt } from "viem/actions"
 
 import { IdentitySDK } from "./viem-identity-sdk"
 import {
-  type contractEnv,
-  type SupportedChains,
-  contractAddresses,
+  contractEnv,
+  chainConfigs,
+  SupportedChains,
+  faucetABI,
+  isSupportedChain,
+  ubiSchemeV2ABI,
+  createRpcUrlIterator,
 } from "../constants"
-import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
+import type { ContractAddresses } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
 import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
 
@@ -38,6 +44,23 @@ export interface WalletClaimStatus {
   nextClaimTime?: Date
 }
 
+export interface CheckEntitlementOptions {
+  publicClient?: PublicClient
+  chainOverride?: SupportedChains
+}
+
+export interface ClaimEntitlementResult {
+  amount: bigint
+  altClaimAvailable: boolean
+  altChainId: SupportedChains | null
+  altAmount: bigint | null
+}
+
+type AltClaimCandidate = {
+  chainId: SupportedChains
+  amount: bigint
+}
+
 export class ClaimSDK {
   readonly publicClient: PublicClient
   readonly walletClient: WalletClient<
@@ -46,11 +69,14 @@ export class ClaimSDK {
     Account | undefined
   >
   private readonly identitySDK: IdentitySDK
+  private readonly chainId: SupportedChains
+  private readonly chainContracts: Map<SupportedChains, ContractAddresses>
+  private readonly fallbackChains: SupportedChains[]
+  private readonly rpcIterators = new Map<SupportedChains, () => string>()
+  private readonly fvDefaultChain: SupportedChains
   private readonly ubiSchemeAddress: Address
-  private readonly ubiSchemeAltAddress: Address
   private readonly faucetAddress: Address
   private readonly account: Address
-  private readonly altChain: SupportedChains
   private readonly env: contractEnv
   public readonly rdu: string
 
@@ -78,12 +104,181 @@ export class ClaimSDK {
       env,
     )
 
-    this.altChain = chainId === 42220 ? 122 : 42220
+    this.chainId = chainId
+    this.chainContracts = new Map([[chainId, contractEnvAddresses]])
+
+    const config = chainConfigs[chainId]
+    this.fvDefaultChain = config.fvDefaultChain ?? chainId
+
+    const fallbackEntries = (chainConfigs[chainId]?.fallbackChains ?? [])
+      .map((fallbackChain) => {
+        const fallbackContracts =
+          chainConfigs[fallbackChain]?.contracts[env] ?? null
+
+        if (!fallbackContracts) {
+          throw new Error(
+            `Contract addresses for chain ${fallbackChain} (${env}) are not defined.`,
+          )
+        }
+
+        return [fallbackChain, fallbackContracts] as const
+      })
+      .filter(
+        (entry): entry is readonly [SupportedChains, ContractAddresses] =>
+          entry !== null,
+      )
+
+    this.fallbackChains = fallbackEntries.map(([id]) => id)
+
+    fallbackEntries.forEach(([id, contracts]) => {
+      this.chainContracts.set(id, contracts)
+    })
 
     this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
-    this.ubiSchemeAltAddress = contractAddresses[this.altChain][env]
-      .ubiContract as Address
     this.faucetAddress = contractEnvAddresses.faucetContract as Address
+  }
+
+  private getContractsForChain(chainId: SupportedChains): ContractAddresses {
+    const contracts = this.chainContracts.get(chainId)
+
+    if (!contracts) {
+      throw new Error(
+        `Missing contract configuration for chain ${chainId} in env ${this.env}.`,
+      )
+    }
+
+    return contracts
+  }
+
+  private getActiveChainId(): SupportedChains {
+    const connectedChainId = this.walletClient.chain?.id
+
+    if (isSupportedChain(connectedChainId)) {
+      return connectedChainId
+    }
+
+    return this.chainId
+  }
+
+  private getRpcIterator(chainId: SupportedChains): () => string {
+    if (!this.rpcIterators.has(chainId)) {
+      this.rpcIterators.set(chainId, createRpcUrlIterator(chainId))
+    }
+
+    const iterator = this.rpcIterators.get(chainId)
+    if (!iterator) {
+      throw new Error(`No RPC iterator available for chain ${chainId}`)
+    }
+
+    return iterator
+  }
+
+  private getRpcFallbackClient(chainId: SupportedChains): PublicClient {
+    const iterator = this.getRpcIterator(chainId)
+    const rpcUrl = iterator()
+
+    return createPublicClient({
+      transport: http(rpcUrl),
+    }) as PublicClient
+  }
+
+  private shouldRetryWithRpcFallback(
+    errorMessage: string,
+    chainId: SupportedChains,
+    attempt: number,
+  ): boolean {
+    if (attempt > 0) return false
+
+    const rpcUrls = chainConfigs[chainId]?.rpcUrls ?? []
+    if (!rpcUrls.length) return false
+
+    const normalizedMessage = errorMessage.toLowerCase()
+    return normalizedMessage.includes("transports[i] is not a function")
+  }
+
+  private extractErrorMessage(error: any): string {
+    const messages = new Set<string>()
+
+    if (typeof error?.shortMessage === "string") {
+      messages.add(error.shortMessage)
+    }
+
+    if (typeof error?.message === "string") {
+      messages.add(error.message)
+    }
+
+    if (typeof error?.details === "string") {
+      messages.add(error.details)
+    }
+
+    const causeMessage = error?.cause?.message
+    if (typeof causeMessage === "string") {
+      messages.add(causeMessage)
+    }
+
+    if (!messages.size) {
+      return "Unknown error"
+    }
+
+    return Array.from(messages).join(" | ")
+  }
+
+  private async readChainEntitlement(
+    chainId: SupportedChains,
+    client?: PublicClient,
+  ): Promise<bigint> {
+    const contracts = this.getContractsForChain(chainId)
+    const isPrimaryChain = chainId === this.chainId
+
+    const resolvedClient = client
+      ? client
+      : isPrimaryChain
+        ? this.publicClient
+        : this.getRpcFallbackClient(chainId)
+
+    let altClient: PublicClient | undefined
+    if (isPrimaryChain) {
+      altClient = client ? resolvedClient : undefined
+    } else {
+      altClient = resolvedClient
+    }
+
+    return this.readContract<bigint>(
+      {
+        address: contracts.ubiContract as Address,
+        abi: ubiSchemeV2ABI,
+        functionName: "checkEntitlement",
+        args: [this.account],
+      },
+      altClient,
+      chainId,
+    )
+  }
+
+  private async findAltEntitlement(): Promise<AltClaimCandidate | null> {
+    for (const fallbackChainId of this.fallbackChains) {
+      const rpcUrls = [...(chainConfigs[fallbackChainId]?.rpcUrls ?? [])]
+      if (!rpcUrls.length) {
+        continue
+      }
+
+      for (let attempt = 0; attempt < rpcUrls.length; attempt++) {
+        try {
+          const amount = await this.readChainEntitlement(fallbackChainId)
+          if (amount > 0n) {
+            return {
+              chainId: fallbackChainId,
+              amount,
+            }
+          }
+        } catch {
+          // Try next RPC endpoint if the current one fails.
+          continue
+        }
+      }
+    }
+
+    return null
   }
 
   static async init(
@@ -107,9 +302,13 @@ export class ClaimSDK {
       args?: any[]
     },
     altClient?: PublicClient,
+    targetChain?: SupportedChains,
+    attempt = 0,
   ): Promise<T> {
+    const chainId = targetChain ?? this.chainId
+    const client = altClient || this.publicClient
+    const errorPrefix = `Failed to read contract ${params.functionName}`
     try {
-      const client = altClient || this.publicClient
       return (await client.readContract({
         address: params.address,
         abi: params.abi,
@@ -118,9 +317,21 @@ export class ClaimSDK {
         account: this.account,
       })) as T
     } catch (error: any) {
-      throw new Error(
-        `Failed to read contract ${params.functionName}: ${error.message}`,
-      )
+      // While fuse/celo work out of the box, there is a transport issue while connecting to XDC.
+      // Resulting in --> Details: transports[i] is not a function
+      // we implement a one-time retry with a fallback RPC from our list
+      const combinedMessage = this.extractErrorMessage(error)
+      if (this.shouldRetryWithRpcFallback(combinedMessage, chainId, attempt)) {
+        const fallbackClient = this.getRpcFallbackClient(chainId)
+        return this.readContract<T>(
+          params,
+          fallbackClient,
+          chainId,
+          attempt + 1,
+        )
+      }
+
+      throw new Error(`${errorPrefix}: ${combinedMessage}`)
     }
   }
 
@@ -161,20 +372,47 @@ export class ClaimSDK {
    * Checks if the connected user is eligible to claim UBI for the current period.
    * Returns the amount they can claim (0 if not eligible or already claimed).
    * Does not check for whitelisting status.
-   * @param pClient - Optional public client to check entitlement on alternative chain.
+   * @param pClient - Optional public client scoped to an alternative chain.
+   * @param chainOverride - Optional chain id to evaluate entitlement against.
    * @returns The claimable amount in the smallest unit (e.g., wei).
    * @throws If the entitlement check fails.
    */
-  async checkEntitlement(pClient?: PublicClient): Promise<bigint> {
-    return this.readContract<bigint>(
-      {
-        address: !pClient ? this.ubiSchemeAddress : this.ubiSchemeAltAddress,
-        abi: ubiSchemeV2ABI,
-        functionName: "checkEntitlement",
-        args: [this.account],
-      },
-      pClient,
-    )
+  async checkEntitlement(
+    options: CheckEntitlementOptions = {},
+  ): Promise<ClaimEntitlementResult> {
+    const targetChain = options.chainOverride ?? this.chainId
+    const clientOverride = options.publicClient
+    const isPrimaryChain = targetChain === this.chainId
+
+    const amount = await this.readChainEntitlement(targetChain, clientOverride)
+
+    if (!isPrimaryChain) {
+      const hasAltAmount = amount > 0n
+      return {
+        amount,
+        altClaimAvailable: hasAltAmount,
+        altChainId: hasAltAmount ? targetChain : null,
+        altAmount: hasAltAmount ? amount : null,
+      }
+    }
+
+    if (amount > 0n) {
+      return {
+        amount,
+        altClaimAvailable: false,
+        altChainId: null,
+        altAmount: null,
+      }
+    }
+
+    const altClaim = await this.findAltEntitlement()
+
+    return {
+      amount,
+      altClaimAvailable: Boolean(altClaim),
+      altChainId: altClaim?.chainId ?? null,
+      altAmount: altClaim?.amount ?? null,
+    }
   }
 
   /**
@@ -198,7 +436,8 @@ export class ClaimSDK {
     }
 
     // 2. Check entitlement (if 0, user has already claimed or can't claim)
-    const entitlement = await this.checkEntitlement()
+    const entitlementResult = await this.checkEntitlement()
+    const entitlement = entitlementResult.amount
 
     if (entitlement > 0n) {
       return {
@@ -228,7 +467,9 @@ export class ClaimSDK {
    * @returns The transaction receipt if the claim is successful.
    * @throws If the user is not whitelisted, not entitled to claim, balance check fails, or claim transaction fails.
    */
-  async claim(txConfirm?: (message: string) => void | Promise<void>): Promise<TransactionReceipt | any> {
+  async claim(
+    txConfirm?: (message: string) => void | Promise<void>,
+  ): Promise<TransactionReceipt | any> {
     const userAddress = this.account
 
     // 1. Check whitelisting status
@@ -240,8 +481,8 @@ export class ClaimSDK {
     }
 
     // 2. Check if user can claim from UBI pool
-    const entitlement = await this.checkEntitlement()
-    if (entitlement === 0n) {
+    const entitlementResult = await this.checkEntitlement()
+    if (entitlementResult.amount === 0n) {
       throw new Error("No UBI available to claim for this period.")
     }
 
@@ -272,7 +513,12 @@ export class ClaimSDK {
    * @throws If face verification redirect fails.
    */
   private async fvRedirect(): Promise<void> {
-    const fvLink = await this.identitySDK.generateFVLink(false, this.rdu, 42220)
+    const fvChainId = this.fvDefaultChain ?? this.chainId
+    const fvLink = await this.identitySDK.generateFVLink(
+      false,
+      this.rdu,
+      fvChainId,
+    )
     if (typeof window !== "undefined") {
       window.location.href = fvLink
     } else {
@@ -290,8 +536,8 @@ export class ClaimSDK {
    */
   async nextClaimTime(): Promise<Date> {
     // Check if user can claim now (entitlement > 0)
-    const entitlement = await this.checkEntitlement()
-    if (entitlement > 0n) {
+    const entitlementResult = await this.checkEntitlement()
+    if (entitlementResult.amount > 0n) {
       return new Date(0) // Return epoch time if can claim now
     }
 
@@ -330,25 +576,28 @@ export class ClaimSDK {
   }
 
   /**
-    * Triggers a faucet request to top up the user's balance.
-    * @param txConfirm - Optional callback to confirm transactions before execution.
-    * @throws If the faucet request fails.
-    *
-    * NOTE: Upgraded to contract-first flow:
-    *  - Try on-chain faucet call (user signs) via `faucet.topWallet(address)`
-    *  - Guard against gas>topping griefing and low native balance for publishing the tx
-    *  - If on-chain path fails (or cannot sign/publish), fallback to backend `/verify/topWallet`
-    *  - Throttled to at most once per hour per chain (localStorage)
-    */
-  async triggerFaucet(txConfirm?: (message: string) => void | Promise<void>): Promise<void> {
+   * Triggers a faucet request to top up the user's balance.
+   * @param txConfirm - Optional callback to confirm transactions before execution.
+   * @throws If the faucet request fails.
+   *
+   * NOTE: Upgraded to contract-first flow:
+   *  - Try on-chain faucet call (user signs) via `faucet.topWallet(address)`
+   *  - Guard against gas>topping griefing and low native balance for publishing the tx
+   *  - If on-chain path fails (or cannot sign/publish), fallback to backend `/verify/topWallet`
+   *  - Throttled to at most once per hour per chain (localStorage)
+   */
+  async triggerFaucet(
+    txConfirm?: (message: string) => void | Promise<void>,
+  ): Promise<void> {
     // Call the txConfirm callback before executing the faucet transaction
     if (txConfirm) {
-      const message = "A manual transaction needs to be signed in order to claim UBI. Please confirm the transaction in your wallet to proceed with the faucet request."
+      const message =
+        "A manual transaction needs to be signed in order to claim UBI. Please confirm the transaction in your wallet to proceed with the faucet request."
       await txConfirm(message)
     }
 
     // Delegate to shared utility to keep SDK lean while preserving this docstring.
-    const chainId = this.walletClient.chain?.id!
+    const chainId = this.getActiveChainId()
     const result = await triggerFaucetUtil({
       chainId,
       account: this.account,
@@ -395,19 +644,23 @@ export class ClaimSDK {
    * @returns True if the balance meets the threshold, false otherwise.
    * @throws If the maximum retries are exceeded or faucet request fails.
    */
-  async checkBalanceWithRetry(txConfirm?: (message: string) => void | Promise<void>): Promise<boolean> {
+  async checkBalanceWithRetry(
+    txConfirm?: (message: string) => void | Promise<void>,
+  ): Promise<boolean> {
     const maxRetries = 5
     const retryDelay = 5000
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // Call the txConfirm callback before each faucet attempt if needed
       if (txConfirm && attempt === 1) {
-        const message = "You might have to sign two transactions if you need additional gas to perform your UBI claim. "
+        const message =
+          "You might have to sign two transactions if you need additional gas to perform your UBI claim. "
         await txConfirm(message)
       }
 
+      const chainId = this.getActiveChainId()
       const result = await triggerFaucetUtil({
-        chainId: this.walletClient.chain?.id!,
+        chainId,
         account: this.account,
         publicClient: this.publicClient,
         walletClient: this.walletClient,
@@ -420,7 +673,8 @@ export class ClaimSDK {
       if (result === "skipped") return true
 
       // If we successfully topped up, return true
-      if (result === "topped_via_contract" || result === "topped_via_api") return true
+      if (result === "topped_via_contract" || result === "topped_via_api")
+        return true
 
       // If error and not last attempt, wait and retry
       if (result === "error" && attempt < maxRetries) {
