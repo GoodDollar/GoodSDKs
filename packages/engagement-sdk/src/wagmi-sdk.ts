@@ -1,20 +1,27 @@
-import { usePublicClient, useWalletClient } from "wagmi";
-import { EngagementRewardsSDK } from "./viem-sdk";
-import { Address } from "viem";
+import { usePublicClient, useWalletClient } from "wagmi"
+import {
+  EngagementRewardsSDK,
+  type EngagementRewardsSDKOptions,
+} from "./viem-sdk"
+import { Address } from "viem"
 
-export function useEngagementRewards(contractAddress: Address) {
-  const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
+export function useEngagementRewards(
+  contractAddress: Address,
+  options?: EngagementRewardsSDKOptions & { debug?: boolean },
+) {
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
 
   if (!walletClient || !publicClient) {
-    return;
+    return
   }
 
   const sdk = new EngagementRewardsSDK(
     publicClient,
     walletClient,
     contractAddress,
-  );
+    options,
+  )
 
-  return sdk;
+  return sdk
 }
