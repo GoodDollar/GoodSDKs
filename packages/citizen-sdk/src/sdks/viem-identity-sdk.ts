@@ -19,10 +19,17 @@ import {
   Envs,
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
+  FarcasterAppConfigs,
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
-import { navigateToUrl, createFarcasterCallbackUrl } from "../utils/auth"
+import { 
+  navigateToUrl, 
+  createFarcasterCallbackUrl, 
+  createFarcasterCallbackUniversalLink,
+  isInFarcasterMiniApp,
+  type FarcasterAppConfig 
+} from "../utils/auth"
 
 import type {
   IdentityContract,
@@ -229,11 +236,25 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        // Create Farcaster-compatible callback URL
-        const farcasterCallbackUrl = createFarcasterCallbackUrl(callbackUrl, {
-          source: "gooddollar_identity_verification"
-        });
-        params[popupMode ? "cbu" : "rdu"] = farcasterCallbackUrl
+        // Check if we're in a Farcaster context and should use Universal Links
+        const isFarcaster = await isInFarcasterMiniApp();
+        
+        if (isFarcaster && FarcasterAppConfigs[this.env]) {
+          // Create proper Farcaster Universal Link
+          const farcasterConfig = FarcasterAppConfigs[this.env];
+          const universalLink = createFarcasterCallbackUniversalLink(
+            farcasterConfig,
+            'verify',
+            { source: "gooddollar_identity_verification" }
+          );
+          params[popupMode ? "cbu" : "rdu"] = universalLink;
+        } else {
+          // Fallback to direct callback URL for non-Farcaster environments
+          const farcasterCallbackUrl = createFarcasterCallbackUrl(callbackUrl, {
+            source: "gooddollar_identity_verification"
+          });
+          params[popupMode ? "cbu" : "rdu"] = farcasterCallbackUrl;
+        }
       }
 
       url.searchParams.append(

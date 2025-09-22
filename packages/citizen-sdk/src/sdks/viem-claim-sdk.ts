@@ -7,6 +7,7 @@ import {
   type WalletClient,
   ContractFunctionExecutionError,
   TransactionReceipt,
+  zeroAddress,
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
@@ -18,9 +19,13 @@ import {
   type SupportedChains,
   contractAddresses,
 } from "../constants"
-import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI } from "../constants"
+import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI, FarcasterAppConfigs } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
-import { createFarcasterCallbackUrl } from "../utils/auth"
+import { 
+  createFarcasterCallbackUrl, 
+  createFarcasterCallbackUniversalLink,
+  isInFarcasterMiniApp 
+} from "../utils/auth"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -47,13 +52,13 @@ export class ClaimSDK {
     Account | undefined
   >
   private readonly identitySDK: IdentitySDK
-  private readonly ubiSchemeAddress: Address
-  private readonly ubiSchemeAltAddress: Address
-  private readonly faucetAddress: Address
+  private ubiSchemeAddress: Address = zeroAddress
+  private ubiSchemeAltAddress: Address = zeroAddress
+  private faucetAddress: Address = zeroAddress
   private readonly account: Address
   private readonly altChain: SupportedChains
   private readonly env: contractEnv
-  public readonly rdu: string
+  public rdu: string
 
   constructor({
     account,
@@ -70,12 +75,11 @@ export class ClaimSDK {
     this.walletClient = walletClient
     this.identitySDK = identitySDK
     this.account = account ?? walletClient.account.address
-
-    // Create Farcaster-compatible callback URL
-    this.rdu = createFarcasterCallbackUrl(rdu, {
-      source: "gooddollar_claim_verification"
-    })
     this.env = env
+
+    // Initialize callback URL - will be set properly in initializeCallbackUrl
+    this.rdu = rdu
+    this.initializeCallbackUrl(rdu);
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
       walletClient,
@@ -83,9 +87,48 @@ export class ClaimSDK {
     )
 
     this.altChain = chainId === 42220 ? 122 : 42220
+    this.initializeContracts();
+  }
+
+  /**
+   * Initialize the callback URL with proper Farcaster Universal Link support
+   * @param rdu - The redirect URL after claim
+   */
+  private async initializeCallbackUrl(rdu?: string): Promise<void> {
+    if (!rdu) return;
+
+    try {
+      // Check if we're in a Farcaster context and should use Universal Links
+      const isFarcaster = await isInFarcasterMiniApp();
+      
+      if (isFarcaster && FarcasterAppConfigs[this.env]) {
+        // Create proper Farcaster Universal Link
+        const farcasterConfig = FarcasterAppConfigs[this.env];
+        this.rdu = createFarcasterCallbackUniversalLink(
+          farcasterConfig,
+          'claim',
+          { source: "gooddollar_claim_verification" }
+        );
+      } else {
+        // Fallback to direct callback URL for non-Farcaster environments
+        this.rdu = createFarcasterCallbackUrl(rdu, {
+          source: "gooddollar_claim_verification"
+        });
+      }
+    } catch (error) {
+      // Fallback to original URL on error
+      this.rdu = rdu;
+    }
+  }
+
+  private initializeContracts(): void {
+    const { contractEnvAddresses } = resolveChainAndContract(
+      this.walletClient,
+      this.env,
+    )
 
     this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
-    this.ubiSchemeAltAddress = contractAddresses[this.altChain][env]
+    this.ubiSchemeAltAddress = contractAddresses[this.altChain][this.env]
       .ubiContract as Address
     this.faucetAddress = contractEnvAddresses.faucetContract as Address
   }

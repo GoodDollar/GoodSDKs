@@ -262,7 +262,58 @@ export function handleVerificationResponseSync(url?: string): {
 }
 
 /**
+ * Configuration for Farcaster Mini App
+ * 
+ * To get your app ID and slug:
+ * 1. Go to the Farcaster Developer Portal
+ * 2. Register your Mini App
+ * 3. Copy the app ID and slug from your Mini App settings
+ * 4. Update the FarcasterAppConfigs in constants.ts with your values
+ */
+export interface FarcasterAppConfig {
+  appId: string;
+  appSlug: string;
+}
+
+/**
+ * Creates a proper Farcaster Universal Link following the official format
+ * @param config - Farcaster app configuration (appId and appSlug)
+ * @param subPath - Optional sub-path to append (e.g., 'verify', 'callback')
+ * @param queryParams - Optional query parameters to include
+ * @returns A proper Farcaster Universal Link
+ */
+export function createFarcasterUniversalLink(
+  config: FarcasterAppConfig,
+  subPath?: string,
+  queryParams?: Record<string, string>
+): string {
+  // Official Farcaster Universal Link format:
+  // https://farcaster.xyz/miniapps/<app-id>/<app-slug>(/<sub-path>)(?<query-params>)
+  
+  let universalLink = `https://farcaster.xyz/miniapps/${config.appId}/${config.appSlug}`;
+  
+  // Add sub-path if provided
+  if (subPath) {
+    // Ensure sub-path doesn't start with '/'
+    const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
+    universalLink += `/${cleanSubPath}`;
+  }
+  
+  // Add query parameters if provided
+  if (queryParams && Object.keys(queryParams).length > 0) {
+    const urlObj = new URL(universalLink);
+    Object.entries(queryParams).forEach(([key, value]) => {
+      urlObj.searchParams.set(key, value);
+    });
+    universalLink = urlObj.toString();
+  }
+  
+  return universalLink;
+}
+
+/**
  * Creates a Farcaster-compatible callback URL
+ * @deprecated Use createFarcasterUniversalLink for proper Universal Links support
  * @param baseUrl - The base callback URL
  * @param additionalParams - Additional parameters to include
  * @returns A Farcaster-compatible callback URL
@@ -299,8 +350,27 @@ export function createFarcasterCallbackUrl(
 }
 
 /**
+ * Helper function to create proper Farcaster Universal Links with callback support
+ * @param config - Farcaster app configuration
+ * @param callbackType - Type of callback ('verify', 'callback', etc.)
+ * @param additionalParams - Additional parameters to include
+ * @returns A proper Farcaster Universal Link
+ */
+export function createFarcasterCallbackUniversalLink(
+  config: FarcasterAppConfig,
+  callbackType: 'verify' | 'callback' | 'claim' = 'verify',
+  additionalParams?: Record<string, string>
+): string {
+  return createFarcasterUniversalLink(config, callbackType, {
+    source: "gooddollar_identity_verification",
+    ...additionalParams
+  });
+}
+
+/**
  * Creates a universal link compatible callback URL for mobile/native app support
  * Enhanced for Farcaster miniapp compatibility with proper sub-path handling
+ * @deprecated Use createFarcasterCallbackUniversalLink for proper Universal Links support
  * @param baseUrl - The base callback URL
  * @param additionalParams - Additional parameters to include
  * @returns A universal link compatible URL
