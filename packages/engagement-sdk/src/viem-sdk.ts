@@ -14,17 +14,25 @@ export const DEV_REWARDS_CONTRACT = devdeployments[
 export const REWARDS_CONTRACT = prod?.[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
+import {
+  DEFAULT_EVENT_BATCH_SIZE,
+  DEFAULT_EVENT_LOOKBACK,
+  WAIT_DELAY,
+  fetchInBlockBatches,
+} from "./utils/rpc"
+import {
+  type StorageLike,
+  type StorageLogger,
+  readProgressBlock,
+  writeProgressBlock,
+  clearStorageKey,
+} from "./utils/storage"
+export type { StorageLike } from "./utils/storage"
 
-export const DEFAULT_EVENT_BATCH_SIZE = 10_000n
-export const DEFAULT_EVENT_LOOKBACK = 500_000n
-const WAIT_DELAY = 5000 // 1 second delay
+export const EVENT_CACHE_PREFIX = "goodsdks:engagement-rewards"
 
-const EVENT_CACHE_PREFIX = "goodsdks:engagement-rewards"
-
-interface StorageLike {
-  getItem(key: string): string | null
-  setItem(key: string, value: string): void
-  removeItem(key: string): void
+export interface EngagementRewardsSDKOptions {
+  cacheStorage?: StorageLike
 }
 
 export interface AppInfo {
@@ -83,12 +91,45 @@ export class EngagementRewardsSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient
   private contractAddress: Address
+  private cacheStorage?: StorageLike
+  private debug: boolean = false
+  private storageLogger: StorageLogger
+
+  constructor(
+    publicClient: PublicClient,
+    walletClient: WalletClient,
+    contractAddress: Address,
+    options?: EngagementRewardsSDKOptions & { debug?: boolean },
+  ) {
+    this.publicClient = publicClient
+    this.walletClient = walletClient
+    this.contractAddress = contractAddress
+    this.cacheStorage = options?.cacheStorage
+    this.debug = options?.debug ?? false
+    this.storageLogger = (message, context) => {
+      this.logDebug(message, context)
+    }
+  }
+
+  private logDebug(message: string, context?: Record<string, unknown>) {
+    if (!this.debug) return
+    if (context) {
+      console.log("[goodsdks:engagement-sdk]", message, context)
+    } else {
+      console.log("[goodsdks:engagement-sdk]", message)
+    }
+  }
 
   private getCacheStorage(): StorageLike | undefined {
+    if (this.cacheStorage) {
+      return this.cacheStorage
+    }
+
     const globalObject = globalThis as {
       localStorage?: StorageLike
     }
     if (!globalObject.localStorage) {
+      this.logDebug("cache storage unavailable: localStorage missing")
       return undefined
     }
 
@@ -96,8 +137,12 @@ export class EngagementRewardsSDK {
       const key = `${EVENT_CACHE_PREFIX}:check`
       globalObject.localStorage.setItem(key, key)
       globalObject.localStorage.removeItem(key)
-      return globalObject.localStorage
-    } catch {
+      this.cacheStorage = globalObject.localStorage
+      return this.cacheStorage
+    } catch (error) {
+      this.logDebug("cache storage unavailable: localStorage access failed", {
+        error,
+      })
       return undefined
     }
   }
@@ -112,14 +157,17 @@ export class EngagementRewardsSDK {
     ].join(":")
   }
 
-  constructor(
-    publicClient: PublicClient,
-    walletClient: WalletClient,
-    contractAddress: Address,
+  private logBatchFailure(
+    range: { from: bigint; to: bigint },
+    batchSize: bigint,
+    error: unknown,
   ) {
-    this.publicClient = publicClient
-    this.walletClient = walletClient
-    this.contractAddress = contractAddress
+    this.logDebug("failed logs batch", {
+      batchSize: batchSize.toString(),
+      fromBlock: range.from.toString(),
+      toBlock: range.to.toString(),
+      error,
+    })
   }
 
   private async submitAndWait(
@@ -317,59 +365,6 @@ export class EngagementRewardsSDK {
     return { domain, types, message }
   }
 
-  private async getLogsBatches<T>({
-    batchSize,
-    fromBlock,
-    toBlock,
-    promiseCreator,
-  }: {
-    batchSize: bigint
-    fromBlock: bigint
-    toBlock: bigint
-    promiseCreator: (fromBlock: bigint, toBlock: bigint) => Promise<T[]>
-  }): Promise<T[]> {
-    if (batchSize <= 0n) {
-      throw new Error("batchSize must be greater than zero")
-    }
-    if (fromBlock < 0n) {
-      throw new Error("fromBlock must be zero or greater")
-    }
-    if (toBlock < fromBlock) {
-      throw new Error("toBlock must be greater than or equal to fromBlock")
-    }
-
-    const ranges: Array<{ from: bigint; to: bigint }> = []
-    let rangeStart = fromBlock
-
-    while (rangeStart <= toBlock) {
-      const tentativeEnd = rangeStart + batchSize - 1n
-      const rangeEnd = tentativeEnd > toBlock ? toBlock : tentativeEnd
-      ranges.push({ from: rangeStart, to: rangeEnd })
-      if (rangeEnd === toBlock) {
-        break
-      }
-      rangeStart = rangeEnd + 1n
-    }
-
-    const results = await Promise.all(
-      ranges.map(async ({ from, to }) => {
-        try {
-          return await promiseCreator(from, to)
-        } catch (e) {
-          console.log("failed logs batch", {
-            batchSize: batchSize.toString(),
-            fromBlock: from.toString(),
-            toBlock: to.toString(),
-            e,
-          })
-          return [] as T[]
-        }
-      }),
-    )
-
-    return results.flat()
-  }
-
   async getPendingApps() {
     return (await this.getAppliedApps()).filter((_) => _.isApproved === false)
   }
@@ -412,23 +407,23 @@ export class EngagementRewardsSDK {
     resetCache?: boolean,
   ): Promise<bigint | undefined> {
     const storage = this.getCacheStorage()
-    if (!storage) return undefined
+    if (!storage) {
+      this.logDebug("cache storage unavailable: skipping read", {
+        app,
+        inviter,
+        cacheKey,
+      })
+      return undefined
+    }
 
     const storageKey = this.buildCacheKey(app, inviter, cacheKey)
     if (resetCache) {
-      storage.removeItem(storageKey)
+      this.logDebug("resetting cached progress block", { cacheKey: storageKey })
+      clearStorageKey(storage, storageKey, this.storageLogger)
       return undefined
     }
 
-    const raw = storage.getItem(storageKey)
-    if (!raw) return undefined
-
-    try {
-      return BigInt(raw) >= 0n ? BigInt(raw) : undefined
-    } catch {
-      storage.removeItem(storageKey)
-      return undefined
-    }
+    return readProgressBlock(storage, storageKey, this.storageLogger)
   }
 
   /**
@@ -460,22 +455,23 @@ export class EngagementRewardsSDK {
           ? 0n
           : latestBlock - blocksAgo
 
-    const storedFromBlock = disableCache
-      ? undefined
-      : await this.getCachedFromBlock(app, inviter, cacheKey, resetCache)
+    const storedFromBlock = !disableCache
+      ? await this.getCachedFromBlock(app, inviter, cacheKey, resetCache)
+      : undefined
+
     if (storedFromBlock !== undefined && storedFromBlock > latestBlock) {
       return []
     }
 
-    fromBlock =
-      storedFromBlock && storedFromBlock > fromBlock
-        ? storedFromBlock
-        : fromBlock
+    if (storedFromBlock !== undefined && storedFromBlock > fromBlock) {
+      fromBlock = storedFromBlock
+    }
+
     if (fromBlock > latestBlock) {
       return []
     }
 
-    const rewardEvents = await this.getLogsBatches({
+    const rewardEvents = await fetchInBlockBatches({
       batchSize,
       fromBlock,
       toBlock: latestBlock,
@@ -488,23 +484,25 @@ export class EngagementRewardsSDK {
           fromBlock: rangeStart,
           toBlock: rangeEnd,
         }),
+      onBatchFailure: (error, range) => {
+        this.logBatchFailure(range, batchSize, error)
+      },
     })
 
     if (!disableCache) {
-      try {
-        const storage = this.getCacheStorage()
-        storage?.setItem(
-          this.buildCacheKey(app, inviter, cacheKey),
-          (latestBlock + 1n).toString(),
-        )
-      } catch {
-        try {
-          this.getCacheStorage()?.removeItem(
-            this.buildCacheKey(app, inviter, cacheKey),
-          )
-        } catch {
-          // ignore storage errors
-        }
+      const storage = this.getCacheStorage()
+      const key = this.buildCacheKey(app, inviter, cacheKey)
+      if (!storage) {
+        this.logDebug("cache storage unavailable: skipping write", {
+          cacheKey: key,
+        })
+      } else {
+        // remember last processed block so subsequent runs can resume quickly
+        this.logDebug("persisting cached progress block", {
+          cacheKey: key,
+          nextBlock: (latestBlock + 1n).toString(),
+        })
+        writeProgressBlock(storage, key, latestBlock + 1n, this.storageLogger)
       }
     }
 
@@ -526,7 +524,7 @@ export class EngagementRewardsSDK {
         ? 0n
         : latestBlock - DEFAULT_EVENT_LOOKBACK
 
-    const events = await this.getLogsBatches({
+    const events = await fetchInBlockBatches({
       batchSize: DEFAULT_EVENT_BATCH_SIZE,
       fromBlock: earliestBlock,
       toBlock: latestBlock,
@@ -539,6 +537,9 @@ export class EngagementRewardsSDK {
           fromBlock,
           toBlock,
         }),
+      onBatchFailure: (error, range) => {
+        this.logBatchFailure(range, DEFAULT_EVENT_BATCH_SIZE, error)
+      },
     })
 
     return events.map((log) => ({
