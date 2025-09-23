@@ -1,10 +1,11 @@
 {
   "name": "@goodsdks/engagement-sdk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
