@@ -2,12 +2,10 @@ import {
   type Account,
   type Address,
   type Chain,
-  createPublicClient,
   type PublicClient,
   type SimulateContractParameters,
   type WalletClient,
   ContractFunctionExecutionError,
-  http,
   TransactionReceipt,
 } from "viem"
 
@@ -17,15 +15,21 @@ import { IdentitySDK } from "./viem-identity-sdk"
 import {
   contractEnv,
   chainConfigs,
+  FALLBACK_CHAIN_PRIORITY,
   SupportedChains,
   faucetABI,
   isSupportedChain,
   ubiSchemeV2ABI,
-  createRpcUrlIterator,
 } from "../constants"
 import type { ContractAddresses } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
 import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
+import {
+  createRpcIteratorRegistry,
+  extractErrorMessage,
+  getRpcFallbackClient,
+  shouldRetryRpcFallback,
+} from "../utils/rpcFallback"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -72,7 +76,7 @@ export class ClaimSDK {
   private readonly chainId: SupportedChains
   private readonly chainContracts: Map<SupportedChains, ContractAddresses>
   private readonly fallbackChains: SupportedChains[]
-  private readonly rpcIterators = new Map<SupportedChains, () => string>()
+  private readonly rpcIterators = createRpcIteratorRegistry()
   private readonly fvDefaultChain: SupportedChains
   private readonly ubiSchemeAddress: Address
   private readonly faucetAddress: Address
@@ -110,15 +114,15 @@ export class ClaimSDK {
     const config = chainConfigs[chainId]
     this.fvDefaultChain = config.fvDefaultChain ?? chainId
 
-    const fallbackEntries = (chainConfigs[chainId]?.fallbackChains ?? [])
+    const fallbackEntries = FALLBACK_CHAIN_PRIORITY.filter(
+      (fallbackChain) => fallbackChain !== chainId,
+    )
       .map((fallbackChain) => {
         const fallbackContracts =
           chainConfigs[fallbackChain]?.contracts[env] ?? null
 
         if (!fallbackContracts) {
-          throw new Error(
-            `Contract addresses for chain ${fallbackChain} (${env}) are not defined.`,
-          )
+          return null
         }
 
         return [fallbackChain, fallbackContracts] as const
@@ -128,9 +132,9 @@ export class ClaimSDK {
           entry !== null,
       )
 
-    this.fallbackChains = fallbackEntries.map(([id]) => id)
+    this.fallbackChains = fallbackEntries?.map(([id]) => id)
 
-    fallbackEntries.forEach(([id, contracts]) => {
+    fallbackEntries?.forEach(([id, contracts]) => {
       this.chainContracts.set(id, contracts)
     })
 
@@ -160,69 +164,6 @@ export class ClaimSDK {
     return this.chainId
   }
 
-  private getRpcIterator(chainId: SupportedChains): () => string {
-    if (!this.rpcIterators.has(chainId)) {
-      this.rpcIterators.set(chainId, createRpcUrlIterator(chainId))
-    }
-
-    const iterator = this.rpcIterators.get(chainId)
-    if (!iterator) {
-      throw new Error(`No RPC iterator available for chain ${chainId}`)
-    }
-
-    return iterator
-  }
-
-  private getRpcFallbackClient(chainId: SupportedChains): PublicClient {
-    const iterator = this.getRpcIterator(chainId)
-    const rpcUrl = iterator()
-
-    return createPublicClient({
-      transport: http(rpcUrl),
-    }) as PublicClient
-  }
-
-  private shouldRetryWithRpcFallback(
-    errorMessage: string,
-    chainId: SupportedChains,
-    attempt: number,
-  ): boolean {
-    if (attempt > 0) return false
-
-    const rpcUrls = chainConfigs[chainId]?.rpcUrls ?? []
-    if (!rpcUrls.length) return false
-
-    const normalizedMessage = errorMessage.toLowerCase()
-    return normalizedMessage.includes("transports[i] is not a function")
-  }
-
-  private extractErrorMessage(error: any): string {
-    const messages = new Set<string>()
-
-    if (typeof error?.shortMessage === "string") {
-      messages.add(error.shortMessage)
-    }
-
-    if (typeof error?.message === "string") {
-      messages.add(error.message)
-    }
-
-    if (typeof error?.details === "string") {
-      messages.add(error.details)
-    }
-
-    const causeMessage = error?.cause?.message
-    if (typeof causeMessage === "string") {
-      messages.add(causeMessage)
-    }
-
-    if (!messages.size) {
-      return "Unknown error"
-    }
-
-    return Array.from(messages).join(" | ")
-  }
-
   private async readChainEntitlement(
     chainId: SupportedChains,
     client?: PublicClient,
@@ -234,7 +175,7 @@ export class ClaimSDK {
       ? client
       : isPrimaryChain
         ? this.publicClient
-        : this.getRpcFallbackClient(chainId)
+        : getRpcFallbackClient(chainId, this.rpcIterators)
 
     let altClient: PublicClient | undefined
     if (isPrimaryChain) {
@@ -320,9 +261,9 @@ export class ClaimSDK {
       // While fuse/celo work out of the box, there is a transport issue while connecting to XDC.
       // Resulting in --> Details: transports[i] is not a function
       // we implement a one-time retry with a fallback RPC from our list
-      const combinedMessage = this.extractErrorMessage(error)
-      if (this.shouldRetryWithRpcFallback(combinedMessage, chainId, attempt)) {
-        const fallbackClient = this.getRpcFallbackClient(chainId)
+      const combinedMessage = extractErrorMessage(error)
+      if (shouldRetryRpcFallback(combinedMessage, chainId, attempt)) {
+        const fallbackClient = getRpcFallbackClient(chainId, this.rpcIterators)
         return this.readContract<T>(
           params,
           fallbackClient,

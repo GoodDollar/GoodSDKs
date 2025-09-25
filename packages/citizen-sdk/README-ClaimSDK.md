@@ -303,6 +303,7 @@ const ClaimTimer = () => {
 
 ```typescript
 import { useClaimSDK } from '@goodsdks/citizen-sdk';
+import { formatUnits } from "viem"
 
 const ClaimButton = () => {
   const claimSDK = useClaimSDK('production');
@@ -317,7 +318,7 @@ const ClaimButton = () => {
         altChainId,
       } = await claimSDK.checkEntitlement();
 
-      const formattedAmount = Number(amount) / chainConfigs[chainId].decimals;
+      const formattedAmount = formatUnits(amount, CHAIN_DECIMALS[chainId])
       setClaimAmount(formattedAmount);
 
       if (altClaimAvailable && altChainId) {
@@ -599,11 +600,8 @@ const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address)
 ### 2. Entitlement Check
 
 ```typescript
-const {
-  amount,
-  altClaimAvailable,
-  altChainId,
-} = await claimSDK.checkEntitlement()
+const { amount, altClaimAvailable, altChainId } =
+  await claimSDK.checkEntitlement()
 // `amount` is 0n if the user has already claimed or is not eligible
 // `altClaimAvailable` + `altChainId` highlight another network with an active allocation
 ```

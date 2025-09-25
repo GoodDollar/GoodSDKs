@@ -23,7 +23,7 @@ const wagmiAdapter = new WagmiAdapter({
   projectId,
   ssr: true,
   transports: {
-    [xdc.id]: http("https://rpc.xdc.org"),
+    [xdc.id]: http("https://rpc.ankr.com/xdc"),
     [fuse.id]: http("https://rpc.fuse.io"),
     [celo.id]: http("https://forno.celo.org"),
   },

@@ -10,18 +10,18 @@ import {
   createWalletClient,
   custom,
   formatUnits,
-  defineChain,
 } from "viem"
 import { celo, fuse, xdc, type Chain } from "viem/chains"
 
 import {
   ClaimSDK,
+  CHAIN_DECIMALS,
+  FALLBACK_CHAIN_PRIORITY,
   chainConfigs,
   IdentitySDK,
   isSupportedChain,
 } from "@goodsdks/citizen-sdk"
 import {
-  CHAIN_DECIMALS,
   DEFAULT_SUPPORTED_CHAINS,
   getG$TokenAddress,
   goodDollarABI,
@@ -56,7 +56,7 @@ export class ClaimButton extends LitElement {
   @state()
   private error: string | null = null
   @state() private txHash: string | null = null
-  @state() private claimAmount: number | null = null
+  @state() private claimAmount: string | null = null
   @state() private chain: SupportedChains | null = null
   @state() private walletAddress: Address | null = null
   @state() private tokenBalance: string | null = null
@@ -82,8 +82,6 @@ export class ClaimButton extends LitElement {
   private publicClient: PublicClient | null = null
   private walletClient: WalletClient | null = null
   private claimSdk: ClaimSDK | null = null
-  private claimFallbackChains: SupportedChains[] = []
-
   private getSupportedChainIds(): SupportedChains[] {
     const uniqueIds = new Set(
       this.supportedChains.map((chainId) => Number(chainId)),
@@ -393,8 +391,6 @@ export class ClaimButton extends LitElement {
       })
 
       this.claimSdk = sdk
-      this.claimFallbackChains =
-        (this.chain && chainConfigs[this.chain]?.fallbackChains) ?? []
       this.claimOnAlt = false
       this.suggestedChain = null
       await this.fetchTokenBalance()
@@ -409,9 +405,9 @@ export class ClaimButton extends LitElement {
       const { amount, altClaimAvailable, altChainId } =
         await sdk.checkEntitlement()
       const decimals = this.decimals ?? 18
-      this.claimAmount = Number(amount) / 10 ** decimals
+      this.claimAmount = formatUnits(amount, decimals)
 
-      if (this.claimAmount === 0) {
+      if (amount === 0n) {
         const nextTime = await sdk.nextClaimTime()
         this.startCountdownTimer(nextTime)
         this.claimOnAlt = altClaimAvailable
@@ -502,13 +498,14 @@ export class ClaimButton extends LitElement {
   async switchChain(targetChainId?: SupportedChains) {
     try {
       this.claimState = "switching"
+      const fallbackChainCandidates = this.getFallbackChainCandidates()
       const nextChainId =
         targetChainId ??
         this.suggestedChain ??
-        this.claimFallbackChains[0] ??
+        fallbackChainCandidates[0] ??
         this.chain
 
-      if (!nextChainId) {
+      if (!nextChainId || nextChainId === this.chain) {
         throw new Error("No alternative chain available for switching")
       }
 
@@ -545,8 +542,24 @@ export class ClaimButton extends LitElement {
     this.error = null
     this.claimOnAlt = false
     this.suggestedChain = null
-    this.claimFallbackChains = []
     this.clearCountdownTimer()
+  }
+
+  private getFallbackChainCandidates(): SupportedChains[] {
+    const supported = this.getSupportedChainIds()
+    const currentChain = this.chain
+
+    const priority = (chainId: SupportedChains) => {
+      const index = FALLBACK_CHAIN_PRIORITY.indexOf(chainId)
+      return index === -1 ? Number.MAX_SAFE_INTEGER : index
+    }
+
+    return supported
+      .filter((chainId) => chainId !== currentChain)
+      .filter((chainId) =>
+        Boolean(chainConfigs[chainId]?.contracts?.[this.environment]),
+      )
+      .sort((chainA, chainB) => priority(chainA) - priority(chainB))
   }
 
   private clearCountdownTimer() {
@@ -762,7 +775,7 @@ export class ClaimButton extends LitElement {
                     : html` <button
                         class="button claim-button"
                         @click="${this.handleClaim}"
-                        ?disabled="${this.claimAmount === 0 ||
+                        ?disabled="${this.claimAmount === "0" ||
                         this.claimAmount === null}"
                       >
                         ${this.claimAmount === null

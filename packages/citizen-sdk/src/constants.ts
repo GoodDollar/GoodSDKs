@@ -49,7 +49,6 @@ export interface ChainConfig {
   key: keyof typeof SupportedChains
   label: string
   shortName: string
-  decimals: number
   explorer: {
     address: (address: string) => string
     tx: (hash: string) => string
@@ -57,9 +56,20 @@ export interface ChainConfig {
   rpcUrls: string[]
   defaultGasPrice?: bigint
   claimGasBuffer: bigint
-  fallbackChains: SupportedChains[]
   fvDefaultChain?: SupportedChains
   contracts: Partial<Record<contractEnv, ContractAddresses>>
+}
+
+export const FALLBACK_CHAIN_PRIORITY: readonly SupportedChains[] = [
+  SupportedChains.CELO,
+  SupportedChains.XDC,
+  SupportedChains.FUSE,
+]
+
+export const CHAIN_DECIMALS: Record<SupportedChains, number> = {
+  [SupportedChains.FUSE]: 2,
+  [SupportedChains.CELO]: 18,
+  [SupportedChains.XDC]: 18,
 }
 
 const makeExplorer = (baseUrl: string) => ({
@@ -73,12 +83,10 @@ export const chainConfigs: Record<SupportedChains, ChainConfig> = {
     key: "FUSE",
     label: "Fuse",
     shortName: "Fuse",
-    decimals: 1e2,
     explorer: makeExplorer("https://explorer.fuse.io"),
     rpcUrls: ["https://rpc.fuse.io", "https://fuse-rpc.gateway.pokt.network"],
     defaultGasPrice: BigInt(11e9),
     claimGasBuffer: 150000n,
-    fallbackChains: [SupportedChains.CELO, SupportedChains.XDC],
     fvDefaultChain: SupportedChains.CELO,
     contracts: {
       production: {
@@ -106,12 +114,10 @@ export const chainConfigs: Record<SupportedChains, ChainConfig> = {
     key: "CELO",
     label: "Celo",
     shortName: "Celo",
-    decimals: 1e18,
     explorer: makeExplorer("https://celoscan.io"),
     rpcUrls: ["https://forno.celo.org", "https://rpc.ankr.com/celo"],
     defaultGasPrice: BigInt(25.001e9),
     claimGasBuffer: 250000n,
-    fallbackChains: [SupportedChains.FUSE, SupportedChains.XDC],
     fvDefaultChain: SupportedChains.CELO,
     contracts: {
       production: {
@@ -139,13 +145,11 @@ export const chainConfigs: Record<SupportedChains, ChainConfig> = {
     key: "XDC",
     label: "XDC Network",
     shortName: "XDC",
-    decimals: 1e18,
     explorer: makeExplorer("https://xdcscan.com"),
     // rpcUrls: ["https://rpc.xdc.network", "https://rpc.ankr.com/xdc"],
-    rpcUrls: ["https://rpc.xdc.org"],
+    rpcUrls: ["https://rpc.ankr.com/xdc"],
     defaultGasPrice: BigInt(12.5e9),
     claimGasBuffer: 150000n,
-    fallbackChains: [SupportedChains.CELO, SupportedChains.FUSE],
     fvDefaultChain: SupportedChains.XDC,
     contracts: {
       development: {

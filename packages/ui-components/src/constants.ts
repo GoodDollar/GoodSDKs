@@ -16,12 +16,6 @@ export const DEFAULT_SUPPORTED_CHAINS: readonly SupportedChains[] = [
   SupportedChains.XDC,
 ]
 
-export const CHAIN_DECIMALS: Record<SupportedChains, number> = {
-  [SupportedChains.FUSE]: 2,
-  [SupportedChains.CELO]: 18,
-  [SupportedChains.XDC]: 18,
-}
-
 export const goodDollarABI = parseAbi([
   "function balanceOf(address account) view returns (uint256)",
 ])

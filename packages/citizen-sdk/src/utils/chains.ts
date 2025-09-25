@@ -21,7 +21,9 @@ export const resolveChainAndContract = (
   const contractEnvAddresses = chainConfigs[chainId]?.contracts[env] ?? null
 
   if (!contractEnvAddresses) {
-    throw new Error(`Contract address for environment "${env}" not found.`)
+    throw new Error(
+      `Contract address for environment "${env}" on chain "${chainConfigs[chainId].label}" not found. Try a different environment or chain.`,
+    )
   }
 
   return { chainId, contractEnvAddresses }

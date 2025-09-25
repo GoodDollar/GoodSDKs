@@ -3,9 +3,11 @@ import { Button, Text, XStack, YStack, Spacer } from "tamagui"
 import { useClaimSDK } from "@goodsdks/react-hooks"
 import {
   chainConfigs,
+  CHAIN_DECIMALS,
   isSupportedChain,
   SupportedChains,
 } from "@goodsdks/citizen-sdk"
+import { formatUnits } from "viem"
 import { useAccount } from "wagmi"
 
 export const ClaimButton: React.FC = () => {
@@ -21,6 +23,12 @@ export const ClaimButton: React.FC = () => {
   const [altChainId, setAltChainId] = useState<SupportedChains | null>(null)
 
   // Initialize ClaimSDK on component mount
+
+  useEffect(() => {
+    setSdk(null)
+    setError(null)
+  }, [chainId, loading])
+
   useEffect(() => {
     const initializeSDK = async () => {
       const sdk = claimSDK
@@ -35,10 +43,11 @@ export const ClaimButton: React.FC = () => {
         const { amount, altClaimAvailable, altChainId } =
           await sdk.checkEntitlement()
 
-        const decimals = chainConfigs[chainId as SupportedChains].decimals
-        const formattedAmount = Number(amount) / Number(decimals)
+        const decimals = CHAIN_DECIMALS[chainId as SupportedChains]
+
+        const formattedAmount = formatUnits(amount, decimals)
         const rounded =
-          Math.round((formattedAmount + Number.EPSILON) * 100) / 100
+          Math.round((Number(formattedAmount) + Number.EPSILON) * 100) / 100
 
         setClaimAmount(rounded)
         setAltClaimAvailable(altClaimAvailable)
@@ -56,7 +65,7 @@ export const ClaimButton: React.FC = () => {
     } else if (!sdk && !loading) {
       initializeSDK()
     }
-  }, [address, claimAmount, claimSDK, loading])
+  }, [address, claimAmount, claimSDK, loading, chainId])
 
   const handleClaim = useCallback(async () => {
     if (!sdk) {
@@ -87,36 +96,38 @@ export const ClaimButton: React.FC = () => {
       setIsClaiming(false)
       setClaimAmount(null)
     }
-  }, [sdk, claimAmount])
+  }, [sdk, claimAmount, chainId])
 
   return (
     <YStack alignItems="center" gap="$4" padding="$4">
-      <Button
-        onPress={handleClaim}
-        color="$colorWhite"
-        backgroundColor={isClaiming ? "$colorGray500" : "$colorGreen500"}
-        disabled={isClaiming || !address || claimAmount === 0}
-        hoverStyle={{
-          backgroundColor: isClaiming ? "$colorGray600" : "$colorGreen600",
-        }}
-        pressedStyle={{
-          backgroundColor: isClaiming ? "$colorGray700" : "$colorGreen700",
-        }}
-        borderRadius="$4"
-        paddingHorizontal="$6"
-        paddingVertical="$3"
-        opacity={isLoading || !address ? 0.7 : 1}
-      >
-        {isLoading
-          ? "Loading..."
-          : isClaiming
-            ? "Claiming..."
-            : claimAmount !== 0
-              ? `Claim UBI ${claimAmount}`
-              : altClaimAvailable && altChainId
-                ? `Claim available on ${chainConfigs[altChainId].label}`
-                : "Come back tomorrow to claim your UBI!"}
-      </Button>
+      {!error && (
+        <Button
+          onPress={handleClaim}
+          color="$colorWhite"
+          backgroundColor={isClaiming ? "$colorGray500" : "$colorGreen500"}
+          disabled={isClaiming || !address || claimAmount === 0}
+          hoverStyle={{
+            backgroundColor: isClaiming ? "$colorGray600" : "$colorGreen600",
+          }}
+          pressedStyle={{
+            backgroundColor: isClaiming ? "$colorGray700" : "$colorGreen700",
+          }}
+          borderRadius="$4"
+          paddingHorizontal="$6"
+          paddingVertical="$3"
+          opacity={isLoading || !address ? 0.7 : 1}
+        >
+          {isLoading
+            ? "Loading..."
+            : isClaiming
+              ? "Claiming..."
+              : claimAmount !== 0
+                ? `Claim UBI ${claimAmount}`
+                : altClaimAvailable && altChainId
+                  ? `Claim available on ${chainConfigs[altChainId].label}`
+                  : "Come back tomorrow to claim your UBI!"}
+        </Button>
+      )}
 
       {claimAmount === 0 && altClaimAvailable && altChainId && (
         <Text color="$colorBlue600" fontSize="$3">
@@ -150,9 +161,9 @@ export const ClaimButton: React.FC = () => {
         </XStack>
       )}
 
-      {error && (
-        <Text color="$colorRed600" fontSize="$3">
-          Error: {error}
+      {(error || sdkError) && (
+        <Text color="$red10" fontSize="$3">
+          Error: {error ?? sdkError}
         </Text>
       )}
     </YStack>
