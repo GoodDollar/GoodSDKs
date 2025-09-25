@@ -41,6 +41,7 @@ The Claim SDK is part of the same `@goodsdks/citizen-sdk` package and handles Un
 - ✅ Entitlement verification
 - ✅ Next claim time tracking
 - ✅ Daily statistics
+- ✅ Multi-chain support across Fuse, Celo, and XDC (with automatic entitlement fallbacks)
 
 **Use Cases:**
 - Allow verified users to claim their daily UBI

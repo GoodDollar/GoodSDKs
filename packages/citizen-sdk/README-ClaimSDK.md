@@ -9,7 +9,7 @@ The GoodDollar SDK implements a sophisticated claim flow that ensures fair and s
 ### **Flow States:**
 
 1. **🔍 Verify State** - User needs identity verification
-2. **⏰ Timer State** - User is verified but already claimed  
+2. **⏰ Timer State** - User is verified but already claimed
 3. **💰 Claim State** - User is verified and can claim
 
 ### **Flow Diagram:**
@@ -163,17 +163,23 @@ new ClaimSDK({
 
 **Methods:**
 
-- **`checkEntitlement(pClient?: PublicClient): Promise<bigint>`**
+- **`checkEntitlement(options?: CheckEntitlementOptions): Promise<ClaimEntitlementResult>`**
 
-  Checks the user's eligibility to claim UBI for the current period.
+  Checks the user's eligibility to claim UBI for the current period, automatically probing configured fallback chains (e.g., Fuse ⇄ Celo ⇄ XDC) when the primary chain has no allocation.
 
-  **Parameters:**
+  **Parameters (`options`):**
 
-  - `pClient` _(optional)_: An alternative `PublicClient` to check entitlement on another chain (e.g., Celo or Fuse).
+  - `publicClient` _(optional)_: Provide a pre-configured `PublicClient` when manually querying a specific chain.
+  - `chainOverride` _(optional)_: Force the entitlement lookup to run against a particular `SupportedChains` value.
 
   **Returns:**
 
-  The claimable amount in the smallest unit (e.g., wei). Returns `0` if the user is not eligible or has already claimed.
+  An object with:
+
+  - `amount`: Claimable amount on the active chain (in the smallest unit, e.g., wei).
+  - `altClaimAvailable`: `true` when another configured chain currently exposes claimable UBI.
+  - `altChainId`: Suggested fallback chain to switch to (or `null` when none detected).
+  - `altAmount`: Claimable amount on the suggested fallback chain (or `null`).
 
 - **`claim(): Promise<TransactionReceipt | any>`**
 
@@ -210,18 +216,20 @@ new ClaimSDK({
 **Trigger:** User is NOT whitelisted
 
 **User Experience:**
+
 - User sees "Verify Me" button
 - Button redirects to face verification process
 - User completes identity verification
 - Returns to app after verification
 
 **Implementation:**
+
 ```typescript
 import { useIdentitySDK } from '@goodsdks/citizen-sdk';
 
 const VerifyButton = () => {
   const identitySDK = useIdentitySDK('production');
-  
+
   const handleVerify = async () => {
     const fvLink = await identitySDK.generateFVLink(
       false, // redirect mode
@@ -230,7 +238,7 @@ const VerifyButton = () => {
     );
     window.location.href = fvLink;
   };
-  
+
   return (
     <Button onClick={handleVerify}>
       Verify Me
@@ -244,19 +252,21 @@ const VerifyButton = () => {
 **Trigger:** User is whitelisted but has already claimed UBI for the current period
 
 **User Experience:**
+
 - Shows countdown to next claim time
 - Displays "Come back tomorrow to claim your UBI!"
 - Button is disabled
 - Shows when next claim will be available
 
 **Implementation:**
+
 ```typescript
 import { useClaimSDK } from '@goodsdks/citizen-sdk';
 
 const ClaimTimer = () => {
   const claimSDK = useClaimSDK('production');
   const [nextClaimTime, setNextClaimTime] = useState<Date | null>(null);
-  
+
   useEffect(() => {
     const getNextClaimTime = async () => {
       const nextTime = await claimSDK.nextClaimTime();
@@ -264,7 +274,7 @@ const ClaimTimer = () => {
     };
     getNextClaimTime();
   }, []);
-  
+
   return (
     <div>
       <Button disabled>
@@ -283,29 +293,43 @@ const ClaimTimer = () => {
 **Trigger:** User is whitelisted and can claim UBI
 
 **User Experience:**
+
 - Shows claimable amount
 - Displays "Claim UBI [amount]" button
 - Button is enabled and functional
 - Shows transaction status after claiming
 
 **Implementation:**
+
 ```typescript
 import { useClaimSDK } from '@goodsdks/citizen-sdk';
+import { formatUnits } from "viem"
 
 const ClaimButton = () => {
   const claimSDK = useClaimSDK('production');
   const [claimAmount, setClaimAmount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   useEffect(() => {
     const checkEntitlement = async () => {
-      const amount = await claimSDK.checkEntitlement();
-      const formattedAmount = Number(amount) / 1e18;
+      const {
+        amount,
+        altClaimAvailable,
+        altChainId,
+      } = await claimSDK.checkEntitlement();
+
+      const formattedAmount = formatUnits(amount, CHAIN_DECIMALS[chainId])
       setClaimAmount(formattedAmount);
+
+      if (altClaimAvailable && altChainId) {
+        console.info(
+          `Alt claim detected on ${chainConfigs[altChainId].label}. Prompt user to switch.`,
+        );
+      }
     };
     checkEntitlement();
   }, []);
-  
+
   const handleClaim = async () => {
     setIsLoading(true);
     try {
@@ -317,14 +341,14 @@ const ClaimButton = () => {
       setIsLoading(false);
     }
   };
-  
+
   return (
-    <Button 
+    <Button
       onClick={handleClaim}
       disabled={isLoading || claimAmount === 0}
     >
-      {isLoading 
-        ? "Claiming..." 
+      {isLoading
+        ? "Claiming..."
         : `Claim UBI ${claimAmount}`
       }
     </Button>
@@ -350,38 +374,42 @@ const GoodDollarClaimFlow = () => {
   const { address } = useAccount();
   const identitySDK = useIdentitySDK('production');
   const claimSDK = useClaimSDK('production');
-  
+
   const [state, setState] = useState<ClaimFlowState>({ type: 'loading' });
-  
+
   useEffect(() => {
     const determineState = async () => {
       if (!address || !identitySDK || !claimSDK) return;
-      
+
       try {
         // Step 1: Check whitelist status
         const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address);
-        
+
         if (!isWhitelisted) {
           setState({ type: 'verify' });
           return;
         }
-        
+
         // Step 2: Check claim entitlement
-        const entitlement = await claimSDK.checkEntitlement();
-        
-        if (entitlement === 0n) {
+        const {
+          amount,
+          altClaimAvailable,
+          altChainId,
+        } = await claimSDK.checkEntitlement();
+
+        if (amount === 0n) {
           // User has already claimed, show timer
           const nextClaimTime = await claimSDK.nextClaimTime();
-          setState({ 
-            type: 'timer', 
-            data: { nextClaimTime } 
+          setState({
+            type: 'timer',
+            data: { nextClaimTime, altClaimAvailable, altChainId }
           });
         } else {
           // User can claim
-          const claimAmount = Number(entitlement) / 1e18;
-          setState({ 
-            type: 'claim', 
-            data: { claimAmount } 
+          const claimAmount = Number(amount) / chainConfigs[chainId].decimals;
+          setState({
+            type: 'claim',
+            data: { claimAmount, altClaimAvailable, altChainId }
           });
         }
       } catch (error) {
@@ -389,32 +417,32 @@ const GoodDollarClaimFlow = () => {
         setState({ type: 'verify' }); // Fallback to verify
       }
     };
-    
+
     determineState();
   }, [address, identitySDK, claimSDK]);
-  
+
   // Render based on state
   switch (state.type) {
     case 'loading':
       return <div>Loading...</div>;
-      
+
     case 'verify':
       return <VerifyButton />;
-      
+
     case 'timer':
       return (
-        <ClaimTimer 
-          nextClaimTime={state.data?.nextClaimTime} 
+        <ClaimTimer
+          nextClaimTime={state.data?.nextClaimTime}
         />
       );
-      
+
     case 'claim':
       return (
-        <ClaimButton 
-          claimAmount={state.data?.claimAmount} 
+        <ClaimButton
+          claimAmount={state.data?.claimAmount}
         />
       );
-      
+
     default:
       return <div>Unknown state</div>;
   }
@@ -426,10 +454,11 @@ export default GoodDollarClaimFlow;
 ## 🎨 UI Component Examples
 
 ### Verify Button Component
+
 ```typescript
 const VerifyButton = () => {
   const identitySDK = useIdentitySDK('production');
-  
+
   const handleVerify = async () => {
     try {
       const fvLink = await identitySDK.generateFVLink(
@@ -442,7 +471,7 @@ const VerifyButton = () => {
       console.error('Verification failed:', error);
     }
   };
-  
+
   return (
     <div className="verify-container">
       <h3>Identity Verification Required</h3>
@@ -456,32 +485,33 @@ const VerifyButton = () => {
 ```
 
 ### Timer Component
+
 ```typescript
 const ClaimTimer = ({ nextClaimTime }: { nextClaimTime: Date }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
-  
+
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
       const diff = nextClaimTime.getTime() - now.getTime();
-      
+
       if (diff <= 0) {
         setTimeLeft('Ready to claim!');
         return;
       }
-      
+
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      
+
       setTimeLeft(`${hours}h ${minutes}m until next claim`);
     };
-    
+
     updateTimer();
     const interval = setInterval(updateTimer, 60000); // Update every minute
-    
+
     return () => clearInterval(interval);
   }, [nextClaimTime]);
-  
+
   return (
     <div className="timer-container">
       <h3>Already Claimed Today</h3>
@@ -498,18 +528,19 @@ const ClaimTimer = ({ nextClaimTime }: { nextClaimTime: Date }) => {
 ```
 
 ### Claim Button Component
+
 ```typescript
 const ClaimButton = ({ claimAmount }: { claimAmount: number }) => {
   const claimSDK = useClaimSDK('production');
   const [isLoading, setIsLoading] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   const handleClaim = async () => {
     setIsLoading(true);
     setError(null);
     setTxHash(null);
-    
+
     try {
       const receipt = await claimSDK.claim();
       setTxHash(receipt.transactionHash);
@@ -519,24 +550,24 @@ const ClaimButton = ({ claimAmount }: { claimAmount: number }) => {
       setIsLoading(false);
     }
   };
-  
+
   return (
     <div className="claim-container">
       <h3>Claim Your UBI</h3>
       <p>You can claim {claimAmount} G$ today</p>
-      
-      <Button 
+
+      <Button
         onClick={handleClaim}
         disabled={isLoading}
         variant="primary"
       >
         {isLoading ? 'Claiming...' : `Claim UBI ${claimAmount}`}
       </Button>
-      
+
       {txHash && (
         <div className="success">
           <p>✅ UBI claimed successfully!</p>
-          <a 
+          <a
             href={`https://celoscan.io/tx/${txHash}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -545,7 +576,7 @@ const ClaimButton = ({ claimAmount }: { claimAmount: number }) => {
           </a>
         </div>
       )}
-      
+
       {error && (
         <div className="error">
           <p>❌ {error}</p>
@@ -561,20 +592,24 @@ const ClaimButton = ({ claimAmount }: { claimAmount: number }) => {
 The key to implementing the claim flow is understanding how to detect each state:
 
 ### 1. Whitelist Check
+
 ```typescript
-const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address);
+const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address)
 ```
 
 ### 2. Entitlement Check
+
 ```typescript
-const entitlement = await claimSDK.checkEntitlement();
-// Returns 0n if user has already claimed or is not eligible
-// Returns positive amount if user can claim
+const { amount, altClaimAvailable, altChainId } =
+  await claimSDK.checkEntitlement()
+// `amount` is 0n if the user has already claimed or is not eligible
+// `altClaimAvailable` + `altChainId` highlight another network with an active allocation
 ```
 
 ### 3. Next Claim Time
+
 ```typescript
-const nextClaimTime = await claimSDK.nextClaimTime();
+const nextClaimTime = await claimSDK.nextClaimTime()
 // Returns Date object of when user can next claim
 ```
 
@@ -584,18 +619,18 @@ Always implement proper error handling for each state:
 
 ```typescript
 try {
-  const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address);
+  const { isWhitelisted } = await identitySDK.getWhitelistedRoot(address)
   // Handle whitelist check
 } catch (error) {
-  console.error('Whitelist check failed:', error);
+  console.error("Whitelist check failed:", error)
   // Show fallback UI or error message
 }
 
 try {
-  const entitlement = await claimSDK.checkEntitlement();
-  // Handle entitlement check
+  const { amount, altClaimAvailable } = await claimSDK.checkEntitlement()
+  // Handle entitlement check with `amount` and fallback availability
 } catch (error) {
-  console.error('Entitlement check failed:', error);
+  console.error("Entitlement check failed:", error)
   // Show fallback UI or error message
 }
 ```
@@ -641,6 +676,7 @@ const ClaimExample = () => {
   const identitySDK = useIdentitySDK('production');
 
   const [entitlement, setEntitlement] = useState<bigint | null>(null);
+  const [altSuggestion, setAltSuggestion] = useState<string>('');
   const [claimStatus, setClaimStatus] = useState<string>('');
 
   if (!address || !publicClient || !walletClient || !identitySDK) {
@@ -657,8 +693,18 @@ const ClaimExample = () => {
 
   const handleCheckEntitlement = async () => {
     try {
-      const amount = await claimSDK.checkEntitlement();
+      const {
+        amount,
+        altClaimAvailable,
+        altChainId,
+      } = await claimSDK.checkEntitlement();
+
       setEntitlement(amount);
+      setAltSuggestion(
+        altClaimAvailable && altChainId
+          ? `Consider switching to ${chainConfigs[altChainId].label}.`
+          : ''
+      );
     } catch (error) {
       console.error('Entitlement check failed:', error);
     }
@@ -680,6 +726,7 @@ const ClaimExample = () => {
       {entitlement !== null && (
         <p>Entitlement: {entitlement.toString()} units</p>
       )}
+      {altSuggestion && <p>{altSuggestion}</p>}
       <button onClick={handleClaim}>Claim UBI</button>
       {claimStatus && <p>{claimStatus}</p>}
     </div>

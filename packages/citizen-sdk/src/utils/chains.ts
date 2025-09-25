@@ -1,14 +1,12 @@
-import { WalletClient, WalletActions } from "viem"
+import { WalletActions, WalletClient } from "viem"
 
 import {
-  contractAddresses,
   ContractAddresses,
   contractEnv,
+  chainConfigs,
+  isSupportedChain,
   SupportedChains,
 } from "../constants"
-
-export const isSupportedChain = (chainId: any): chainId is SupportedChains =>
-  Object.values(SupportedChains).includes(chainId)
 
 export const resolveChainAndContract = (
   walletClient: WalletClient & WalletActions,
@@ -16,14 +14,16 @@ export const resolveChainAndContract = (
 ): { chainId: SupportedChains; contractEnvAddresses: ContractAddresses } => {
   const chainId = walletClient.chain?.id
 
-  if (!chainId || !isSupportedChain(chainId)) {
+  if (!isSupportedChain(chainId)) {
     throw new Error(`Unsupported chain ID.`)
   }
 
-  const contractEnvAddresses = contractAddresses[chainId][env]
+  const contractEnvAddresses = chainConfigs[chainId]?.contracts[env] ?? null
 
-  if (!contractAddresses) {
-    throw new Error(`Contract address for environment "${env}" not found.`)
+  if (!contractEnvAddresses) {
+    throw new Error(
+      `Contract address for environment "${env}" on chain "${chainConfigs[chainId].label}" not found. Try a different environment or chain.`,
+    )
   }
 
   return { chainId, contractEnvAddresses }
