@@ -62,8 +62,11 @@ const globalStyles = `
   }
   
   code {
-    color: #fff !important;
-    text-shadow: none !important;
+    color: orange !important;
+    background-color: black;
+    padding: 2px;
+    margin-left: 2px;
+    margin-right: 2px;
   }
   
   .token.comment { color: #888 !important; }
@@ -996,9 +999,8 @@ const loadInviterRewards = async (
                 <p className="text-sm text-muted-foreground">
                   Use the optional <code>inviter</code> filter to ask the RPC
                   for inviter-specific logs without fetching every event. Adjust
-                  the
-                  <code>blocksAgo</code> and <code>batchSize</code> values, or
-                  reuse the exported defaults, to tune how much history you
+                  the <code>blocksAgo</code> and <code>batchSize</code> values,
+                  or reuse the exported defaults, to tune how much history you
                   scan. The SDK remembers the last processed block range in
                   localStorage so future calls only fetch new events—pass
                   <code>resetCache: true</code> to replay history or
