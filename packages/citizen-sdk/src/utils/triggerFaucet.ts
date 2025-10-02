@@ -176,8 +176,9 @@ export async function triggerFaucet({
       )
     }
     return "topped_via_contract"
-  } catch {
+  } catch (err) {
     // Fallback to backend API
+    console.error("Faucet topWallet error, falling back to API", err)
     try {
       const { backend } = Envs[env as keyof typeof Envs] || {}
       if (!backend) return "error"
