@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { useAccount } from "wagmi";
-import { useEngagementRewards } from "@goodsdks/engagement-sdk";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import React, { useEffect, useState } from "react"
+import { useAccount } from "wagmi"
+import {
+  useEngagementRewards,
+  type EngagementRewardsSDK,
+} from "@goodsdks/engagement-sdk"
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import {
   Table,
   TableBody,
@@ -9,73 +12,42 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "./ui/table";
-import { Button } from "./ui/button";
-import env from "@/env";
-import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
-import { TruncatedAddress } from "./ui/TruncatedAddress";
+} from "./ui/table"
+import { Button } from "./ui/button"
+import env from "@/env"
+import { useNavigate } from "react-router-dom"
+import { Loader2 } from "lucide-react"
+import { TruncatedAddress } from "./ui/TruncatedAddress"
+
+// Derive AppInfo type from EngagementRewardsSDK type
+export type AppInfo = Awaited<
+  ReturnType<EngagementRewardsSDK["getRegisteredApps"]>
+>[number]
 
 const PendingAppsPage: React.FC = () => {
-  const { isConnected } = useAccount();
-  const engagementRewards = useEngagementRewards(env.rewardsContract); // Replace with actual contract address
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const { isConnected } = useAccount()
+  const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
 
-  const [pendingApps, setPendingApps] = useState<
-    Array<{
-      address: string;
-      owner: string;
-      rewardReceiver: string;
-      totalRewardsClaimed: bigint;
-      registeredAt: number;
-      lastResetAt: number;
-      userAndInviterPercentage: number;
-      userPercentage: number;
-      isRegistered: boolean;
-      isApproved: boolean;
-      description: string;
-      url: string;
-      email: string;
-    }>
-  >([]);
+  const [pendingApps, setPendingApps] = useState<Array<AppInfo>>([])
 
   useEffect(() => {
     const fetchPendingApps = async () => {
-      if (!engagementRewards) return;
-      const apps = await engagementRewards.getPendingApps();
-      const appDetails = await Promise.all(
-        apps.map(async (app) => {
-          const info = await engagementRewards.getAppInfo(app as `0x${string}`);
-          return {
-            address: app,
-            owner: info[0], // Updated index
-            rewardReceiver: info[1], // Updated index
-            totalRewardsClaimed: info[2],
-            registeredAt: Number(info[3]),
-            lastResetAt: Number(info[4]),
-            userAndInviterPercentage: Number(info[5]),
-            userPercentage: Number(info[6]),
-            isRegistered: info[7],
-            isApproved: info[8],
-            description: info[9],
-            url: info[10],
-            email: info[11],
-          };
-        }),
-      );
-      setPendingApps(appDetails);
-      setLoading(false);
-    };
+      if (!engagementRewards) return
+      const apps = await engagementRewards.getPendingApps()
+      setPendingApps(apps)
+      setLoading(false)
+    }
 
     if (isConnected) {
-      fetchPendingApps();
+      fetchPendingApps()
     }
-  }, [isConnected, !!engagementRewards]);
+  }, [isConnected, !!engagementRewards])
 
   const handleApprove = async (app: string) => {
-    navigate(`/approve/${app}`);
-  };
+    navigate(`/approve/${app}`)
+  }
 
   if (!isConnected) {
     return (
@@ -87,7 +59,7 @@ const PendingAppsPage: React.FC = () => {
           <p>Please connect your wallet to view pending apps.</p>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   if (loading) {
@@ -102,7 +74,7 @@ const PendingAppsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   return (
@@ -127,9 +99,9 @@ const PendingAppsPage: React.FC = () => {
           </TableHeader>
           <TableBody>
             {pendingApps.map((app) => (
-              <TableRow key={app.address}>
+              <TableRow key={app.app}>
                 <TableCell>
-                  <TruncatedAddress address={app.address} />
+                  <TruncatedAddress address={app.app} />
                 </TableCell>
                 <TableCell>
                   <TruncatedAddress address={app.owner} />
@@ -156,7 +128,7 @@ const PendingAppsPage: React.FC = () => {
                   </a>
                 </TableCell>
                 <TableCell>
-                  <Button onClick={() => handleApprove(app.address)}>
+                  <Button onClick={() => handleApprove(app.app)}>
                     Approve
                   </Button>
                 </TableCell>
@@ -166,7 +138,7 @@ const PendingAppsPage: React.FC = () => {
         </Table>
       </CardContent>
     </Card>
-  );
-};
+  )
+}
 
-export default PendingAppsPage;
+export default PendingAppsPage

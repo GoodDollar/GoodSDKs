@@ -2,45 +2,38 @@ import {
   Address,
   PublicClient,
   WalletClient,
-  parseAbi,
   type SimulateContractParameters,
 } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
-
 import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json"
 import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json"
-
+import { EngagementRewards as engagementRewardsABI } from "./abi/abis"
 export const DEV_REWARDS_CONTRACT = devdeployments[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
 export const REWARDS_CONTRACT = prod?.[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
+import {
+  DEFAULT_EVENT_BATCH_SIZE,
+  DEFAULT_EVENT_LOOKBACK,
+  WAIT_DELAY,
+  fetchInBlockBatches,
+} from "./utils/rpc"
+import {
+  type StorageLike,
+  type StorageLogger,
+  readProgressBlock,
+  writeProgressBlock,
+  clearStorageKey,
+} from "./utils/storage"
+export type { StorageLike } from "./utils/storage"
 
-const BLOCKS_AGO = BigInt(100000)
-const WAIT_DELAY = 5000 // 1 second delay
+export const EVENT_CACHE_PREFIX = "goodsdks:engagement-rewards"
 
-//TODO:
-// create guide how to integrate claiming with/without signature
-// allow update app details screen with all the details
-//
-const engagementRewardsABI = parseAbi([
-  "function applyApp(address app, address rewardReceiver, uint8 userInviterPercentage, uint8 userPercentage, string description, string url, string email) external",
-  "function approve(address app) external",
-  "function canClaim(address app, address user) external view returns(bool)",
-  "function updateAppSettings(address app, address rewardReceiver, uint8 userInviterPercentage, uint8 userPercentage) external",
-  "function registeredApps(address) external view returns (address owner, address rewardReceiver, uint96 totalRewardsClaimed, uint32 registeredAt, uint32 lastResetAt, uint8 userAndInviterPercentage, uint8 userPercentage, bool isRegistered, bool isApproved, string description, string url, string email)",
-  "function appsStats(address) external view returns (uint96 numberOfRewards, uint96 totalAppRewards, uint96 totalUserRewards, uint96 totalInviterRewards)",
-  "function appClaim(address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
-  "function appClaim(address inviter, uint256 nonce, bytes memory signature, uint8 userAndInviterPercentage, uint8 userPercentage) external returns (bool)",
-  "function eoaClaim(address app, address inviter, uint256 nonce, bytes memory signature) external returns (bool)",
-  "function nonContractAppClaim(address app, address inviter, uint256 nonce, bytes memory userSignature, bytes memory appSignature) external returns (bool)",
-  "event AppApplied(address indexed app, address indexed owner, address rewardReceiver, uint256 userAndInviterPercentage, uint256 userPercentage, string description, string url, string email)",
-  "event AppApproved(address indexed app)",
-  "event AppSettingsUpdated(address indexed app, uint256 userAndInviterPercentage, uint256 userPercentage)",
-  "event RewardClaimed(address indexed app, address indexed user, address indexed inviter, uint256 appReward, uint256 userAmount, uint256 inviterAmount)",
-  "event RewardAmountUpdated(uint256 newAmount)",
-])
+export interface EngagementRewardsSDKOptions {
+  cacheStorage?: StorageLike
+}
 
 export interface AppInfo {
   rewardReceiver: Address
@@ -73,19 +66,108 @@ export interface AppEvent {
   block: bigint
 }
 
+export interface GetAppRewardEventsOptions {
+  /** Optional inviter to filter server-side; skips local filtering. */
+  inviter?: Address
+  /**
+   * Number of blocks to request per batch when walking the chain.
+   * Defaults to {@link DEFAULT_EVENT_BATCH_SIZE}.
+   */
+  batchSize?: bigint
+  /**
+   * How many blocks to look back from the latest block.
+   * Defaults to {@link DEFAULT_EVENT_LOOKBACK}.
+   */
+  blocksAgo?: bigint
+  /** Override the default localStorage key derivation. */
+  cacheKey?: string
+  /** Skip storing progress in localStorage. */
+  disableCache?: boolean
+  /** Remove any stored progress before fetching. */
+  resetCache?: boolean
+}
+
 export class EngagementRewardsSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient
   private contractAddress: Address
+  private cacheStorage?: StorageLike
+  private debug: boolean = false
+  private storageLogger: StorageLogger
 
   constructor(
     publicClient: PublicClient,
     walletClient: WalletClient,
     contractAddress: Address,
+    options?: EngagementRewardsSDKOptions & { debug?: boolean },
   ) {
     this.publicClient = publicClient
     this.walletClient = walletClient
     this.contractAddress = contractAddress
+    this.cacheStorage = options?.cacheStorage
+    this.debug = options?.debug ?? false
+    this.storageLogger = (message, context) => {
+      this.logDebug(message, context)
+    }
+  }
+
+  private logDebug(message: string, context?: Record<string, unknown>) {
+    if (!this.debug) return
+    if (context) {
+      console.log("[goodsdks:engagement-sdk]", message, context)
+    } else {
+      console.log("[goodsdks:engagement-sdk]", message)
+    }
+  }
+
+  private getCacheStorage(): StorageLike | undefined {
+    if (this.cacheStorage) {
+      return this.cacheStorage
+    }
+
+    const globalObject = globalThis as {
+      localStorage?: StorageLike
+    }
+    if (!globalObject.localStorage) {
+      this.logDebug("cache storage unavailable: localStorage missing")
+      return undefined
+    }
+
+    try {
+      const key = `${EVENT_CACHE_PREFIX}:check`
+      globalObject.localStorage.setItem(key, key)
+      globalObject.localStorage.removeItem(key)
+      this.cacheStorage = globalObject.localStorage
+      return this.cacheStorage
+    } catch (error) {
+      this.logDebug("cache storage unavailable: localStorage access failed", {
+        error,
+      })
+      return undefined
+    }
+  }
+
+  private buildCacheKey(app: Address, inviter?: Address, customKey?: string) {
+    if (customKey) return customKey
+    return [
+      EVENT_CACHE_PREFIX,
+      this.contractAddress,
+      app,
+      inviter ?? "all",
+    ].join(":")
+  }
+
+  private logBatchFailure(
+    range: { from: bigint; to: bigint },
+    batchSize: bigint,
+    error: unknown,
+  ) {
+    this.logDebug("failed logs batch", {
+      batchSize: batchSize.toString(),
+      fromBlock: range.from.toString(),
+      toBlock: range.to.toString(),
+      error,
+    })
   }
 
   private async submitAndWait(
@@ -284,46 +366,21 @@ export class EngagementRewardsSDK {
   }
 
   async getPendingApps() {
-    const curBlock = await this.publicClient.getBlockNumber()
-    const [applyEvents, approvedEvents] = await Promise.all([
-      this.publicClient.getContractEvents({
-        address: this.contractAddress,
-        abi: engagementRewardsABI,
-        eventName: "AppApplied",
-        fromBlock: curBlock - BigInt(BLOCKS_AGO),
-      }),
-      await this.publicClient.getContractEvents({
-        address: this.contractAddress,
-        abi: engagementRewardsABI,
-        eventName: "AppApproved",
-        fromBlock: curBlock - BigInt(BLOCKS_AGO),
-      }),
-    ])
-
-    const approvedApps = new Set<string>()
-    approvedEvents
-      .map((_) => _.args.app)
-      .filter((_) => _ !== undefined)
-      .forEach((app) => {
-        approvedApps.add(app.toLowerCase())
-      })
-
-    return applyEvents
-      .map((_) => _.args.app?.toLowerCase())
-      .filter((_) => _ !== undefined)
-      .filter((app) => !approvedApps.has(app))
+    return (await this.getAppliedApps()).filter((_) => _.isApproved === false)
   }
 
   async getRegisteredApps() {
-    const curBlock = await this.publicClient.getBlockNumber()
-    const approvedEvents = await this.publicClient.getContractEvents({
+    return (await this.getAppliedApps()).filter((_) => _.isApproved === true)
+  }
+
+  async getAppliedApps() {
+    const apps = await this.publicClient.readContract({
       address: this.contractAddress,
       abi: engagementRewardsABI,
-      eventName: "AppApproved",
-      fromBlock: curBlock - BigInt(BLOCKS_AGO),
+      functionName: "getAppliedApps",
     })
 
-    return approvedEvents.map((_) => _.args.app).filter((_) => _ !== undefined)
+    return apps
   }
 
   async getAppRewards(app: Address) {
@@ -343,16 +400,111 @@ export class EngagementRewardsSDK {
     }
   }
 
-  async getAppRewardEvents(app: Address): Promise<RewardEvent[]> {
-    const curBlock = await this.publicClient.getBlockNumber()
+  async getCachedFromBlock(
+    app: Address,
+    inviter?: Address,
+    cacheKey?: string,
+    resetCache?: boolean,
+  ): Promise<bigint | undefined> {
+    const storage = this.getCacheStorage()
+    if (!storage) {
+      this.logDebug("cache storage unavailable: skipping read", {
+        app,
+        inviter,
+        cacheKey,
+      })
+      return undefined
+    }
 
-    const rewardEvents = await this.publicClient.getContractEvents({
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      eventName: "RewardClaimed",
-      args: { app },
-      fromBlock: curBlock - BigInt(BLOCKS_AGO),
+    const storageKey = this.buildCacheKey(app, inviter, cacheKey)
+    if (resetCache) {
+      this.logDebug("resetting cached progress block", { cacheKey: storageKey })
+      clearStorageKey(storage, storageKey, this.storageLogger)
+      return undefined
+    }
+
+    return readProgressBlock(storage, storageKey, this.storageLogger)
+  }
+
+  /**
+   * Fetch RewardClaimed logs for an app, optionally narrowed by inviter or
+   * custom log pagination parameters.
+   */
+  async getAppRewardEvents(
+    app: Address,
+    options: GetAppRewardEventsOptions = {},
+  ): Promise<RewardEvent[]> {
+    const {
+      inviter,
+      batchSize = DEFAULT_EVENT_BATCH_SIZE,
+      blocksAgo = DEFAULT_EVENT_LOOKBACK,
+      cacheKey,
+      disableCache = false,
+      resetCache = false,
+    } = options
+
+    if (blocksAgo < 0n) {
+      throw new Error("blocksAgo must be zero or greater")
+    }
+
+    const latestBlock = await this.publicClient.getBlockNumber()
+    let fromBlock =
+      blocksAgo === 0n
+        ? latestBlock
+        : blocksAgo >= latestBlock
+          ? 0n
+          : latestBlock - blocksAgo
+
+    const storedFromBlock = !disableCache
+      ? await this.getCachedFromBlock(app, inviter, cacheKey, resetCache)
+      : undefined
+
+    if (storedFromBlock !== undefined && storedFromBlock > latestBlock) {
+      return []
+    }
+
+    if (storedFromBlock !== undefined && storedFromBlock > fromBlock) {
+      fromBlock = storedFromBlock
+    }
+
+    if (fromBlock > latestBlock) {
+      return []
+    }
+
+    const rewardEvents = await fetchInBlockBatches({
+      batchSize,
+      fromBlock,
+      toBlock: latestBlock,
+      promiseCreator: (rangeStart, rangeEnd) =>
+        this.publicClient.getContractEvents({
+          address: this.contractAddress,
+          abi: engagementRewardsABI,
+          eventName: "RewardClaimed",
+          args: inviter ? { app, inviter } : { app },
+          fromBlock: rangeStart,
+          toBlock: rangeEnd,
+        }),
+      onBatchFailure: (error, range) => {
+        this.logBatchFailure(range, batchSize, error)
+      },
     })
+
+    if (!disableCache) {
+      const storage = this.getCacheStorage()
+      const key = this.buildCacheKey(app, inviter, cacheKey)
+      if (!storage) {
+        this.logDebug("cache storage unavailable: skipping write", {
+          cacheKey: key,
+        })
+      } else {
+        // remember last processed block so subsequent runs can resume quickly
+        this.logDebug("persisting cached progress block", {
+          cacheKey: key,
+          nextBlock: (latestBlock + 1n).toString(),
+        })
+        writeProgressBlock(storage, key, latestBlock + 1n, this.storageLogger)
+      }
+    }
 
     return rewardEvents.map((log) => ({
       tx: log.transactionHash,
@@ -366,13 +518,28 @@ export class EngagementRewardsSDK {
   }
 
   async getAppHistory(app: Address): Promise<AppEvent[]> {
-    const curBlock = await this.publicClient.getBlockNumber()
-    const events = await this.publicClient.getContractEvents({
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      eventName: "AppApplied",
-      args: { app },
-      fromBlock: curBlock - BigInt(BLOCKS_AGO),
+    const latestBlock = await this.publicClient.getBlockNumber()
+    const earliestBlock =
+      DEFAULT_EVENT_LOOKBACK >= latestBlock
+        ? 0n
+        : latestBlock - DEFAULT_EVENT_LOOKBACK
+
+    const events = await fetchInBlockBatches({
+      batchSize: DEFAULT_EVENT_BATCH_SIZE,
+      fromBlock: earliestBlock,
+      toBlock: latestBlock,
+      promiseCreator: (fromBlock, toBlock) =>
+        this.publicClient.getContractEvents({
+          address: this.contractAddress,
+          abi: engagementRewardsABI,
+          eventName: "AppApplied",
+          args: { app },
+          fromBlock,
+          toBlock,
+        }),
+      onBatchFailure: (error, range) => {
+        this.logBatchFailure(range, DEFAULT_EVENT_BATCH_SIZE, error)
+      },
     })
 
     return events.map((log) => ({

@@ -1,6 +1,6 @@
 # Claim Button Web Component
 
-The `claim-button` web component provides a simple and interactive way for users to claim Universal Basic Income (UBI) in the form of GoodDollars (G$) on supported blockchain networks (Celo and Fuse). It integrates with the GoodDollar ecosystem to manage wallet connections, eligibility checks, and token claims, offering a seamless experience for users within any web application.
+The `claim-button` web component provides a simple and interactive way for users to claim Universal Basic Income (UBI) in the form of GoodDollars (G$) on supported blockchain networks (Celo, Fuse, and XDC). It integrates with the GoodDollar ecosystem to manage wallet connections, eligibility checks, and token claims, offering a seamless experience for users within any web application.
 
 ## What It Does
 
@@ -12,7 +12,7 @@ The `claim-button` enables users to:
 - Claim their UBI with a single click, handling all blockchain transactions.
 - View their G$ token balance.
 - See a countdown timer until their next claim if they’ve already claimed for the current period.
-- Switch between supported chains (Celo and Fuse) if entitlements are available on another network.
+- Switch between supported chains (Celo, Fuse, and XDC) if entitlements are available on another network.
 
 ## How to Use It
 
@@ -110,11 +110,13 @@ Customize the `claim-button` using these properties:
     })
     ```
   - **Note:** `appkitConfig` cannot be set as an HTML attribute; it must be set on the element as a property from JavaScript.
+- **`supportedChains`**: _(Optional property)_
+  Restricts the networks presented in the wallet modal and entitlement checks. Provide an array of chain IDs (e.g. `[122, 42220, 50]`). By default the component enables Fuse, Celo, and XDC.
 
 ## Additional Notes
 
 - **Dependencies**: The component uses `@reown/appkit` for wallet connections, `@goodsdks/citizen-sdk` for claim logic, `viem` for blockchain interactions, and `lit` for the reactive UI.
-- **Supported Chains**: Works on Celo and Fuse networks.
+- **Supported Chains**: Works on Celo, Fuse, and XDC networks. The component automatically rotates between multiple RPC endpoints per chain to mitigate rate limits.
 - **Feedback**: Displays loading states, success messages, errors, and a countdown timer as needed.
 
 This README provides all you need to get started with the `claim-button` web component in your web projects!

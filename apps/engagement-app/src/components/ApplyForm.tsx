@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { useEngagementRewards } from "@goodsdks/engagement-sdk";
-import { useAccount, usePublicClient } from "wagmi";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import React, { useState, useEffect } from "react"
+import { useEngagementRewards } from "@goodsdks/engagement-sdk"
+import { useAccount, usePublicClient } from "wagmi"
+import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/ui/card";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useWatch } from "react-hook-form";
-import * as z from "zod";
+} from "@/components/ui/card"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm, useWatch } from "react-hook-form"
+import * as z from "zod"
 import {
   Form,
   FormControl,
@@ -22,18 +22,18 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import env from "@/env";
-import { PublicClient, zeroAddress } from "viem";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
-import { useSigningModal } from "@/hooks/useSigningModal";
-import { SigningModal } from "./SigningModal";
-import { useParams } from "react-router-dom";
+} from "@/components/ui/form"
+import env from "@/env"
+import { PublicClient, zeroAddress } from "viem"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
+import { useSigningModal } from "@/hooks/useSigningModal"
+import { SigningModal } from "./SigningModal"
+import { useParams } from "react-router-dom"
 import {
   isContract,
   checkSourceVerification,
-} from "@/utils/contract-verification";
+} from "@/utils/contract-verification"
 
 const baseFormSchema = z.object({
   app: z.string().startsWith("0x"),
@@ -42,32 +42,29 @@ const baseFormSchema = z.object({
     .startsWith("0x", { message: "Must be a valid Ethereum address" }),
   userInviterPercentage: z.number().min(0).max(100),
   userPercentage: z.number().min(0).max(100),
-  description: z
-    .string()
-    .min(50)
-    .max(512, {
-      message: "Description must be up to 512 characters and longer than 50",
-    }),
+  description: z.string().min(50).max(512, {
+    message: "Description must be up to 512 characters and longer than 50",
+  }),
   url: z.string().url().max(255),
   email: z.string().email().max(255),
-});
+})
 
 const ApplyForm: React.FC = () => {
-  const { appAddress } = useParams<{ appAddress: string }>();
-  const { isConnected } = useAccount();
-  const { toast } = useToast();
-  const engagementRewards = useEngagementRewards(env.rewardsContract); // Replace with actual contract address
-  const [isReapplying, setIsReapplying] = useState(false);
+  const { appAddress } = useParams<{ appAddress: string }>()
+  const { isConnected } = useAccount()
+  const { toast } = useToast()
+  const engagementRewards = useEngagementRewards(env.rewardsContract) // Replace with actual contract address
+  const [isReapplying, setIsReapplying] = useState(false)
   const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } =
-    useSigningModal();
-  const publicClient = usePublicClient();
+    useSigningModal()
+  const publicClient = usePublicClient()
   const [verificationStatus, setVerificationStatus] = useState<{
-    isVerified: boolean;
-    checked: boolean;
+    isVerified: boolean
+    checked: boolean
   }>({
     isVerified: false,
     checked: false,
-  });
+  })
 
   const form = useForm<z.infer<typeof baseFormSchema>>({
     resolver: (values, context, options) => {
@@ -77,8 +74,8 @@ const ApplyForm: React.FC = () => {
           path: ["app"],
           message: "Contract must be verified on Sourcify",
         },
-      );
-      return zodResolver(schema)(values, context, options);
+      )
+      return zodResolver(schema)(values, context, options)
     },
     defaultValues: {
       app: appAddress,
@@ -89,51 +86,51 @@ const ApplyForm: React.FC = () => {
       url: "",
       email: "",
     },
-  });
+  })
 
   const appValue = useWatch({
     control: form.control,
     name: "app",
-  });
+  })
 
   useEffect(() => {
     const handleAppChange = async () => {
       // Reset reapplying status
-      setIsReapplying(false);
+      setIsReapplying(false)
       if (
         !publicClient ||
         !appValue ||
         !appValue.startsWith("0x") ||
         appValue.length !== 42
       )
-        return;
+        return
 
       // Check if app exists
       const appInfo = await engagementRewards?.getAppInfo(
         appValue as `0x${string}`,
-      );
+      )
       if (appInfo?.[0] !== zeroAddress) {
-        setIsReapplying(true);
+        setIsReapplying(true)
       }
 
       // Check contract verification
       const contractStatus = await isContract(
         publicClient as PublicClient,
         appValue,
-      );
-      let verifiedStatus = true;
+      )
+      let verifiedStatus = true
       if (contractStatus) {
-        const chainId = await publicClient.getChainId();
-        verifiedStatus = await checkSourceVerification(appValue, chainId);
+        const chainId = await publicClient.getChainId()
+        verifiedStatus = await checkSourceVerification(appValue, chainId)
       }
       setVerificationStatus({
         isVerified: verifiedStatus,
         checked: true,
-      });
-    };
+      })
+    }
 
-    handleAppChange();
-  }, [appValue, !!engagementRewards, !!publicClient]);
+    handleAppChange()
+  }, [appValue, !!engagementRewards, !!publicClient])
 
   const onSubmit = async (values: z.infer<typeof baseFormSchema>) => {
     if (!isConnected || !engagementRewards) {
@@ -141,8 +138,8 @@ const ApplyForm: React.FC = () => {
         title: "Wallet not connected",
         description: "Please connect your wallet first",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
 
     await wrapWithSigningModal(async () => {
@@ -160,16 +157,16 @@ const ApplyForm: React.FC = () => {
           toast({
             title: "Transaction Submitted",
             description: `Transaction hash: ${hash}`,
-          });
+          })
         },
-      );
+      )
 
       if (receipt?.status === "success") {
-        form.reset();
+        form.reset()
       }
-      return receipt;
-    }, "Your application has been submitted successfully!");
-  };
+      return receipt
+    }, "Your application has been submitted successfully!")
+  }
 
   if (!isConnected) {
     return (
@@ -181,7 +178,7 @@ const ApplyForm: React.FC = () => {
           </CardDescription>
         </CardHeader>
       </Card>
-    );
+    )
   }
 
   return (
@@ -201,7 +198,7 @@ const ApplyForm: React.FC = () => {
                 name="app"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>App Address</FormLabel>
+                    <FormLabel>App / Signer Address </FormLabel>
                     <FormControl>
                       <Input placeholder="0x..." {...field} />
                     </FormControl>
@@ -254,8 +251,8 @@ const ApplyForm: React.FC = () => {
                       />
                     </FormControl>
                     <FormDescription>
-                      Percentage of rewards allocated to users and inviters
-                      (0-100)
+                      Percentage of rewards allocated between dApp and
+                      user+inviter (0-100). 0% means all rewards go to the dApp
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -359,7 +356,7 @@ const ApplyForm: React.FC = () => {
         onOpenChange={setIsSigningModalOpen}
       />
     </>
-  );
-};
+  )
+}
 
-export default ApplyForm;
+export default ApplyForm

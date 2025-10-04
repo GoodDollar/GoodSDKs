@@ -1,6 +1,6 @@
 import { createAppKit } from "@reown/appkit/react"
-import { WagmiProvider } from "wagmi"
-import { celo, type AppKitNetwork } from "@reown/appkit/networks"
+import { http, WagmiProvider } from "wagmi"
+import { celo, fuse, xdc, type AppKitNetwork } from "@reown/appkit/networks"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi"
 import React, { ReactNode } from "react"
@@ -15,12 +15,17 @@ const metadata = {
   icons: ["https://avatars.githubusercontent.com/u/179229932"],
 }
 
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [celo]
+const networks: [AppKitNetwork, ...AppKitNetwork[]] = [celo, fuse, xdc]
 
 const wagmiAdapter = new WagmiAdapter({
   networks,
   projectId,
   ssr: true,
+  transports: {
+    [xdc.id]: http("https://rpc.ankr.com/xdc"),
+    [fuse.id]: http("https://rpc.fuse.io"),
+    [celo.id]: http("https://forno.celo.org"),
+  },
 })
 
 createAppKit({
