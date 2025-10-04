@@ -19,12 +19,15 @@ import {
   Envs,
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
+  FarcasterAppConfigs,
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
 import { 
   navigateToUrl, 
-  createVerificationCallbackUrl
+  createVerificationCallbackUrl,
+  createFarcasterUniversalLink,
+  isInFarcasterMiniApp
 } from "../utils/auth"
 
 import type {
@@ -232,12 +235,33 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        // Create callback URL with verification parameters
-        const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl, {
-          source: "gooddollar_identity_verification",
-          verified: "true" // Pass verified param as required
-        });
-        params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
+        // Check if we're in a Farcaster miniapp and should use Universal Links for callback
+        const isFarcaster = await isInFarcasterMiniApp();
+        
+        if (isFarcaster && FarcasterAppConfigs[this.env]) {
+          // Use Farcaster Universal Link for callback to return to miniapp after verification
+          const farcasterConfig = FarcasterAppConfigs[this.env];
+          const universalLinkCallback = createFarcasterUniversalLink(
+            farcasterConfig,
+            'verify', // Sub-path for verification callback
+            {
+              source: "gooddollar_identity_verification",
+              verified: "true", // Pass verified param as required
+              account: address, // Include account for verification
+              nonce: nonce // Include nonce for verification
+            }
+          );
+          params[popupMode ? "cbu" : "rdu"] = universalLinkCallback;
+          console.log('Using Farcaster Universal Link for callback:', universalLinkCallback);
+        } else {
+          // Fallback to regular callback URL for non-Farcaster environments
+          const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl, {
+            source: "gooddollar_identity_verification",
+            verified: "true" // Pass verified param as required
+          });
+          params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
+          console.log('Using regular callback URL:', callbackUrlWithParams);
+        }
       }
 
       url.searchParams.append(
