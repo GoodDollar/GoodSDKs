@@ -281,7 +281,6 @@ export class ClaimSDK {
     const { isWhitelisted } =
       await this.identitySDK.getWhitelistedRoot(userAddress)
     if (!isWhitelisted) {
-      // Use IdentitySDK's navigation method to eliminate code duplication
       await this.identitySDK.navigateToFaceVerification(
         false, // popupMode
         this.rdu, // callbackUrl
