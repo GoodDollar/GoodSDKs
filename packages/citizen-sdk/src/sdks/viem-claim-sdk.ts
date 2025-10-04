@@ -22,7 +22,7 @@ import {
 import { Envs, faucetABI, getGasPrice, ubiSchemeV2ABI, FarcasterAppConfigs } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
 import { 
-  createFarcasterCallbackUrl, 
+  createVerificationCallbackUrl, 
   createFarcasterCallbackUniversalLink,
   isInFarcasterMiniApp 
 } from "../utils/auth"
@@ -111,7 +111,7 @@ export class ClaimSDK {
         );
       } else {
         // Fallback to direct callback URL for non-Farcaster environments
-        this.rdu = createFarcasterCallbackUrl(rdu, {
+        this.rdu = await createVerificationCallbackUrl(rdu, {
           source: "gooddollar_claim_verification"
         });
       }

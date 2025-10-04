@@ -4,34 +4,53 @@ import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
 interface VerifyButtonProps {
-  onVerificationSuccess?: () => void
+  // No props needed - verification success is handled by URL callback detection
 }
 
-export const VerifyButton: React.FC<VerifyButtonProps> = ({
-  onVerificationSuccess,
-}) => {
+export const VerifyButton: React.FC<VerifyButtonProps> = () => {
   const { address } = useAccount()
   const { sdk: identitySDK } = useIdentitySDK("development")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleVerify = async () => {
-    if (!identitySDK || !address) return
+    if (!identitySDK || !address) {
+      setError("Wallet not connected. Please connect your wallet first.")
+      return
+    }
 
     setIsLoading(true)
     setError(null)
 
     try {
-      // Force popup mode for better Farcaster compatibility
+      console.log("Starting face verification process...")
+      console.log("Address:", address)
+      console.log("Callback URL:", window.location.href)
+      
+      // Navigate to face verification - this will open in external browser in Farcaster
       await identitySDK.navigateToFaceVerification(
-        true, // Force popup mode
+        false, // Use redirect mode for proper callback handling
         window.location.href,
         42220
       )
-      onVerificationSuccess?.()
+      
+      console.log("Face verification navigation initiated successfully")
+      // Note: Verification success will be handled by URL callback detection in App.tsx
+      // when the user returns from the external verification process
+      
     } catch (error: any) {
-      console.error("Verification failed:", error)
-      setError(error.message || "Verification failed. Please try again.")
+      console.error("Face verification navigation failed:", error)
+      
+      // Provide specific error messages based on error type
+      if (error.message?.includes("Navigation not supported")) {
+        setError("Navigation is not supported in this environment. Please try in a different browser.")
+      } else if (error.message?.includes("openUrl")) {
+        setError("Failed to open verification page. Please check your browser settings and try again.")
+      } else if (error.message?.includes("signature")) {
+        setError("Failed to sign verification message. Please try again.")
+      } else {
+        setError(error.message || "Verification failed. Please try again.")
+      }
     } finally {
       setIsLoading(false)
     }

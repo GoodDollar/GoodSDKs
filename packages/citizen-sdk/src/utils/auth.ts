@@ -62,30 +62,43 @@ export function isInFarcasterMiniAppSync(): boolean {
 }
 
 /**
- * Farcaster-aware URL navigation with capability detection
+ * Farcaster-aware URL navigation using sdk.actions.openUrl() for proper external navigation
  * @param url - The URL to navigate to
- * @param fallbackToNewTab - Whether to open in new tab as fallback
+ * @param fallbackToNewTab - Whether to open in new tab as fallback for non-Farcaster
  */
 export async function navigateToUrl(url: string, fallbackToNewTab = true): Promise<void> {
   if (typeof window === 'undefined') {
     throw new Error('Navigation not supported in this environment');
   }
 
-  // Try Farcaster navigation first if available
-  if (await isInFarcasterMiniApp() && await canUseFarcasterNavigation()) {
+  console.log('Navigating to URL:', url);
+
+  // Check if we're in Farcaster miniapp
+  const inFarcaster = await isInFarcasterMiniApp();
+  console.log('In Farcaster miniapp:', inFarcaster);
+
+  if (inFarcaster) {
     try {
-      await sdk.actions.ready();
+      // Use Farcaster's openUrl to properly open external URLs in new tab/browser
+      // This is the core requirement - face verification should open in external browser
+      console.log('Using Farcaster sdk.actions.openUrl() for external navigation');
       await sdk.actions.openUrl(url);
       return;
     } catch (error) {
-      console.warn('Farcaster navigation failed, falling back to browser:', error);
+      console.warn('Farcaster openUrl failed, falling back to window.open:', error);
+      // Fallback to window.open if Farcaster SDK fails
+      window.open(url, '_blank');
+      return;
     }
   }
 
-  // Fallback to standard browser navigation
+  // For non-Farcaster environments, use standard browser navigation
+  console.log('Not in Farcaster miniapp - using standard browser navigation');
   if (fallbackToNewTab) {
+    console.log('Opening in new tab');
     window.open(url, '_blank');
   } else {
+    console.log('Navigating in same window');
     window.location.href = url;
   }
 }
@@ -95,6 +108,39 @@ export async function openUrlInFarcaster(
   fallbackToNewTab = true
 ): Promise<void> {
   return navigateToUrl(url, fallbackToNewTab);
+}
+
+/**
+ * Specialized function for face verification in Farcaster miniapps
+ * Uses sdk.actions.openUrl() to open face verification in external browser/tab
+ */
+export async function navigateToFaceVerificationInFarcaster(
+  verificationUrl: string
+): Promise<void> {
+  if (typeof window === 'undefined') {
+    throw new Error('Navigation not supported in this environment');
+  }
+
+  console.log('Navigating to face verification in Farcaster miniapp');
+  console.log('Verification URL:', verificationUrl);
+
+  const inFarcaster = await isInFarcasterMiniApp();
+  console.log('Confirmed in Farcaster miniapp:', inFarcaster);
+
+  if (inFarcaster) {
+    try {
+      // Use Farcaster's openUrl to open face verification in external browser
+      // This is the correct approach - face verification should open in new tab/browser
+      console.log('Using Farcaster sdk.actions.openUrl() for face verification');
+      await sdk.actions.openUrl(verificationUrl);
+    } catch (error) {
+      console.warn('Farcaster openUrl failed, falling back to window.open:', error);
+      window.open(verificationUrl, '_blank');
+    }
+  } else {
+    console.warn('Not in Farcaster miniapp, using standard navigation');
+    window.open(verificationUrl, '_blank');
+  }
 }
 
 /**
@@ -163,27 +209,41 @@ export async function handleVerificationResponse(
     onChainVerified: undefined,
   };
 
+  console.log('Handling verification response...');
+  console.log('Provided URL:', url);
+  console.log('Address:', address);
+
   try {
     // Get URL from Farcaster context or provided parameter
     let targetUrl = url;
     
     if (!targetUrl) {
-      if (await isInFarcasterMiniApp()) {
+      console.log('No URL provided, getting from context...');
+      const inFarcaster = await isInFarcasterMiniApp();
+      console.log('In Farcaster miniapp:', inFarcaster);
+      
+      if (inFarcaster) {
         // Use Farcaster SDK to get current context
         try {
           const context = await sdk.context;
-          // Farcaster context doesn't have href, fallback to window
+          console.log('Farcaster context:', context);
+          
+          // Farcaster context doesn't provide URL directly
+          // We need to use window.location.href as fallback
           if (typeof window !== "undefined") {
             targetUrl = window.location.href;
+            console.log('Using window.location.href in Farcaster context:', targetUrl);
           }
         } catch (error) {
           console.warn('Failed to get Farcaster context:', error);
           if (typeof window !== "undefined") {
             targetUrl = window.location.href;
+            console.log('Error fallback to window.location.href:', targetUrl);
           }
         }
       } else if (typeof window !== "undefined") {
         targetUrl = window.location.href;
+        console.log('Not in Farcaster, using window.location.href:', targetUrl);
       }
     }
     
@@ -312,40 +372,63 @@ export function createFarcasterUniversalLink(
 }
 
 /**
- * Creates a Farcaster-compatible callback URL
- * @deprecated Use createFarcasterUniversalLink for proper Universal Links support
+ * Creates a verification callback URL - simplified approach
  * @param baseUrl - The base callback URL
  * @param additionalParams - Additional parameters to include
- * @returns A Farcaster-compatible callback URL
+ * @returns A callback URL with verification parameters
  */
-export function createFarcasterCallbackUrl(
-  baseUrl: string, 
+export async function createVerificationCallbackUrl(
+  baseUrl: string,
   additionalParams?: Record<string, string>
-): string {
+): Promise<string> {
   const url = new URL(baseUrl);
-  
-  // Add universal link indicators
   if (!url.protocol.startsWith("http")) {
-    // If it's already a custom scheme, return as-is
     return baseUrl;
   }
   
-  // For Farcaster miniapps, ensure the URL structure is compatible
-  // Add a sub-path for verification callback if not already present
+  // Add verify sub-path if not already present
   if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
-    url.pathname = url.pathname.endsWith('/') 
-      ? `${url.pathname}verify` 
+    url.pathname = url.pathname.endsWith('/')
+      ? `${url.pathname}verify`
       : `${url.pathname}/verify`;
   }
   
-  // Add additional parameters if provided
+  // Add additional parameters
   if (additionalParams) {
     Object.entries(additionalParams).forEach(([key, value]) => {
       url.searchParams.set(key, value);
     });
   }
   
-  // Ensure the URL is properly formatted for Farcaster Universal Links
+  return url.toString();
+}
+
+/**
+ * @deprecated Use createVerificationCallbackUrl for proper Universal Links support
+ */
+export function createFarcasterCallbackUrl(
+  baseUrl: string, 
+  additionalParams?: Record<string, string>
+): string {
+  // This is a sync fallback - for proper Universal Links, use createVerificationCallbackUrl
+  const url = new URL(baseUrl);
+  
+  if (!url.protocol.startsWith("http")) {
+    return baseUrl;
+  }
+  
+  if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
+    url.pathname = url.pathname.endsWith('/') 
+      ? `${url.pathname}verify` 
+      : `${url.pathname}/verify`;
+  }
+  
+  if (additionalParams) {
+    Object.entries(additionalParams).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+  }
+  
   return url.toString();
 }
 
