@@ -68,7 +68,6 @@ const App: React.FC = () => {
           setConnectedAccount(address)
           const { isWhitelisted } =
             (await identitySDK?.getWhitelistedRoot(address)) ?? {}
-
           setIsWhitelisted(isWhitelisted)
           setIsVerified(isWhitelisted ?? false)
         } catch (error) {
@@ -83,9 +82,10 @@ const App: React.FC = () => {
       setConnectedAccount(address)
       setIsWhitelisted(undefined)
       setIsVerified(undefined)
+    } else {
       checkWhitelistStatus()
     }
-  }, [address, identitySDK])
+  }, [address, identitySDK, isWhitelisted, connectedAccount])
 
   const handleVerificationSuccess = () => {
     setIsVerified(true)
