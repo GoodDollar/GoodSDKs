@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast"
 import { CopyIcon, CheckIcon } from "lucide-react"
 import { useEngagementRewards } from "@goodsdks/engagement-sdk"
 import { useAccount, useSignTypedData } from "wagmi"
+import { useIdentitySDK } from "@goodsdks/react-hooks"
 import env from "@/env"
 
 interface InviteReward {
@@ -22,8 +23,8 @@ const formatAmount = (amount: bigint) => {
 const InviteDemo = () => {
   const { inviterAddress } = useParams()
   const { address: userWallet, isConnected } = useAccount()
-  const { signTypedDataAsync } = useSignTypedData()
   const { toast } = useToast()
+  const { sdk: identitySDK } = useIdentitySDK()
 
   const [inviteLink, setInviteLink] = useState<string>("")
   const [isCopied, setIsCopied] = useState(false)
@@ -31,6 +32,8 @@ const InviteDemo = () => {
   const [rewardAmount, setRewardAmount] = useState<bigint>(0n)
   const [inviterShare, setInviterShare] = useState<number>(0)
   const [isClaimable, setIsClaimable] = useState(false)
+  const [isWhitelisted, setIsWhitelisted] = useState<boolean>(false)
+  const [checkingWhitelist, setCheckingWhitelist] = useState<boolean>(true)
 
   const engagementRewards = useEngagementRewards(env.rewardsContract)
 
@@ -111,6 +114,28 @@ const InviteDemo = () => {
       setInviteLink(`${baseUrl}/invite/${userWallet}`)
     }
   }, [inviterAddress, userWallet])
+
+  // Add whitelist check effect
+  useEffect(() => {
+    const checkWhitelistStatus = async () => {
+      if (!identitySDK || !userWallet) {
+        setCheckingWhitelist(false)
+        return
+      }
+
+      try {
+        const { isWhitelisted } =
+          await identitySDK.getWhitelistedRoot(userWallet)
+        setIsWhitelisted(isWhitelisted)
+      } catch (error) {
+        console.error("Error checking whitelist status:", error)
+      } finally {
+        setCheckingWhitelist(false)
+      }
+    }
+
+    checkWhitelistStatus()
+  }, [identitySDK, userWallet])
 
   const copyInviteLink = async () => {
     try {
@@ -205,6 +230,31 @@ const InviteDemo = () => {
     }
   }
 
+  const handleVerification = async () => {
+    if (!identitySDK) {
+      toast({
+        title: "Error",
+        description: "Identity SDK not initialized",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Generate FV link with current URL as callback
+      const currentUrl = window.location.href
+      const fvLink = await identitySDK.generateFVLink(false, currentUrl)
+      window.location.href = fvLink
+    } catch (err) {
+      console.error("Error generating verification link:", err)
+      toast({
+        title: "Error",
+        description: "Failed to generate verification link",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <div className="max-w-4xl w-full mx-auto space-y-8">
       <div className="text-center space-y-4">
@@ -227,6 +277,22 @@ const InviteDemo = () => {
       ) : (
         <div className="space-y-8">
           <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Verification Status</h2>
+            {checkingWhitelist ? (
+              <p>Checking verification status...</p>
+            ) : isWhitelisted ? (
+              <p className="text-green-600">Your account is verified! ✓</p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-yellow-600">
+                  Your account needs verification
+                </p>
+                <Button onClick={handleVerification}>Get Verified</Button>
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">Your Invite Link</h2>
             <div className="flex gap-2">
               <input
@@ -240,6 +306,7 @@ const InviteDemo = () => {
                 size="icon"
                 onClick={copyInviteLink}
                 className="shrink-0"
+                disabled={!isWhitelisted}
               >
                 {isCopied ? (
                   <CheckIcon className="h-4 w-4" />
@@ -249,8 +316,11 @@ const InviteDemo = () => {
               </Button>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              Share this link to earn {inviterShare}% of{" "}
-              {formatAmount(rewardAmount)} G$ for each new user who joins!
+              {isWhitelisted
+                ? `Share this link to earn ${inviterShare}% of ${formatAmount(
+                    rewardAmount,
+                  )} G$ for each new user who joins!`
+                : "Verify your account to start sharing and earning rewards"}
             </p>
           </Card>
 
@@ -274,7 +344,9 @@ const InviteDemo = () => {
               </div>
             ) : (
               <p className="text-center text-muted-foreground">
-                No rewards yet. Share your invite link to start earning!
+                {isWhitelisted
+                  ? "No rewards yet. Share your invite link to start earning!"
+                  : "Get verified to start earning rewards"}
               </p>
             )}
           </Card>
@@ -288,8 +360,11 @@ const InviteDemo = () => {
                   {formatAmount(rewardAmount)} G$
                 </p>
               </div>
-              <Button onClick={claimReward} disabled={!isClaimable}>
-                Claim Rewards
+              <Button
+                onClick={claimReward}
+                disabled={!isClaimable || !isWhitelisted}
+              >
+                {!isWhitelisted ? "Verify to Claim" : "Claim Rewards"}
               </Button>
             </div>
           </Card>

@@ -1886,6 +1886,7 @@ __metadata:
   dependencies:
     "@eslint/js": "npm:^9.17.0"
     "@goodsdks/engagement-sdk": "npm:*"
+    "@goodsdks/react-hooks": "npm:*"
     "@hookform/resolvers": "npm:^3.10.0"
     "@radix-ui/react-dialog": "npm:^1.1.5"
     "@radix-ui/react-label": "npm:^2.1.1"
