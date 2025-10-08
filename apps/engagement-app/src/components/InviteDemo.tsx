@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -6,7 +6,6 @@ import { useToast } from "@/hooks/use-toast"
 import { CopyIcon, CheckIcon } from "lucide-react"
 import { useEngagementRewards } from "@goodsdks/engagement-sdk"
 import { useAccount, useSignTypedData } from "wagmi"
-import { parseEther } from "viem"
 import env from "@/env"
 
 interface InviteReward {
@@ -124,6 +123,7 @@ const InviteDemo = () => {
         description: "Invite link copied to clipboard!",
       })
       setTimeout(() => setIsCopied(false), 2000)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast({
         title: "Copy Failed",
