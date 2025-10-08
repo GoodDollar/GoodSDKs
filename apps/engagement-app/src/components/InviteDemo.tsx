@@ -11,7 +11,6 @@ import env from "@/env"
 interface InviteReward {
   invitedWallet: string
   rewardAmount: string
-  timestamp: number
 }
 
 const INVITE_STORAGE_KEY = "invite_inviter"
@@ -83,7 +82,6 @@ const InviteDemo = () => {
             rewardAmount: formatAmount(
               BigInt(event.inviterAmount || 0),
             ).toString(),
-            timestamp: Number(event.timestamp),
           }))
 
         setInviteRewards(inviterEvents)
@@ -169,24 +167,15 @@ const InviteDemo = () => {
         .then((data) => data.signature)
 
       // Get user signature
-      const { domain, types, message } =
-        await engagementRewards.prepareClaimSignature(
-          env.rewardsContract,
-          inviter as `0x${string}`,
-          validUntilBlock,
-          "Engagement Reward Claim",
-        )
-
-      const userSignature = await signTypedDataAsync({
-        domain,
-        types,
-        primaryType: "Claim",
-        message,
-      })
+      const userSignature = await engagementRewards.signClaim(
+        env.demoApp,
+        inviter as `0x${string}`,
+        validUntilBlock,
+      )
 
       // Submit claim transaction
       await engagementRewards.nonContractAppClaim(
-        env.rewardsContract,
+        env.demoApp,
         inviter as `0x${string}`,
         validUntilBlock,
         userSignature,
@@ -277,9 +266,6 @@ const InviteDemo = () => {
                     <div>
                       <p className="font-medium">
                         Invited: {reward.invitedWallet}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(reward.timestamp * 1000).toLocaleDateString()}
                       </p>
                     </div>
                     <p className="font-medium">{reward.rewardAmount} G$</p>

@@ -502,12 +502,17 @@ contract EngagementRewards is
     }
 
     function canClaim(address app, address user) public view returns (bool) {
+        require(user != address(0), "Invalid user address");
+        require(
+            identityContract.getWhitelistedRoot(user) != address(0),
+            "User not whitelisted"
+        );
+
         uint32 lastClaim = userRegistrations[app][user].lastClaimTimestamp;
         require(
             block.timestamp >= lastClaim + CLAIM_COOLDOWN,
             "Claim cooldown not reached"
         );
-        require(user != address(0), "Invalid user address");
 
         require(rewardAmount > 0, "Reward amount must be greater than zero");
         require(
