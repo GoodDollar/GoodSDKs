@@ -558,6 +558,14 @@ export class EngagementRewardsSDK {
     return this.publicClient.getBlockNumber()
   }
 
+  async getRewardAmount() {
+    return this.publicClient.readContract({
+      address: this.contractAddress,
+      abi: engagementRewardsABI,
+      functionName: "rewardAmount",
+    })
+  }
+
   async canClaim(app: Address, user: Address) {
     try {
       await this.publicClient.readContract({
