@@ -436,6 +436,11 @@ contract EngagementRewards is
             );
             userRegistrations[app][user].isRegistered = uint32(block.timestamp);
         }
+        require(
+            userRegistrations[app][user].isRegistered >=
+                registeredApps[app].registeredAt,
+            "User not registered for app"
+        );
         if (!canClaim(app, user)) return false;
 
         updateClaimInfo(app, user);
@@ -503,11 +508,7 @@ contract EngagementRewards is
             "Claim cooldown not reached"
         );
         require(user != address(0), "Invalid user address");
-        require(
-            userRegistrations[app][user].isRegistered >=
-                registeredApps[app].registeredAt,
-            "User not registered for app"
-        );
+
         require(rewardAmount > 0, "Reward amount must be greater than zero");
         require(
             rewardToken.balanceOf(address(this)) >= rewardAmount,

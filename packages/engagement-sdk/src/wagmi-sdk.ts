@@ -1,3 +1,4 @@
+import React, { useMemo } from "react"
 import { usePublicClient, useWalletClient } from "wagmi"
 import {
   EngagementRewardsSDK,
@@ -12,16 +13,17 @@ export function useEngagementRewards(
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
 
-  if (!walletClient || !publicClient) {
-    return
-  }
-
-  const sdk = new EngagementRewardsSDK(
-    publicClient,
-    walletClient,
-    contractAddress,
-    options,
-  )
-
+  const sdk = useMemo(() => {
+    if (!walletClient || !publicClient) {
+      return
+    }
+    const sdk = new EngagementRewardsSDK(
+      publicClient,
+      walletClient,
+      contractAddress,
+      options,
+    )
+    return sdk
+  }, [publicClient, walletClient, contractAddress, JSON.stringify(options)])
   return sdk
 }

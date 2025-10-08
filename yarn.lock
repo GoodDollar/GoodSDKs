@@ -1967,11 +1967,14 @@ __metadata:
   resolution: "@goodsdks/engagement-sdk@workspace:packages/engagement-sdk"
   dependencies:
     "@repo/typescript-config": "workspace:*"
+    "@types/react": "npm:^18"
+    react: "npm:^18"
     tsup: "npm:^8.3.5"
     typescript: "npm:latest"
     viem: "npm:latest"
     wagmi: "npm:latest"
   peerDependencies:
+    react: "*"
     viem: "*"
     wagmi: "*"
   languageName: unknown
@@ -7276,6 +7279,16 @@ __metadata:
   peerDependencies:
     "@types/react": ^18.0.0
   checksum: 10c0/b163d35a6b32a79f5782574a7aeb12a31a647e248792bf437e6d596e2676961c394c5e3c6e91d1ce44ae90441dbaf93158efb4f051c0d61e2612f1cb04ce4faa
+  languageName: node
+  linkType: hard
+
+"@types/react@npm:^18":
+  version: 18.3.26
+  resolution: "@types/react@npm:18.3.26"
+  dependencies:
+    "@types/prop-types": "npm:*"
+    csstype: "npm:^3.0.2"
+  checksum: 10c0/7b62d91c33758f14637311921c92db6045b6328e2300666a35ef8130d06385e39acada005eaf317eee93228edc10ea5f0cd34a0385654d2014d24699a65bfeef
   languageName: node
   linkType: hard
 
@@ -14932,7 +14945,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react@npm:^18.3.1":
+"react@npm:^18, react@npm:^18.3.1":
   version: 18.3.1
   resolution: "react@npm:18.3.1"
   dependencies:
