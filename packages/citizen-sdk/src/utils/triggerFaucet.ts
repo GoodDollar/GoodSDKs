@@ -1,22 +1,17 @@
 // GoodSDKs/packages/citizen-sdk/src/utils/triggerFaucet.ts
-import type {
-  Address,
-  PublicClient,
-  WalletClient,
-  Chain,
-  Account,
-} from "viem"
+import type { Address, PublicClient, WalletClient, Chain, Account } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
-import { Envs, faucetABI, getGasPrice } from "../constants"
+import { Envs, faucetABI, chainConfigs } from "../constants"
+import { SupportedChains } from "../types"
 
 export type TriggerFaucetResult =
-  | "skipped"               // throttled, not eligible, or balance sufficient
-  | "topped_via_contract"   // success via on-chain call
-  | "topped_via_api"        // success via backend fallback
-  | "error"                 // tried and failed
+  | "skipped" // throttled, not eligible, or balance sufficient
+  | "topped_via_contract" // success via on-chain call
+  | "topped_via_api" // success via backend fallback
+  | "error" // tried and failed
 
 export interface TriggerFaucetParams {
-  chainId: number
+  chainId: SupportedChains
   account: Address
   publicClient: PublicClient
   walletClient: WalletClient<any, Chain | undefined, Account | undefined>
@@ -37,21 +32,29 @@ export interface TriggerFaucetParams {
  * @throws If gas price cannot be determined or balance check fails.
  */
 async function canClaim(
-  chainId: number,
+  chainId: SupportedChains,
   account: Address,
   publicClient: PublicClient,
   faucetAddress: Address,
   toppingAmount: bigint,
-  minTopping: number
+  minTopping: number,
 ): Promise<boolean> {
-  const gasPrice = getGasPrice(chainId)
+  const gasPrice = chainConfigs[chainId]?.defaultGasPrice ?? undefined
   if (!gasPrice) {
     throw new Error(
       "Cannot determine gasPrice for the current connected chain.",
     )
   }
 
-  const minBalance = (chainId === 42220 ? 250000n : 150000n) * gasPrice
+  const claimGasBuffer = chainConfigs[chainId]?.claimGasBuffer ?? undefined
+
+  if (claimGasBuffer == null) {
+    throw new Error(
+      "Cannot determine gas buffer requirement for the current connected chain.",
+    )
+  }
+
+  const minBalance = claimGasBuffer * gasPrice
   const minThreshold =
     (toppingAmount * (100n - BigInt(minTopping))) / 100n || minBalance
 
@@ -73,7 +76,7 @@ async function canClaim(
 export async function triggerFaucet({
   chainId,
   account,
-  publicClient, 
+  publicClient,
   walletClient,
   faucetAddress,
   env,
@@ -116,8 +119,15 @@ export async function triggerFaucet({
     ])
 
     // Check if user already has sufficient balance using the canClaim logic
-    const hasGoodBalance = await canClaim(chainId, account, publicClient, faucetAddress, toppingAmount, minTopping)
-    
+    const hasGoodBalance = await canClaim(
+      chainId,
+      account,
+      publicClient,
+      faucetAddress,
+      toppingAmount,
+      minTopping,
+    )
+
     // Skip if faucet won't top, already above threshold, or has sufficient balance for claiming
     if (!canTop || balance >= toppingAmount || hasGoodBalance) {
       if (typeof localStorage !== "undefined") {
@@ -142,8 +152,10 @@ export async function triggerFaucet({
     // Optional guards: gas should be payable and <= toppingAmount
     const gasLimit: bigint | undefined = (request as any)?.gas
     if (typeof gasLimit === "bigint") {
-      if (balance < gasLimit) throw new Error("Not enough balance to pay for gas")
-      if (gasLimit > toppingAmount) throw new Error("Gas limit exceeds topping amount")
+      if (balance < gasLimit)
+        throw new Error("Not enough balance to pay for gas")
+      if (gasLimit > toppingAmount)
+        throw new Error("Gas limit exceeds topping amount")
     }
 
     // Send tx (user signs)
@@ -164,8 +176,9 @@ export async function triggerFaucet({
       )
     }
     return "topped_via_contract"
-  } catch {
+  } catch (err) {
     // Fallback to backend API
+    console.error("Faucet topWallet error, falling back to API", err)
     try {
       const { backend } = Envs[env as keyof typeof Envs] || {}
       if (!backend) return "error"

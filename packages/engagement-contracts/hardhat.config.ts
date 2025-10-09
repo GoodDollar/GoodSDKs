@@ -1,15 +1,9 @@
-//
-
-import "dotenv/config"
-import { HardhatUserConfig } from "hardhat/types"
-
+import type { HardhatUserConfig } from "hardhat/config"
+import "@nomicfoundation/hardhat-toolbox"
 import "@nomicfoundation/hardhat-chai-matchers"
 import "@nomicfoundation/hardhat-ethers"
-import "@nomicfoundation/hardhat-toolbox"
+import "@openzeppelin/hardhat-upgrades"
 import "@typechain/hardhat"
-import "hardhat-gas-reporter"
-import "solidity-coverage"
-
 import dotenv from "dotenv"
 import { ethers } from "ethers"
 dotenv.config()
@@ -45,7 +39,7 @@ const config: HardhatUserConfig = {
         network: "celo",
         chainId: 42220,
         urls: {
-          apiURL: "https://api.celoscan.io/api",
+          apiURL: "https://api.etherscan.io/v2/api?chainid=42220",
           browserURL: "https://celoscan.io/",
         },
       },

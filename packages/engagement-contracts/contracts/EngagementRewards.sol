@@ -440,6 +440,11 @@ contract EngagementRewards is
             );
             userRegistrations[app][user].isRegistered = uint32(block.timestamp);
         }
+        require(
+            userRegistrations[app][user].isRegistered >=
+                registeredApps[app].registeredAt,
+            "User not registered for app"
+        );
         if (!canClaim(app, user)) return false;
 
         updateClaimInfo(app, user);
@@ -501,17 +506,18 @@ contract EngagementRewards is
     }
 
     function canClaim(address app, address user) public view returns (bool) {
+        require(user != address(0), "Invalid user address");
+        require(
+            identityContract.getWhitelistedRoot(user) != address(0),
+            "User not whitelisted"
+        );
+
         uint32 lastClaim = userRegistrations[app][user].lastClaimTimestamp;
         require(
             block.timestamp >= lastClaim + CLAIM_COOLDOWN,
             "Claim cooldown not reached"
         );
-        require(user != address(0), "Invalid user address");
-        require(
-            userRegistrations[app][user].isRegistered >=
-                registeredApps[app].registeredAt,
-            "User not registered for app"
-        );
+
         require(rewardAmount > 0, "Reward amount must be greater than zero");
         require(
             rewardToken.balanceOf(address(this)) >= rewardAmount,

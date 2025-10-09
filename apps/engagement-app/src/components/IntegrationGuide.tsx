@@ -62,8 +62,11 @@ const globalStyles = `
   }
   
   code {
-    color: #fff !important;
-    text-shadow: none !important;
+    color: orange !important;
+    background-color: black;
+    padding: 2px;
+    margin-left: 2px;
+    margin-right: 2px;
   }
   
   .token.comment { color: #888 !important; }
@@ -955,6 +958,54 @@ const handleClaim = async () => {
 };
             `}
                 />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">
+                  4. Track Inviter Rewards via Events
+                </h3>
+                <CodeBlock
+                  language="typescript"
+                  code={`
+import {
+  DEFAULT_EVENT_BATCH_SIZE,
+  DEFAULT_EVENT_LOOKBACK,
+} from '@goodsdks/engagement-sdk'
+
+const loadInviterRewards = async (
+  appAddress: \`0x\${string}\`,
+  inviterAddress: \`0x\${string}\`,
+) => {
+  if (!engagementRewards) {
+    return { events: [], totalInviterRewards: 0n }
+  }
+
+  const events = await engagementRewards.getAppRewardEvents(appAddress, {
+    inviter: inviterAddress,
+    blocksAgo: DEFAULT_EVENT_LOOKBACK, // narrow or expand the window as needed
+    batchSize: DEFAULT_EVENT_BATCH_SIZE,
+    // cacheKey: 'invite-history-<$>{inviterAddress}', // optional override
+  })
+
+  const totalInviterRewards = events.reduce(
+    (sum, event) => sum + event.inviterAmount,
+    0n,
+  )
+
+  return { events, totalInviterRewards }
+}
+            `}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Use the optional <code>inviter</code> filter to ask the RPC
+                  for inviter-specific logs without fetching every event. Adjust
+                  the <code>blocksAgo</code> and <code>batchSize</code> values,
+                  or reuse the exported defaults, to tune how much history you
+                  scan. The SDK remembers the last processed block range in
+                  localStorage so future calls only fetch new events—pass
+                  <code>resetCache: true</code> to replay history or
+                  <code>disableCache: true</code> when running server-side.
+                </p>
               </div>
             </CardContent>
           </Card>
