@@ -6,9 +6,9 @@ import {
   type SimulateContractParameters,
 } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
-
 import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json"
 import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json"
+import { range, flatten } from "lodash"
 
 export const DEV_REWARDS_CONTRACT = devdeployments[
   "EngagementRewardsProxy#ERC1967Proxy"
@@ -17,6 +17,7 @@ export const REWARDS_CONTRACT = prod?.[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
 
+const BLOCKS_RANGE = BigInt(10000)
 const BLOCKS_AGO = BigInt(100000)
 const WAIT_DELAY = 5000 // 1 second delay
 
@@ -283,47 +284,68 @@ export class EngagementRewardsSDK {
     return { domain, types, message }
   }
 
+  async getLogsBatches<
+    P extends (startBlock: number, endBlock: number) => Promise<any>,
+  >(
+    batchSize: bigint,
+    blocksAgo: bigint,
+    promiseCreator: P,
+  ): Promise<Awaited<ReturnType<P>>> {
+    const curBlock = await this.publicClient.getBlockNumber()
+    const startBlock = Number(curBlock - blocksAgo)
+    const ranges = range(
+      Number(startBlock),
+      Number(curBlock),
+      Number(batchSize),
+    )
+    return flatten(
+      await Promise.all(
+        ranges.map((toBlock, i) =>
+          promiseCreator(toBlock - Number(batchSize), toBlock),
+        ),
+      ),
+    ) as Awaited<ReturnType<P>>
+  }
   async getPendingApps() {
     const curBlock = await this.publicClient.getBlockNumber()
-    const [applyEvents, approvedEvents] = await Promise.all([
-      this.publicClient.getContractEvents({
-        address: this.contractAddress,
-        abi: engagementRewardsABI,
-        eventName: "AppApplied",
-        fromBlock: curBlock - BigInt(BLOCKS_AGO),
-      }),
-      await this.publicClient.getContractEvents({
-        address: this.contractAddress,
-        abi: engagementRewardsABI,
-        eventName: "AppApproved",
-        fromBlock: curBlock - BigInt(BLOCKS_AGO),
-      }),
-    ])
 
-    const approvedApps = new Set<string>()
-    approvedEvents
-      .map((_) => _.args.app)
-      .filter((_) => _ !== undefined)
-      .forEach((app) => {
-        approvedApps.add(app.toLowerCase())
-      })
-
-    return applyEvents
-      .map((_) => _.args.app?.toLowerCase())
-      .filter((_) => _ !== undefined)
-      .filter((app) => !approvedApps.has(app))
+    const approvedApps = new Set<string>(await this.getRegisteredApps())
+    const appliedApps = await this.getAppliedApps()
+    return appliedApps.filter((app) => !approvedApps.has(app))
   }
 
   async getRegisteredApps() {
-    const curBlock = await this.publicClient.getBlockNumber()
-    const approvedEvents = await this.publicClient.getContractEvents({
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      eventName: "AppApproved",
-      fromBlock: curBlock - BigInt(BLOCKS_AGO),
-    })
+    const approvedEvents = await this.getLogsBatches(
+      BLOCKS_RANGE,
+      BLOCKS_AGO,
+      (startBlock, endBlock) =>
+        this.publicClient.getContractEvents({
+          address: this.contractAddress,
+          abi: engagementRewardsABI,
+          eventName: "AppApproved",
+          fromBlock: BigInt(startBlock),
+          toBlock: BigInt(endBlock),
+        }),
+    )
 
     return approvedEvents.map((_) => _.args.app).filter((_) => _ !== undefined)
+  }
+
+  async getAppliedApps() {
+    const applyEvents = await this.getLogsBatches(
+      BLOCKS_RANGE,
+      BLOCKS_AGO,
+      (startBlock, endBlock) =>
+        this.publicClient.getContractEvents({
+          address: this.contractAddress,
+          abi: engagementRewardsABI,
+          eventName: "AppApplied",
+          fromBlock: BigInt(startBlock),
+          toBlock: BigInt(endBlock),
+        }),
+    )
+
+    return applyEvents.map((_) => _.args.app).filter((_) => _ !== undefined)
   }
 
   async getAppRewards(app: Address) {
@@ -344,15 +366,19 @@ export class EngagementRewardsSDK {
   }
 
   async getAppRewardEvents(app: Address): Promise<RewardEvent[]> {
-    const curBlock = await this.publicClient.getBlockNumber()
-
-    const rewardEvents = await this.publicClient.getContractEvents({
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      eventName: "RewardClaimed",
-      args: { app },
-      fromBlock: curBlock - BigInt(BLOCKS_AGO),
-    })
+    const rewardEvents = await this.getLogsBatches(
+      BLOCKS_RANGE,
+      BLOCKS_AGO,
+      (startBlock, endBlock) =>
+        this.publicClient.getContractEvents({
+          address: this.contractAddress,
+          abi: engagementRewardsABI,
+          eventName: "RewardClaimed",
+          args: { app },
+          fromBlock: BigInt(startBlock),
+          toBlock: BigInt(endBlock),
+        }),
+    )
 
     return rewardEvents.map((log) => ({
       tx: log.transactionHash,
@@ -366,14 +392,19 @@ export class EngagementRewardsSDK {
   }
 
   async getAppHistory(app: Address): Promise<AppEvent[]> {
-    const curBlock = await this.publicClient.getBlockNumber()
-    const events = await this.publicClient.getContractEvents({
-      address: this.contractAddress,
-      abi: engagementRewardsABI,
-      eventName: "AppApplied",
-      args: { app },
-      fromBlock: curBlock - BigInt(BLOCKS_AGO),
-    })
+    const events = await this.getLogsBatches(
+      BLOCKS_RANGE,
+      BLOCKS_AGO,
+      (startBlock, endBlock) =>
+        this.publicClient.getContractEvents({
+          address: this.contractAddress,
+          abi: engagementRewardsABI,
+          eventName: "AppApplied",
+          args: { app },
+          fromBlock: BigInt(startBlock),
+          toBlock: BigInt(endBlock),
+        }),
+    )
 
     return events.map((log) => ({
       owner: log.args.owner as Address,
