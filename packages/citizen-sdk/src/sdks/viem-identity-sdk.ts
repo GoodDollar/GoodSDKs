@@ -1,3 +1,4 @@
+
 import {
   type Account,
   Address,
@@ -6,6 +7,7 @@ import {
   WalletClient,
   SimulateContractParameters,
   WalletActions,
+  LocalAccount,
   zeroAddress,
 } from "viem"
 
@@ -23,6 +25,12 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
+import { 
+  navigateToUrl, 
+  createVerificationCallbackUrl,
+  createFarcasterUniversalLink,
+  isInFarcasterMiniApp
+} from "../utils/auth"
 
 import type {
   IdentityContract,
@@ -246,7 +254,33 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        params[popupMode ? "cbu" : "rdu"] = callbackUrl
+        // Check if we're in a Farcaster miniapp and should use Universal Links for callback
+        const isFarcaster = await isInFarcasterMiniApp();
+        
+        if (isFarcaster && FarcasterAppConfigs[this.env]) {
+          // Use Farcaster Universal Link for callback to return to miniapp after verification
+          const farcasterConfig = FarcasterAppConfigs[this.env];
+          const universalLinkCallback = createFarcasterUniversalLink(
+            farcasterConfig,
+            'verify', // Sub-path for verification callback
+            {
+              source: "gooddollar_identity_verification",
+              verified: "true", // Pass verified param as required
+              account: address, // Include account for verification
+              nonce: nonce // Include nonce for verification
+            }
+          );
+          params[popupMode ? "cbu" : "rdu"] = universalLinkCallback;
+          console.log('Using Farcaster Universal Link for callback:', universalLinkCallback);
+        } else {
+          // Fallback to regular callback URL for non-Farcaster environments
+          const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl, {
+            source: "gooddollar_identity_verification",
+            verified: "true" // Pass verified param as required
+          });
+          params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
+          console.log('Using regular callback URL:', callbackUrlWithParams);
+        }
       }
 
       url.searchParams.append(
@@ -282,5 +316,23 @@ export class IdentitySDK {
     return {
       expiryTimestamp,
     }
+  }
+
+  /**
+   * Navigates to face verification with proper Farcaster miniapp support.
+   * Uses sdk.actions.openUrl() to open face verification in external browser.
+   * @param popupMode - Whether to use popup mode.
+   * @param callbackUrl - The URL to callback after verification.
+   * @param chainId - The blockchain network ID.
+   */
+  async navigateToFaceVerification(
+    popupMode: boolean = false,
+    callbackUrl?: string,
+    chainId?: number,
+  ): Promise<void> {
+    const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
+    
+    // Use the corrected navigation that properly opens external browser in Farcaster
+    await navigateToUrl(fvLink, !popupMode);
   }
 }
