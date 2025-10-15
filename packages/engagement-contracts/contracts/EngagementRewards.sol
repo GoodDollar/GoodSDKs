@@ -390,7 +390,7 @@ contract EngagementRewards is
         bytes memory signature
     ) internal view {
         require(
-            validUntilBlock <= block.number + 50,
+            validUntilBlock <= block.number + 600,
             "ValidUntilBlock too far in future"
         );
         require(validUntilBlock >= block.number, "Signature expired");
