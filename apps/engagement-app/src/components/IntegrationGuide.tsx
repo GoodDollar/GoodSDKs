@@ -524,7 +524,7 @@ const GameComponent = () => {
     try {
       // 1. Get current block for signature
       const currentBlock = await engagementRewards.getCurrentBlockNumber()
-      const validUntilBlock = currentBlock + 10n // Valid for 10 blocks
+      const validUntilBlock = currentBlock + 600n // Valid for 600 blocks
 
       // Generate signature for first-time users or after app re-apply
       let signature = "0x"
@@ -683,7 +683,7 @@ const MyComponent = () => {
 
     // Get current block and prepare signature if needed
     const currentBlock = await engagementRewards.getCurrentBlockNumber()
-    const validUntilBlock = currentBlock + 10n // Valid for 10 blocks
+    const validUntilBlock = currentBlock + 600n // Valid for 600 blocks
 
     // Generate signature for first-time users or after app re-apply
     let signature = "0x"
