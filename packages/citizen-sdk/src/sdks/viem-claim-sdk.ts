@@ -13,7 +13,6 @@ import {
 import { waitForTransactionReceipt } from "viem/actions"
 
 import { IdentitySDK } from "./viem-identity-sdk"
-import { createUniversalLinkCallback } from "../utils/auth"
 import {
   type contractEnv,
   type SupportedChains,
