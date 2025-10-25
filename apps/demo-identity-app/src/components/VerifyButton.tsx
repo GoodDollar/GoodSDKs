@@ -3,11 +3,11 @@ import { Button, Spinner } from "tamagui"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
-interface VerifyButtonProps {
-  // No props needed - verification success is handled by URL callback detection
-}
-
-export const VerifyButton: React.FC<VerifyButtonProps> = () => {
+/**
+ * VerifyButton component initiates the face verification flow.
+ * Verification success is handled by URL callback detection in the parent App component.
+ */
+export const VerifyButton: React.FC = () => {
   const { address } = useAccount()
   const { sdk: identitySDK } = useIdentitySDK("development")
   const [isLoading, setIsLoading] = useState(false)
@@ -23,10 +23,6 @@ export const VerifyButton: React.FC<VerifyButtonProps> = () => {
     setError(null)
 
     try {
-      console.log("Starting face verification process...")
-      console.log("Address:", address)
-      console.log("Callback URL:", window.location.href)
-      
       // Navigate to face verification - this will open in external browser in Farcaster
       await identitySDK.navigateToFaceVerification(
         false, // Use redirect mode for proper callback handling
@@ -34,12 +30,10 @@ export const VerifyButton: React.FC<VerifyButtonProps> = () => {
         42220
       )
       
-      console.log("Face verification navigation initiated successfully")
       // Note: Verification success will be handled by URL callback detection in App.tsx
       // when the user returns from the external verification process
       
     } catch (error: any) {
-      console.error("Face verification navigation failed:", error)
       
       // Provide specific error messages based on error type
       if (error.message?.includes("Navigation not supported")) {
