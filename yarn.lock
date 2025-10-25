@@ -9904,7 +9904,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "demo-identity-app@workspace:apps/demo-identity-app"
   dependencies:
-    "@farcaster/miniapp-sdk": "npm:^0.1.8"
     "@goodsdks/citizen-sdk": "npm:*"
     "@goodsdks/react-hooks": "npm:*"
     "@reown/appkit": "npm:^1.7.2"
