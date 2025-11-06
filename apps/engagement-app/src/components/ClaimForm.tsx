@@ -58,7 +58,7 @@ const ClaimForm: React.FC = () => {
 
     const fetchCurrentBlock = async () => {
       const currentBlock = await engagementRewards.getCurrentBlockNumber()
-      setValidUntilBlock(currentBlock + 50n)
+      setValidUntilBlock(currentBlock + 600n)
     }
 
     if (isConnected) {

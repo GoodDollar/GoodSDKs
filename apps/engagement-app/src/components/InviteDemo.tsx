@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { CopyIcon, CheckIcon } from "lucide-react"
 import { useEngagementRewards } from "@goodsdks/engagement-sdk"
-import { useAccount, useSignTypedData } from "wagmi"
+import { useAccount } from "wagmi"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
 import env from "@/env"
 
@@ -171,7 +171,7 @@ const InviteDemo = () => {
         localStorage.getItem(INVITE_STORAGE_KEY) ||
         "0x0000000000000000000000000000000000000000"
       const validUntilBlock =
-        (await engagementRewards.getCurrentBlockNumber()) + 10n
+        (await engagementRewards.getCurrentBlockNumber()) + 600n
 
       // Get app signature from backend
       const appSignature = await fetch(
