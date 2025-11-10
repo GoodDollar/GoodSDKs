@@ -1,5 +1,5 @@
 import { Account, createWalletClient, http, PublicClient, Address } from "viem";
-import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractAddresses, contractEnv } from "../constants";
+import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractEnv, chainConfigs, SupportedChains, isSupportedChain } from "../constants";
 import { sdk } from "@farcaster/miniapp-sdk";
 
 // new helper for the fallback context check
@@ -159,7 +159,16 @@ export async function isAddressWhitelisted(
 ): Promise<boolean> {
   try {
     const targetChainId = chainId || await publicClient.getChainId();
-    const identityContract = contractAddresses[targetChainId as keyof typeof contractAddresses]?.[env]?.identityContract;
+    
+    // Check if chain is supported
+    if (!isSupportedChain(targetChainId)) {
+      console.warn('Unsupported chain ID:', targetChainId);
+      return false;
+    }
+    
+    // Get contract address from chainConfigs
+    const chainConfig = chainConfigs[targetChainId as SupportedChains];
+    const identityContract = chainConfig?.contracts?.[env]?.identityContract;
     
     if (!identityContract) {
       console.warn('Identity contract not found for chain:', targetChainId, 'env:', env);
