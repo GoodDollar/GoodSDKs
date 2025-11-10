@@ -56,6 +56,8 @@ contract EngagementRewards is
         string description;
         string url;
         string email;
+        address app;
+        address signer; // 20 bytes
     }
 
     struct AppStats {
@@ -79,6 +81,7 @@ contract EngagementRewards is
     mapping(address => AppStats) public appsStats;
     mapping(address => mapping(address => UserInfo)) public userRegistrations;
     mapping(address => UserGlobalInfo) public userPeriodClaims;
+    address[] public appliedApps;
 
     event AppApplied(
         address indexed app,
@@ -147,6 +150,13 @@ contract EngagementRewards is
         _grantRole(ADMIN_ROLE, msg.sender);
     }
 
+    function upgrade(address[] memory apps) external reinitializer(2) {
+        for (uint256 i = 0; i < apps.length; i++) {
+            appliedApps.push(apps[i]);
+            registeredApps[apps[i]].app = apps[i];
+        }
+    }
+
     function applyApp(
         address app,
         address rewardReceiver,
@@ -198,6 +208,7 @@ contract EngagementRewards is
             existingApp.registeredAt = uint32(block.timestamp);
         } else {
             // New registration
+            appliedApps.push(app);
             registeredApps[app] = AppInfo({
                 isRegistered: true,
                 isApproved: false,
@@ -210,7 +221,9 @@ contract EngagementRewards is
                 userPercentage: uint8(userPercentage),
                 description: description,
                 url: url,
-                email: email
+                email: email,
+                app: app,
+                signer: address(0)
             });
         }
 
@@ -233,6 +246,12 @@ contract EngagementRewards is
         registeredApps[app].isApproved = true;
 
         emit AppApproved(app);
+    }
+
+    function setAppSigner(address app, address signer) external {
+        require(msg.sender == registeredApps[app].owner, "Not app owner");
+        require(signer != address(0), "Invalid signer address");
+        registeredApps[app].signer = signer;
     }
 
     function updateAppSettings(
@@ -349,7 +368,18 @@ contract EngagementRewards is
         bytes32 hash = _hashTypedDataV4(structHash);
 
         // Change ECDSA recover to SignatureChecker
-        return SignatureChecker.isValidSignatureNow(app, hash, signature);
+        return
+            SignatureChecker.isValidSignatureNow(app, hash, signature) ||
+            SignatureChecker.isValidSignatureNow(
+                registeredApps[app].signer,
+                hash,
+                signature
+            ) ||
+            SignatureChecker.isValidSignatureNow(
+                registeredApps[app].owner,
+                hash,
+                signature
+            );
     }
 
     function _validateSignature(
@@ -360,7 +390,7 @@ contract EngagementRewards is
         bytes memory signature
     ) internal view {
         require(
-            validUntilBlock <= block.number + 50,
+            validUntilBlock <= block.number + 600,
             "ValidUntilBlock too far in future"
         );
         require(validUntilBlock >= block.number, "Signature expired");
@@ -406,6 +436,11 @@ contract EngagementRewards is
             );
             userRegistrations[app][user].isRegistered = uint32(block.timestamp);
         }
+        require(
+            userRegistrations[app][user].isRegistered >=
+                registeredApps[app].registeredAt,
+            "User not registered for app"
+        );
         if (!canClaim(app, user)) return false;
 
         updateClaimInfo(app, user);
@@ -467,17 +502,18 @@ contract EngagementRewards is
     }
 
     function canClaim(address app, address user) public view returns (bool) {
+        require(user != address(0), "Invalid user address");
+        require(
+            identityContract.getWhitelistedRoot(user) != address(0),
+            "User not whitelisted"
+        );
+
         uint32 lastClaim = userRegistrations[app][user].lastClaimTimestamp;
         require(
             block.timestamp >= lastClaim + CLAIM_COOLDOWN,
             "Claim cooldown not reached"
         );
-        require(user != address(0), "Invalid user address");
-        require(
-            userRegistrations[app][user].isRegistered >=
-                registeredApps[app].registeredAt,
-            "User not registered for app"
-        );
+
         require(rewardAmount > 0, "Reward amount must be greater than zero");
         require(
             rewardToken.balanceOf(address(this)) >= rewardAmount,
@@ -582,6 +618,20 @@ contract EngagementRewards is
 
     function getDomainSeparator() external view returns (bytes32) {
         return _domainSeparatorV4();
+    }
+
+    function getAppliedApps() external view returns (AppInfo[] memory apps) {
+        uint256 length = appliedApps.length;
+        apps = new AppInfo[](length);
+        for (uint256 i = 0; i < length; i++) {
+            apps[i] = registeredApps[appliedApps[i]];
+        }
+    }
+
+    function overwriteAppDetails(
+        AppInfo memory app
+    ) external onlyRole(ADMIN_ROLE) {
+        registeredApps[app.app] = app;
     }
 
     function _authorizeUpgrade(

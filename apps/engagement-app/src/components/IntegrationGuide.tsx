@@ -62,8 +62,11 @@ const globalStyles = `
   }
   
   code {
-    color: #fff !important;
-    text-shadow: none !important;
+    color: orange !important;
+    background-color: black;
+    padding: 2px;
+    margin-left: 2px;
+    margin-right: 2px;
   }
   
   .token.comment { color: #888 !important; }
@@ -143,6 +146,11 @@ const IntegrationGuide: React.FC = () => {
                   >
                     https://docs.gooddollar.org/for-developers/apis-and-sdks/identity-sybil-resistance
                   </a>
+                </li>
+                <li>
+                  <b>Note:</b> Only the user claiming the reward must be
+                  whitelisted. The inviter does <b>not</b> need to be
+                  whitelisted.
                 </li>
               </ul>
             </li>
@@ -260,29 +268,36 @@ const IntegrationGuide: React.FC = () => {
         </CardContent>
       </Card>
 
+      <p className="text-base text-muted-foreground mb-4">
+        <b>Choose one integration method:</b> You must implement <b>either</b>{" "}
+        the Smart Contract Integration <b>or</b> the Client-Side Integration in
+        your app. Both methods are supported, but only one is required.
+      </p>
+
       <Tabs defaultValue="smart-contract">
         <TabsList className="border-b-0 bg-transparent flex justify-start gap-4 mb-6">
           <TabsTrigger
             value="smart-contract"
             className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
           >
-            Smart Contract Integration
+            Smart Contract + Client Side Integration
           </TabsTrigger>
           <TabsTrigger
             value="client"
             className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
           >
-            Client-Side Integration
+            Client-Side Only Integration
           </TabsTrigger>
           <TabsTrigger
             value="invite"
             className="px-6 py-3 text-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md transition-colors"
           >
-            Invite Link
+            Invite Link Example Integration
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="smart-contract" className="space-y-6">
+          {/* Integration-specific explanation */}
           <Card>
             <CardHeader>
               <CardTitle>Smart Contract Integration</CardTitle>
@@ -290,7 +305,46 @@ const IntegrationGuide: React.FC = () => {
                 Integrate directly through your smart contract
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <b>How it works:</b> Your app's smart contract calls the{" "}
+                <span className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-100 font-mono">
+                  appClaim
+                </span>{" "}
+                function on the EngagementRewards contract when a user completes
+                an action (e.g., wins a game or achieves something). The
+                contract verifies the action and submits the claim on-chain.
+                <br />
+                <b>Key points:</b>
+                <ul className="list-disc pl-6 mt-2">
+                  <li>
+                    <b>
+                      All reward logic and eligibility checks are enforced
+                      on-chain in your contract.
+                    </b>
+                  </li>
+                  <li>
+                    <b>User signatures</b> are only required for first-time
+                    registration or after re-applying your app.
+                  </li>
+                  <li>
+                    <b>Custom reward percentages</b> can be set dynamically by
+                    your contract logic
+                  </li>
+                  <li>
+                    <b>Gas fees</b> are paid by the user for each claim.
+                  </li>
+                  <li>
+                    <b>Frontend</b> only needs to call your contract; it does
+                    not interact with EngagementRewards directly.
+                  </li>
+                  <li>
+                    <b>Best for:</b> On-chain games, dApps with custom logic, or
+                    when you want all logic to be transparent and trustless.
+                  </li>
+                </ul>
+              </div>
+
               <div>
                 <h3 className="text-lg font-semibold mb-2">
                   1. Interface Definition
@@ -470,7 +524,7 @@ const GameComponent = () => {
     try {
       // 1. Get current block for signature
       const currentBlock = await engagementRewards.getCurrentBlockNumber()
-      const validUntilBlock = currentBlock + 10n // Valid for 10 blocks
+      const validUntilBlock = currentBlock + 600n // Valid for 600 blocks
 
       // Generate signature for first-time users or after app re-apply
       let signature = "0x"
@@ -550,6 +604,7 @@ const GameComponent = () => {
         </TabsContent>
 
         <TabsContent value="client" className="space-y-6">
+          {/* Integration-specific explanation */}
           <Card>
             <CardHeader>
               <CardTitle>Client-Side Integration</CardTitle>
@@ -557,7 +612,46 @@ const GameComponent = () => {
                 Integrate using the engagement-sdk directly in your dApp
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <b>How it works:</b> Your frontend and backend use the
+                EngagementRewards SDK to check eligibility and submit claims
+                directly, without any custom smart contract. The backend signs
+                claims as the app.
+                <br />
+                <b>Key points:</b>
+                <ul className="list-disc pl-6 mt-2">
+                  <li>
+                    <b>
+                      All reward logic and eligibility checks happen off-chain
+                    </b>{" "}
+                    in your frontend/backend using the SDK.
+                  </li>
+                  <li>
+                    <b>User signatures</b> are required for first-time
+                    registration or after re-applying your app, and are
+                    generated in the frontend.
+                  </li>
+                  <li>
+                    <b>App signatures</b> are generated by your backend using
+                    your app's private key.
+                  </li>
+                  <li>
+                    <b>No custom smart contract is needed</b>; you interact
+                    directly with the EngagementRewards contract via the SDK.
+                  </li>
+                  <li>
+                    <b>Gas fees</b> are still paid by the user for the claim
+                    transaction, but all business logic is off-chain.
+                  </li>
+                  <li>
+                    <b>Best for:</b> Apps without custom on-chain logic,
+                    web2-style apps, or when you want to minimize smart contract
+                    development.
+                  </li>
+                </ul>
+              </div>
+
               <div>
                 <h3 className="text-lg font-semibold mb-2">1. SDK Setup</h3>
                 <CodeBlock
@@ -589,7 +683,7 @@ const MyComponent = () => {
 
     // Get current block and prepare signature if needed
     const currentBlock = await engagementRewards.getCurrentBlockNumber()
-    const validUntilBlock = currentBlock + 10n // Valid for 10 blocks
+    const validUntilBlock = currentBlock + 600n // Valid for 600 blocks
 
     // Generate signature for first-time users or after app re-apply
     let signature = "0x"
@@ -864,6 +958,54 @@ const handleClaim = async () => {
 };
             `}
                 />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">
+                  4. Track Inviter Rewards via Events
+                </h3>
+                <CodeBlock
+                  language="typescript"
+                  code={`
+import {
+  DEFAULT_EVENT_BATCH_SIZE,
+  DEFAULT_EVENT_LOOKBACK,
+} from '@goodsdks/engagement-sdk'
+
+const loadInviterRewards = async (
+  appAddress: \`0x\${string}\`,
+  inviterAddress: \`0x\${string}\`,
+) => {
+  if (!engagementRewards) {
+    return { events: [], totalInviterRewards: 0n }
+  }
+
+  const events = await engagementRewards.getAppRewardEvents(appAddress, {
+    inviter: inviterAddress,
+    blocksAgo: DEFAULT_EVENT_LOOKBACK, // narrow or expand the window as needed
+    batchSize: DEFAULT_EVENT_BATCH_SIZE,
+    // cacheKey: 'invite-history-<$>{inviterAddress}', // optional override
+  })
+
+  const totalInviterRewards = events.reduce(
+    (sum, event) => sum + event.inviterAmount,
+    0n,
+  )
+
+  return { events, totalInviterRewards }
+}
+            `}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Use the optional <code>inviter</code> filter to ask the RPC
+                  for inviter-specific logs without fetching every event. Adjust
+                  the <code>blocksAgo</code> and <code>batchSize</code> values,
+                  or reuse the exported defaults, to tune how much history you
+                  scan. The SDK remembers the last processed block range in
+                  localStorage so future calls only fetch new events—pass
+                  <code>resetCache: true</code> to replay history or
+                  <code>disableCache: true</code> when running server-side.
+                </p>
               </div>
             </CardContent>
           </Card>

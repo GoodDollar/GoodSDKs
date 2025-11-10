@@ -1,6 +1,6 @@
 {
   "name": "@goodsdks/ui-components",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "type": "module",
   "scripts": {
     "build": "yarn build-claim",
@@ -22,5 +22,9 @@
     "@reown/appkit-adapter-ethers": "^1.7.2",
     "ethers": "6.13.5",
     "lit": "^3.2.1"
-  }
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
 }

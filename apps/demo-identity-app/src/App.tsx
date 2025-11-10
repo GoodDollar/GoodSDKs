@@ -37,7 +37,7 @@ const App: React.FC = () => {
   const [connectedAccount, setConnectedAccount] = useState<string | undefined>(
     undefined,
   )
-  const { sdk: identitySDK } = useIdentitySDK("development")
+  const { sdk: identitySDK, loading, error } = useIdentitySDK("development")
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search)
@@ -68,7 +68,6 @@ const App: React.FC = () => {
           setConnectedAccount(address)
           const { isWhitelisted } =
             (await identitySDK?.getWhitelistedRoot(address)) ?? {}
-
           setIsWhitelisted(isWhitelisted)
           setIsVerified(isWhitelisted ?? false)
         } catch (error) {
@@ -83,9 +82,10 @@ const App: React.FC = () => {
       setConnectedAccount(address)
       setIsWhitelisted(undefined)
       setIsVerified(undefined)
+    } else {
       checkWhitelistStatus()
     }
-  }, [address, identitySDK])
+  }, [address, identitySDK, isWhitelisted, connectedAccount])
 
   const handleVerificationSuccess = () => {
     setIsVerified(true)
@@ -159,7 +159,9 @@ const App: React.FC = () => {
               <appkit-button></appkit-button>
             </Stack>
 
-            {isConnected && loadingWhitelist ? <Spinner size="large" /> : null}
+            {isConnected && (loadingWhitelist || loading) ? (
+              <Spinner size="large" />
+            ) : null}
 
             {isConnected &&
               !loadingWhitelist &&
@@ -175,7 +177,8 @@ const App: React.FC = () => {
             {isConnected &&
             !loadingWhitelist &&
             !isVerified &&
-            !isWhitelisted ? (
+            !isWhitelisted &&
+            !error ? (
               <YStack alignItems="center" gap={12}>
                 <VerifyButton
                   onVerificationSuccess={handleVerificationSuccess}
@@ -184,6 +187,12 @@ const App: React.FC = () => {
                   You need to verify your identity via GoodDollar to continue.
                 </Text>
               </YStack>
+            ) : null}
+
+            {isConnected && error ? (
+              <Text marginTop={16} fontSize={16} color="$red10">
+                Error initializing Identity SDK: {error}
+              </Text>
             ) : null}
           </View>
 

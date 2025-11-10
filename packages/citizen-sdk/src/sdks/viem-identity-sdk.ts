@@ -16,10 +16,13 @@ import { compressToEncodedURIComponent } from "lz-string"
 
 import {
   contractEnv,
+  chainConfigs,
   Envs,
   FV_IDENTIFIER_MSG2,
   identityV2ABI,
   FarcasterAppConfigs,
+  SupportedChains,
+  isSupportedChain,
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
@@ -66,6 +69,8 @@ export class IdentitySDK {
   walletClient: WalletClient & WalletActions
   public contract: IdentityContract
   public env: contractEnv = "production"
+  private readonly chainId: SupportedChains
+  private readonly fvDefaultChain: SupportedChains
 
   /**
    * Initializes the IdentitySDK.
@@ -80,14 +85,22 @@ export class IdentitySDK {
     env,
   }: IdentitySDKOptions) {
     if (!walletClient.account) {
-      throw new Error("ClaimSDK: WalletClient must have an account attached.")
+      throw new Error(
+        "IdentitySDK: WalletClient must have an account attached.",
+      )
     }
     this.publicClient = publicClient
     this.walletClient = walletClient
     this.env = env
     this.account = account ?? walletClient.account.address
 
-    const { contractEnvAddresses } = resolveChainAndContract(walletClient, env)
+    const { chainId, contractEnvAddresses } = resolveChainAndContract(
+      walletClient,
+      env,
+    )
+
+    this.chainId = chainId
+    this.fvDefaultChain = chainConfigs[chainId]?.fvDefaultChain ?? chainId
 
     this.contract = initializeIdentityContract(
       this.publicClient,
@@ -227,11 +240,18 @@ export class IdentitySDK {
       }
 
       const url = new URL(identityUrl)
+      const fallbackChain = this.fvDefaultChain ?? this.chainId
+      const resolvedChain =
+        typeof chainId === "number" ? chainId : fallbackChain
+      const fvChain = isSupportedChain(resolvedChain)
+        ? resolvedChain
+        : fallbackChain
+
       const params: Record<string, string | number> = {
         account: address,
         nonce,
         fvsig: fvSig,
-        chain: chainId || (await this.publicClient.getChainId()),
+        chain: fvChain,
       }
 
       if (callbackUrl) {

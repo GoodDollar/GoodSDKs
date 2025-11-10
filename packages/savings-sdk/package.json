@@ -1,0 +1,39 @@
+{
+  "name": "@goodsdks/savings-sdk",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "require": {
+      "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "latest",
+    "viem": "latest",
+    "wagmi": "latest"
+  },
+  "peerDependencies": {
+    "viem": "*",
+    "wagmi": "*"
+  },
+  "dependencies": {
+    "tsup": "^8.3.5"
+  }
+}

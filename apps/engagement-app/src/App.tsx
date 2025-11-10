@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react"
-import { BrowserRouter as Router, Route, Routes, Link, useLocation } from "react-router-dom"
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Link,
+  useLocation,
+} from "react-router-dom"
 import { Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import ApplyForm from "@/components/ApplyForm"
@@ -12,16 +18,17 @@ import RegisteredAppsPage from "@/components/RegisteredApps"
 import AppDetailsPage from "@/components/AppDetails"
 import { UpdateAppSettingsForm } from "@/components/UpdateAppSettingsForm"
 import IntegrationGuide from "@/components/IntegrationGuide"
+import InviteDemo from "@/components/InviteDemo"
 
 interface NavItemProps {
-  to: string;
-  children: React.ReactNode;
-  onClick?: () => void;
+  to: string
+  children: React.ReactNode
+  onClick?: () => void
 }
 
 const NavItem = ({ to, children, onClick }: NavItemProps) => {
-  const location = useLocation();
-  const isActive = location.pathname === to;
+  const location = useLocation()
+  const isActive = location.pathname === to
 
   return (
     <li>
@@ -31,24 +38,24 @@ const NavItem = ({ to, children, onClick }: NavItemProps) => {
         className={cn(
           "block px-4 py-2 rounded-md transition-colors",
           "hover:bg-accent hover:text-accent-foreground",
-          isActive && "bg-primary text-primary-foreground"
+          isActive && "bg-primary text-primary-foreground",
         )}
       >
         {children}
       </Link>
     </li>
-  );
-};
+  )
+}
 
 const Navigation = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const closeMenu = () => setIsOpen(false);
+  const [isOpen, setIsOpen] = useState(false)
+  const closeMenu = () => setIsOpen(false)
 
   // Close menu on location change
-  const location = useLocation();
+  const location = useLocation()
   useEffect(() => {
-    setIsOpen(false);
-  }, [location]);
+    setIsOpen(false)
+  }, [location])
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
@@ -72,6 +79,7 @@ const Navigation = () => {
             <NavItem to="/pending">Pending</NavItem>
             <NavItem to="/registered">Registered</NavItem>
             <NavItem to="/claim">Claim Demo</NavItem>
+            <NavItem to="/invite">Invite Demo</NavItem>
             <NavItem to="/guide">Integration Guide</NavItem>
           </ul>
 
@@ -87,16 +95,31 @@ const Navigation = () => {
             "md:hidden",
             "absolute left-0 right-0 bg-background border-b",
             "transition-all duration-200 ease-in-out",
-            isOpen ? "top-16 opacity-100" : "-top-96 opacity-0"
+            isOpen ? "top-16 opacity-100" : "-top-96 opacity-0",
           )}
         >
           <ul className="container py-4 space-y-1">
-            <NavItem to="/apply" onClick={closeMenu}>Apply</NavItem>
-            <NavItem to="/approve" onClick={closeMenu}>Approve</NavItem>
-            <NavItem to="/claim" onClick={closeMenu}>Claim</NavItem>
-            <NavItem to="/pending" onClick={closeMenu}>Pending Apps</NavItem>
-            <NavItem to="/registered" onClick={closeMenu}>Registered Apps</NavItem>
-            <NavItem to="/guide" onClick={closeMenu}>Integration Guide</NavItem>
+            <NavItem to="/apply" onClick={closeMenu}>
+              Apply
+            </NavItem>
+            <NavItem to="/approve" onClick={closeMenu}>
+              Approve
+            </NavItem>
+            <NavItem to="/claim" onClick={closeMenu}>
+              Claim
+            </NavItem>
+            <NavItem to="/invite" onClick={closeMenu}>
+              Invite Demo
+            </NavItem>
+            <NavItem to="/pending" onClick={closeMenu}>
+              Pending Apps
+            </NavItem>
+            <NavItem to="/registered" onClick={closeMenu}>
+              Registered Apps
+            </NavItem>
+            <NavItem to="/guide" onClick={closeMenu}>
+              Integration Guide
+            </NavItem>
             <li className="p-2">
               <appkit-button />
             </li>
@@ -104,8 +127,8 @@ const Navigation = () => {
         </div>
       </div>
     </nav>
-  );
-};
+  )
+}
 
 const LandingPage = () => {
   return (
@@ -121,34 +144,45 @@ const LandingPage = () => {
 
       <div className="grid gap-8 md:grid-cols-2 mt-12">
         <div className="space-y-4">
-          <h2 className="text-2xl font-semibold">Why Choose Engagement Rewards?</h2>
+          <h2 className="text-2xl font-semibold">
+            Why Choose Engagement Rewards?
+          </h2>
           <ul className="space-y-3">
             <li className="flex items-start gap-3">
               <div className="mt-1 bg-primary/10 p-1 rounded">💎</div>
               <div>
                 <span className="font-medium">Token Rewards</span>
-                <p className="text-muted-foreground">Incentivize users with G$ tokens for meaningful interactions</p>
+                <p className="text-muted-foreground">
+                  Incentivize users with G$ tokens for meaningful interactions
+                </p>
               </div>
             </li>
             <li className="flex items-start gap-3">
               <div className="mt-1 bg-primary/10 p-1 rounded">🤝</div>
               <div>
                 <span className="font-medium">Referral System</span>
-                <p className="text-muted-foreground">Built-in referral tracking to amplify your organic growth</p>
+                <p className="text-muted-foreground">
+                  Built-in referral tracking to amplify your organic growth
+                </p>
               </div>
             </li>
             <li className="flex items-start gap-3">
               <div className="mt-1 bg-primary/10 p-1 rounded">⚡</div>
               <div>
                 <span className="font-medium">Easy Integration</span>
-                <p className="text-muted-foreground">Simple SDK and documentation to get started in minutes</p>
+                <p className="text-muted-foreground">
+                  Simple SDK and documentation to get started in minutes
+                </p>
               </div>
             </li>
             <li className="flex items-start gap-3">
               <div className="mt-1 bg-primary/10 p-1 rounded">🔐</div>
               <div>
                 <span className="font-medium">Secure & Transparent</span>
-                <p className="text-muted-foreground">Open source smart contracts with verifiable reward distribution</p>
+                <p className="text-muted-foreground">
+                  Open source smart contracts with verifiable reward
+                  distribution
+                </p>
               </div>
             </li>
           </ul>
@@ -159,15 +193,23 @@ const LandingPage = () => {
           <div className="space-y-4">
             <div className="rounded-lg border p-4">
               <h3 className="font-medium">1. Apply</h3>
-              <p className="text-sm text-muted-foreground">Register your dApp and customize reward distribution between your app, users, and referrers</p>
+              <p className="text-sm text-muted-foreground">
+                Register your dApp and customize reward distribution between
+                your app, users, and referrers
+              </p>
             </div>
             <div className="rounded-lg border p-4">
               <h3 className="font-medium">2. Integrate</h3>
-              <p className="text-sm text-muted-foreground">Add our SDK to your application with just a few lines of code</p>
+              <p className="text-sm text-muted-foreground">
+                Add our SDK to your application with just a few lines of code
+              </p>
             </div>
             <div className="rounded-lg border p-4">
               <h3 className="font-medium">3. Grow</h3>
-              <p className="text-sm text-muted-foreground">Watch your user base expand as engagement increases through incentivized actions</p>
+              <p className="text-sm text-muted-foreground">
+                Watch your user base expand as engagement increases through
+                incentivized actions
+              </p>
             </div>
           </div>
         </div>
@@ -183,14 +225,21 @@ const LandingPage = () => {
           </Button>
         </div>
         <p className="text-sm text-muted-foreground">
-          Already registered? <Link to="/registered" className="underline">View your apps</Link>
+          Already registered?{" "}
+          <Link to="/registered" className="underline">
+            View your apps
+          </Link>
         </p>
       </div>
 
       <div className="mt-16 border-t pt-8">
-        <h2 className="text-2xl font-semibold text-center mb-6">Reward Distribution Example</h2>
+        <h2 className="text-2xl font-semibold text-center mb-6">
+          Reward Distribution Example
+        </h2>
         <div className="max-w-md mx-auto bg-card rounded-lg border p-6">
-          <p className="text-sm text-muted-foreground mb-4">For each successful engagement:</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            For each successful engagement:
+          </p>
           <div className="space-y-2">
             <div className="flex justify-between">
               <span>Your dApp receives</span>
@@ -216,7 +265,7 @@ const LandingPage = () => {
 
 const App: React.FC = () => {
   return (
-    <Router>      
+    <Router>
       <div className="min-h-screen flex flex-col items-center">
         <Navigation />
         <div className="container mx-auto p-4 pt-20 flex-grow flex flex-col items-center">
@@ -229,8 +278,13 @@ const App: React.FC = () => {
             <Route path="/claim" element={<ClaimForm />} />
             <Route path="/registered" element={<RegisteredAppsPage />} />
             <Route path="/app/:appAddress" element={<AppDetailsPage />} />
-            <Route path="/app/:appAddress/settings" element={<UpdateAppSettingsForm />} />
+            <Route
+              path="/app/:appAddress/settings"
+              element={<UpdateAppSettingsForm />}
+            />
             <Route path="/guide" element={<IntegrationGuide />} />
+            <Route path="/invite" element={<InviteDemo />} />
+            <Route path="/invite/:inviterAddress" element={<InviteDemo />} />
           </Routes>
           <Toaster />
         </div>
@@ -240,4 +294,3 @@ const App: React.FC = () => {
 }
 
 export default App
-

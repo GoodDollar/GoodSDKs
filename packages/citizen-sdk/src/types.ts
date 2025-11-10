@@ -21,4 +21,4 @@ export interface WalletClaimStatus {
   nextClaimTime?: Date
 }
 
-export type SupportedChains = 42220 | 122
+export type SupportedChains = 42220 | 122 | 50
