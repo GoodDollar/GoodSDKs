@@ -27,6 +27,25 @@ export const Envs: Record<string, Record<string, string>> = {
   },
 }
 
+/**
+ * Farcaster Mini App configurations for different environments
+ * You need to replace these with your actual Farcaster app IDs and slugs from the Farcaster Developer Portal
+ */
+export const FarcasterAppConfigs: Record<string, { appId: string; appSlug: string }> = {
+  production: {
+    appId: "your-production-app-id", // Replace with actual app ID from Farcaster Developer Portal
+    appSlug: "gooddollar-identity", // Replace with actual app slug
+  },
+  staging: {
+    appId: "your-staging-app-id", // Replace with actual app ID from Farcaster Developer Portal
+    appSlug: "gooddollar-identity-staging", // Replace with actual app slug
+  },
+  development: {
+    appId: "your-development-app-id", // Replace with actual app ID from Farcaster Developer Portal
+    appSlug: "gooddollar-identity-dev", // Replace with actual app slug
+  },
+}
+
 export interface ContractAddresses {
   identityContract: `0x${string}`
   ubiContract: `0x${string}`

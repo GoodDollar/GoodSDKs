@@ -1,5 +1,253 @@
-import { Account, createWalletClient, http } from "viem";
-import { Envs, FV_IDENTIFIER_MSG2 } from "../constants";
+import { Account, createWalletClient, http, PublicClient, Address } from "viem";
+import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractEnv, chainConfigs, SupportedChains, isSupportedChain } from "../constants";
+import { sdk } from "@farcaster/miniapp-sdk";
+
+async function detectFarcasterContext(): Promise<boolean> {
+  try {
+    const ctx = await sdk.context;
+    return !!(ctx.location && ctx.location.type != null);
+  } catch {
+    return false;
+  }
+}
+
+export async function isInFarcasterMiniApp(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    return await sdk.isInMiniApp();
+  } catch {
+    return detectFarcasterContext();
+  }
+}
+
+export async function canUseFarcasterNavigation(): Promise<boolean> {
+  if (!await isInFarcasterMiniApp()) return false;
+  try {
+    const capabilities = await sdk.getCapabilities();
+    return capabilities?.includes('actions.openUrl') ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function isInFarcasterMiniAppSync(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return false;
+  }
+}
+
+export async function navigateToUrl(url: string, fallbackToNewTab = true): Promise<void> {
+  if (typeof window === 'undefined') {
+    throw new Error('Navigation not supported in this environment');
+  }
+
+  const isInFarcaster = await isInFarcasterMiniApp();
+
+  if (isInFarcaster) {
+    try {
+      await sdk.actions.openUrl(url);
+      return;
+    } catch {
+      window.open(url, '_blank');
+      return;
+    }
+  }
+
+  if (fallbackToNewTab) {
+    window.open(url, '_blank');
+  } else {
+    window.location.href = url;
+  }
+}
+
+export async function isAddressWhitelisted(
+  address: Address,
+  publicClient: PublicClient,
+  chainId?: number,
+  env: contractEnv = "production"
+): Promise<boolean> {
+  try {
+    const targetChainId = chainId || await publicClient.getChainId();
+    
+    if (!isSupportedChain(targetChainId)) {
+      return false;
+    }
+    
+    const chainConfig = chainConfigs[targetChainId as SupportedChains];
+    const identityContract = chainConfig?.contracts?.[env]?.identityContract;
+    
+    if (!identityContract) {
+      return false;
+    }
+    
+    const result = await publicClient.readContract({
+      address: identityContract as Address,
+      abi: identityV2ABI,
+      functionName: "lastAuthenticated",
+      args: [address],
+    });
+    
+    return result ? BigInt(result) > 0n : false;
+  } catch {
+    return false;
+  }
+}
+
+export async function handleVerificationResponse(
+  url?: string,
+  address?: Address,
+  publicClient?: PublicClient,
+  chainId?: number,
+  env: contractEnv = "production"
+): Promise<{
+  isVerified: boolean;
+  params: URLSearchParams;
+  verified?: string;
+  onChainVerified?: boolean;
+}> {
+  const defaultResult = {
+    isVerified: false,
+    params: new URLSearchParams(),
+    verified: undefined,
+    onChainVerified: undefined,
+  };
+
+  try {
+    let targetUrl = url;
+    
+    if (!targetUrl && typeof window !== "undefined") {
+      targetUrl = window.location.href;
+    }
+    
+    if (!targetUrl) {
+      if (address && publicClient) {
+        const onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
+        return {
+          ...defaultResult,
+          isVerified: onChainVerified,
+          onChainVerified,
+        };
+      }
+      return defaultResult;
+    }
+
+    const urlObj = new URL(targetUrl);
+    const params = urlObj.searchParams;
+    const verified = params.get("verified");
+    const urlVerified = verified === "true";
+    
+    let onChainVerified: boolean | undefined;
+    if (address && publicClient) {
+      onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
+    }
+    
+    const isVerified = urlVerified || (onChainVerified ?? false);
+    
+    return {
+      isVerified,
+      verified: verified || undefined,
+      params,
+      onChainVerified
+    };
+  } catch {
+    return defaultResult;
+  }
+}
+
+export function handleVerificationResponseSync(url?: string): {
+  isVerified: boolean;
+  params: URLSearchParams;
+  verified?: string;
+} {
+  const defaultResult = {
+    isVerified: false,
+    params: new URLSearchParams(),
+    verified: undefined,
+  };
+
+  try {
+    const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
+    if (!targetUrl) return defaultResult;
+
+    const urlObj = new URL(targetUrl);
+    const params = urlObj.searchParams;
+    const verified = params.get("verified");
+    
+    return {
+      isVerified: verified === "true",
+      verified: verified || undefined,
+      params
+    };
+  } catch {
+    return defaultResult;
+  }
+}
+
+export interface FarcasterAppConfig {
+  appId: string;
+  appSlug: string;
+}
+
+export function createFarcasterUniversalLink(
+  config: FarcasterAppConfig,
+  subPath?: string,
+  queryParams?: Record<string, string>
+): string {
+  let universalLink = `https://farcaster.xyz/miniapps/${config.appId}/${config.appSlug}`;
+  
+  if (subPath) {
+    const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
+    universalLink += `/${cleanSubPath}`;
+  }
+  
+  if (queryParams && Object.keys(queryParams).length > 0) {
+    const urlObj = new URL(universalLink);
+    Object.entries(queryParams).forEach(([key, value]) => {
+      urlObj.searchParams.set(key, value);
+    });
+    universalLink = urlObj.toString();
+  }
+  
+  return universalLink;
+}
+
+export async function createVerificationCallbackUrl(
+  baseUrl: string,
+  additionalParams?: Record<string, string>
+): Promise<string> {
+  const url = new URL(baseUrl);
+  if (!url.protocol.startsWith("http")) {
+    return baseUrl;
+  }
+  
+  if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
+    url.pathname = url.pathname.endsWith('/')
+      ? `${url.pathname}verify`
+      : `${url.pathname}/verify`;
+  }
+  
+  if (additionalParams) {
+    Object.entries(additionalParams).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+  }
+  
+  return url.toString();
+}
+
+export function createFarcasterCallbackUniversalLink(
+  config: FarcasterAppConfig,
+  callbackType: 'verify' | 'callback' | 'claim' = 'verify',
+  additionalParams?: Record<string, string>
+): string {
+  return createFarcasterUniversalLink(config, callbackType, {
+    source: "gooddollar_identity_verification",
+    ...additionalParams
+  });
+}
 
 async function signMessageWithViem(
   account: Account,

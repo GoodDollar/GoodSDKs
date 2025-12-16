@@ -70,8 +70,8 @@ const App: React.FC = () => {
             (await identitySDK?.getWhitelistedRoot(address)) ?? {}
           setIsWhitelisted(isWhitelisted)
           setIsVerified(isWhitelisted ?? false)
-        } catch (error) {
-          console.error("Error checking whitelist:", error)
+        } catch {
+          setIsWhitelisted(false)
         } finally {
           setLoadingWhitelist(false)
         }
@@ -86,10 +86,6 @@ const App: React.FC = () => {
       checkWhitelistStatus()
     }
   }, [address, identitySDK, isWhitelisted, connectedAccount])
-
-  const handleVerificationSuccess = () => {
-    setIsVerified(true)
-  }
 
   return (
     <TamaguiProvider config={tamaguiConfig}>
@@ -180,9 +176,7 @@ const App: React.FC = () => {
             !isWhitelisted &&
             !error ? (
               <YStack alignItems="center" gap={12}>
-                <VerifyButton
-                  onVerificationSuccess={handleVerificationSuccess}
-                />
+                <VerifyButton />
                 <Text fontSize={14} color="$gray10">
                   You need to verify your identity via GoodDollar to continue.
                 </Text>
