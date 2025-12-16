@@ -2,8 +2,7 @@ import { Account, createWalletClient, http, PublicClient, Address } from "viem";
 import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractEnv, chainConfigs, SupportedChains, isSupportedChain } from "../constants";
 import { sdk } from "@farcaster/miniapp-sdk";
 
-// new helper for the fallback context check
-async function fallbackDetect(): Promise<boolean> {
+async function detectFarcasterContext(): Promise<boolean> {
   try {
     const ctx = await sdk.context;
     return !!(ctx.location && ctx.location.type != null);
@@ -12,145 +11,58 @@ async function fallbackDetect(): Promise<boolean> {
   }
 }
 
-export async function isInFarcasterMiniApp(timeoutMs = 100): Promise<boolean> {
+export async function isInFarcasterMiniApp(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   try {
     return await sdk.isInMiniApp();
   } catch {
-    console.warn('SDK failed, trying context fallback…');
-    return fallbackDetect();
+    return detectFarcasterContext();
   }
 }
 
-/**
- * Gets Farcaster SDK capabilities for the current miniapp
- * @returns Promise<string[] | null> - Available capabilities or null if not in miniapp
- */
-export async function getFarcasterCapabilities(): Promise<string[] | null> {
-  if (!await isInFarcasterMiniApp()) return null;
-  try {
-    return await sdk.getCapabilities();
-  } catch (error) {
-    console.warn('Failed to get Farcaster capabilities:', error);
-    return null;
-  }
-}
-
-/**
- * Checks if Farcaster navigation is available
- * @returns Promise<boolean> - true if openUrl action is supported
- */
 export async function canUseFarcasterNavigation(): Promise<boolean> {
-  const capabilities = await getFarcasterCapabilities();
-  return capabilities?.includes('actions.openUrl') ?? false;
-}
-
-/**
- * Synchronous version for backwards compatibility
- * Note: This uses basic detection and should be replaced with async version when possible
- */
-export function isInFarcasterMiniAppSync(): boolean {
-  if (typeof window === "undefined") return false;
-  
+  if (!await isInFarcasterMiniApp()) return false;
   try {
-    // Basic detection without the async SDK call
-    // Only check if we're in an iframe which is common for miniapps
-    return window.self !== window.top;
-  } catch (error) {
+    const capabilities = await sdk.getCapabilities();
+    return capabilities?.includes('actions.openUrl') ?? false;
+  } catch {
     return false;
   }
 }
 
-/**
- * Farcaster-aware URL navigation using sdk.actions.openUrl() for proper external navigation
- * @param url - The URL to navigate to
- * @param fallbackToNewTab - Whether to open in new tab as fallback for non-Farcaster
- */
+export function isInFarcasterMiniAppSync(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return false;
+  }
+}
+
 export async function navigateToUrl(url: string, fallbackToNewTab = true): Promise<void> {
   if (typeof window === 'undefined') {
     throw new Error('Navigation not supported in this environment');
   }
 
-  console.log('Navigating to URL:', url);
+  const isInFarcaster = await isInFarcasterMiniApp();
 
-  // Check if we're in Farcaster miniapp
-  const inFarcaster = await isInFarcasterMiniApp();
-  console.log('In Farcaster miniapp:', inFarcaster);
-
-  if (inFarcaster) {
+  if (isInFarcaster) {
     try {
-      // Use Farcaster's openUrl to properly open external URLs in new tab/browser
-      // This is the core requirement - face verification should open in external browser
-      console.log('Using Farcaster sdk.actions.openUrl() for external navigation');
       await sdk.actions.openUrl(url);
       return;
-    } catch (error) {
-      console.warn('Farcaster openUrl failed, falling back to window.open:', error);
-      // Fallback to window.open if Farcaster SDK fails
+    } catch {
       window.open(url, '_blank');
       return;
     }
   }
 
-  // For non-Farcaster environments, use standard browser navigation
-  console.log('Not in Farcaster miniapp - using standard browser navigation');
   if (fallbackToNewTab) {
-    console.log('Opening in new tab');
     window.open(url, '_blank');
   } else {
-    console.log('Navigating in same window');
     window.location.href = url;
   }
 }
 
-export async function openUrlInFarcaster(
-  url: string,
-  fallbackToNewTab = true
-): Promise<void> {
-  return navigateToUrl(url, fallbackToNewTab);
-}
-
-/**
- * Specialized function for face verification in Farcaster miniapps
- * Uses sdk.actions.openUrl() to open face verification in external browser/tab
- */
-export async function navigateToFaceVerificationInFarcaster(
-  verificationUrl: string
-): Promise<void> {
-  if (typeof window === 'undefined') {
-    throw new Error('Navigation not supported in this environment');
-  }
-
-  console.log('Navigating to face verification in Farcaster miniapp');
-  console.log('Verification URL:', verificationUrl);
-
-  const inFarcaster = await isInFarcasterMiniApp();
-  console.log('Confirmed in Farcaster miniapp:', inFarcaster);
-
-  if (inFarcaster) {
-    try {
-      // Use Farcaster's openUrl to open face verification in external browser
-      // This is the correct approach - face verification should open in new tab/browser
-      console.log('Using Farcaster sdk.actions.openUrl() for face verification');
-      await sdk.actions.openUrl(verificationUrl);
-    } catch (error) {
-      console.warn('Farcaster openUrl failed, falling back to window.open:', error);
-      window.open(verificationUrl, '_blank');
-    }
-  } else {
-    console.warn('Not in Farcaster miniapp, using standard navigation');
-    window.open(verificationUrl, '_blank');
-  }
-}
-
-/**
- * Checks if a wallet address is whitelisted on-chain
- * @param address - The wallet address to check
- * @param publicClient - The viem public client for blockchain queries
- * @param chainId - Optional chain ID (defaults to client's chain)
- * @param env - Environment to determine contract address
- * @returns Promise<boolean> - true if address is whitelisted
- */
 export async function isAddressWhitelisted(
   address: Address,
   publicClient: PublicClient,
@@ -160,18 +72,14 @@ export async function isAddressWhitelisted(
   try {
     const targetChainId = chainId || await publicClient.getChainId();
     
-    // Check if chain is supported
     if (!isSupportedChain(targetChainId)) {
-      console.warn('Unsupported chain ID:', targetChainId);
       return false;
     }
     
-    // Get contract address from chainConfigs
     const chainConfig = chainConfigs[targetChainId as SupportedChains];
     const identityContract = chainConfig?.contracts?.[env]?.identityContract;
     
     if (!identityContract) {
-      console.warn('Identity contract not found for chain:', targetChainId, 'env:', env);
       return false;
     }
     
@@ -182,23 +90,12 @@ export async function isAddressWhitelisted(
       args: [address],
     });
     
-    // If lastAuthenticated returns a timestamp > 0, the address is whitelisted
     return result ? BigInt(result) > 0n : false;
-  } catch (error) {
-    console.warn('Failed to check address whitelist status:', error);
+  } catch {
     return false;
   }
 }
 
-/**
- * Enhanced verification response handler that supports both URL params and on-chain verification
- * @param url - The current URL or callback URL to parse
- * @param address - Optional wallet address to check on-chain verification
- * @param publicClient - Optional viem public client for on-chain checks
- * @param chainId - Optional chain ID for on-chain checks
- * @param env - Environment for contract resolution
- * @returns Object containing verification status and any additional parameters
- */
 export async function handleVerificationResponse(
   url?: string,
   address?: Address,
@@ -218,46 +115,14 @@ export async function handleVerificationResponse(
     onChainVerified: undefined,
   };
 
-  console.log('Handling verification response...');
-  console.log('Provided URL:', url);
-  console.log('Address:', address);
-
   try {
-    // Get URL from Farcaster context or provided parameter
     let targetUrl = url;
     
-    if (!targetUrl) {
-      console.log('No URL provided, getting from context...');
-      const inFarcaster = await isInFarcasterMiniApp();
-      console.log('In Farcaster miniapp:', inFarcaster);
-      
-      if (inFarcaster) {
-        // Use Farcaster SDK to get current context
-        try {
-          const context = await sdk.context;
-          console.log('Farcaster context:', context);
-          
-          // Farcaster context doesn't provide URL directly
-          // We need to use window.location.href as fallback
-          if (typeof window !== "undefined") {
-            targetUrl = window.location.href;
-            console.log('Using window.location.href in Farcaster context:', targetUrl);
-          }
-        } catch (error) {
-          console.warn('Failed to get Farcaster context:', error);
-          if (typeof window !== "undefined") {
-            targetUrl = window.location.href;
-            console.log('Error fallback to window.location.href:', targetUrl);
-          }
-        }
-      } else if (typeof window !== "undefined") {
-        targetUrl = window.location.href;
-        console.log('Not in Farcaster, using window.location.href:', targetUrl);
-      }
+    if (!targetUrl && typeof window !== "undefined") {
+      targetUrl = window.location.href;
     }
     
     if (!targetUrl) {
-      // If no URL, check on-chain only
       if (address && publicClient) {
         const onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
         return {
@@ -274,13 +139,11 @@ export async function handleVerificationResponse(
     const verified = params.get("verified");
     const urlVerified = verified === "true";
     
-    // For popup mode (cbu), check on-chain verification since no redirect occurs
     let onChainVerified: boolean | undefined;
     if (address && publicClient) {
       onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
     }
     
-    // Verification is true if either URL param says so OR on-chain check passes
     const isVerified = urlVerified || (onChainVerified ?? false);
     
     return {
@@ -289,16 +152,11 @@ export async function handleVerificationResponse(
       params,
       onChainVerified
     };
-  } catch (error) {
-    console.warn('Failed to parse verification response URL:', error);
+  } catch {
     return defaultResult;
   }
 }
 
-/**
- * Legacy synchronous version for backwards compatibility
- * @deprecated Use the async handleVerificationResponse instead for better verification support
- */
 export function handleVerificationResponseSync(url?: string): {
   isVerified: boolean;
   params: URLSearchParams;
@@ -311,7 +169,6 @@ export function handleVerificationResponseSync(url?: string): {
   };
 
   try {
-    // For sync version, fallback to window.location.href
     const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
     if (!targetUrl) return defaultResult;
 
@@ -324,51 +181,28 @@ export function handleVerificationResponseSync(url?: string): {
       verified: verified || undefined,
       params
     };
-  } catch (error) {
-    console.warn('Failed to parse verification response URL:', error);
+  } catch {
     return defaultResult;
   }
 }
 
-/**
- * Configuration for Farcaster Mini App
- * 
- * To get your app ID and slug:
- * 1. Go to the Farcaster Developer Portal
- * 2. Register your Mini App
- * 3. Copy the app ID and slug from your Mini App settings
- * 4. Update the FarcasterAppConfigs in constants.ts with your values
- */
 export interface FarcasterAppConfig {
   appId: string;
   appSlug: string;
 }
 
-/**
- * Creates a proper Farcaster Universal Link following the official format
- * @param config - Farcaster app configuration (appId and appSlug)
- * @param subPath - Optional sub-path to append (e.g., 'verify', 'callback')
- * @param queryParams - Optional query parameters to include
- * @returns A proper Farcaster Universal Link
- */
 export function createFarcasterUniversalLink(
   config: FarcasterAppConfig,
   subPath?: string,
   queryParams?: Record<string, string>
 ): string {
-  // Official Farcaster Universal Link format:
-  // https://farcaster.xyz/miniapps/<app-id>/<app-slug>(/<sub-path>)(?<query-params>)
-  
   let universalLink = `https://farcaster.xyz/miniapps/${config.appId}/${config.appSlug}`;
   
-  // Add sub-path if provided
   if (subPath) {
-    // Ensure sub-path doesn't start with '/'
     const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
     universalLink += `/${cleanSubPath}`;
   }
   
-  // Add query parameters if provided
   if (queryParams && Object.keys(queryParams).length > 0) {
     const urlObj = new URL(universalLink);
     Object.entries(queryParams).forEach(([key, value]) => {
@@ -380,12 +214,6 @@ export function createFarcasterUniversalLink(
   return universalLink;
 }
 
-/**
- * Creates a verification callback URL - simplified approach
- * @param baseUrl - The base callback URL
- * @param additionalParams - Additional parameters to include
- * @returns A callback URL with verification parameters
- */
 export async function createVerificationCallbackUrl(
   baseUrl: string,
   additionalParams?: Record<string, string>
@@ -395,14 +223,12 @@ export async function createVerificationCallbackUrl(
     return baseUrl;
   }
   
-  // Add verify sub-path if not already present
   if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
     url.pathname = url.pathname.endsWith('/')
       ? `${url.pathname}verify`
       : `${url.pathname}/verify`;
   }
   
-  // Add additional parameters
   if (additionalParams) {
     Object.entries(additionalParams).forEach(([key, value]) => {
       url.searchParams.set(key, value);
@@ -412,42 +238,6 @@ export async function createVerificationCallbackUrl(
   return url.toString();
 }
 
-/**
- * @deprecated Use createVerificationCallbackUrl for proper Universal Links support
- */
-export function createFarcasterCallbackUrl(
-  baseUrl: string, 
-  additionalParams?: Record<string, string>
-): string {
-  // This is a sync fallback - for proper Universal Links, use createVerificationCallbackUrl
-  const url = new URL(baseUrl);
-  
-  if (!url.protocol.startsWith("http")) {
-    return baseUrl;
-  }
-  
-  if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
-    url.pathname = url.pathname.endsWith('/') 
-      ? `${url.pathname}verify` 
-      : `${url.pathname}/verify`;
-  }
-  
-  if (additionalParams) {
-    Object.entries(additionalParams).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
-    });
-  }
-  
-  return url.toString();
-}
-
-/**
- * Helper function to create proper Farcaster Universal Links with callback support
- * @param config - Farcaster app configuration
- * @param callbackType - Type of callback ('verify', 'callback', etc.)
- * @param additionalParams - Additional parameters to include
- * @returns A proper Farcaster Universal Link
- */
 export function createFarcasterCallbackUniversalLink(
   config: FarcasterAppConfig,
   callbackType: 'verify' | 'callback' | 'claim' = 'verify',
@@ -457,21 +247,6 @@ export function createFarcasterCallbackUniversalLink(
     source: "gooddollar_identity_verification",
     ...additionalParams
   });
-}
-
-/**
- * Creates a universal link compatible callback URL for mobile/native app support
- * Enhanced for Farcaster miniapp compatibility with proper sub-path handling
- * @deprecated Use createFarcasterCallbackUniversalLink for proper Universal Links support
- * @param baseUrl - The base callback URL
- * @param additionalParams - Additional parameters to include
- * @returns A universal link compatible URL
- */
-export function createUniversalLinkCallback(
-  baseUrl: string, 
-  additionalParams?: Record<string, string>
-): string {
-  return createFarcasterCallbackUrl(baseUrl, additionalParams);
 }
 
 async function signMessageWithViem(

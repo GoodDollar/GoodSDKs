@@ -115,194 +115,134 @@ export class IdentitySDK {
     return new IdentitySDK({ account, ...props })
   }
 
-  /**
-   * Submits a transaction and waits for its receipt.
-   * @param params - Parameters for simulating the contract call.
-   * @param onHash - Optional callback to receive the transaction hash.
-   * @returns The transaction receipt.
-   * @throws If submission fails or no active wallet address is found.
-   */
   async submitAndWait(
     params: SimulateContractParameters,
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
-    try {
-      if (!this.account) throw new Error("No active wallet address found.")
+    if (!this.account) throw new Error("No active wallet address found.")
 
-      const { request } = await this.publicClient.simulateContract({
-        account: this.account,
-        ...params,
-      })
+    const { request } = await this.publicClient.simulateContract({
+      account: this.account,
+      ...params,
+    })
 
-      const hash = await this.walletClient.writeContract(request)
-      onHash?.(hash)
+    const hash = await this.walletClient.writeContract(request)
+    onHash?.(hash)
 
-      return waitForTransactionReceipt(this.publicClient, { hash })
-    } catch (error: any) {
-      console.error("submitAndWait Error:", error)
-      throw new Error(`Failed to submit transaction: ${error.message}`)
-    }
+    return waitForTransactionReceipt(this.publicClient, { hash })
   }
 
-  /**
-   * Returns whitelist status of main account or any connected account.
-   * @param account - The account address to check.
-   * @returns An object containing whitelist status and root address.
-   * @reference: https://docs.gooddollar.org/user-guides/connect-another-wallet-address-to-identity
-   */
   async getWhitelistedRoot(
     account: Address,
   ): Promise<{ isWhitelisted: boolean; root: Address }> {
-    try {
-      const root = await this.publicClient.readContract({
+    const root = await this.publicClient.readContract({
+      address: this.contract.contractAddress,
+      abi: identityV2ABI,
+      functionName: "getWhitelistedRoot",
+      args: [account],
+    })
+
+    return {
+      isWhitelisted: root !== zeroAddress,
+      root,
+    }
+  }
+
+  async getIdentityExpiryData(account: Address): Promise<IdentityExpiryData> {
+    const [lastAuthenticated, authPeriod] = await Promise.all([
+      this.publicClient.readContract({
         address: this.contract.contractAddress,
         abi: identityV2ABI,
-        functionName: "getWhitelistedRoot",
+        functionName: "lastAuthenticated",
         args: [account],
-      })
+      }),
+      this.publicClient.readContract({
+        address: this.contract.contractAddress,
+        abi: identityV2ABI,
+        functionName: "authenticationPeriod",
+        args: [],
+      }),
+    ])
 
-      return {
-        isWhitelisted: root !== zeroAddress,
-        root,
-      }
-    } catch (error: any) {
-      console.error("getWhitelistedRoot Error:", error)
-      throw new Error(`Failed to get whitelisted root: ${error.message}`)
-    }
+    return { lastAuthenticated, authPeriod }
   }
 
-  /**
-   * Retrieves identity expiry data for a given account.
-   * @param account - The account address.
-   * @returns The identity expiry data.
-   */
-  async getIdentityExpiryData(account: Address): Promise<IdentityExpiryData> {
-    try {
-      const [lastAuthenticated, authPeriod] = await Promise.all([
-        this.publicClient.readContract({
-          address: this.contract.contractAddress,
-          abi: identityV2ABI,
-          functionName: "lastAuthenticated",
-          args: [account],
-        }),
-        this.publicClient.readContract({
-          address: this.contract.contractAddress,
-          abi: identityV2ABI,
-          functionName: "authenticationPeriod",
-          args: [],
-        }),
-      ])
-
-      return { lastAuthenticated, authPeriod }
-    } catch (error: any) {
-      console.error("getIdentityExpiryData Error:", error)
-      throw new Error(
-        `Failed to retrieve identity expiry data: ${error.message}`,
-      )
-    }
-  }
-
-  /**
-   * Generates a Face Verification Link.
-   * @param popupMode - Whether to generate a popup link.
-   * @param callbackUrl - The URL to callback after verification.
-   * @param chainId - The blockchain network ID.
-   * @returns The generated Face Verification link.
-   */
   async generateFVLink(
     popupMode: boolean = false,
     callbackUrl?: string,
     chainId?: number,
   ): Promise<string> {
-    try {
-      const address = this.account
-      if (!address) throw new Error("No wallet address found.")
+    const address = this.account
+    if (!address) throw new Error("No wallet address found.")
 
-      const nonce = Math.floor(Date.now() / 1000).toString()
+    const nonce = Math.floor(Date.now() / 1000).toString()
 
-      const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", address)
-      const fvSig = await this.walletClient.signMessage({
-        account: address,
-        message: fvSigMessage,
-      })
+    const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", address)
+    const fvSig = await this.walletClient.signMessage({
+      account: address,
+      message: fvSigMessage,
+    })
 
-      const { identityUrl } = Envs[this.env]
-      if (!identityUrl) {
-        throw new Error("identityUrl is not defined in environment settings.")
-      }
-
-      if (!fvSig) {
-        throw new Error("Missing signature for Face Verification.")
-      }
-
-      if (!popupMode && !callbackUrl) {
-        throw new Error("Callback URL is required for redirect mode.")
-      }
-
-      const url = new URL(identityUrl)
-      const fallbackChain = this.fvDefaultChain ?? this.chainId
-      const resolvedChain =
-        typeof chainId === "number" ? chainId : fallbackChain
-      const fvChain = isSupportedChain(resolvedChain)
-        ? resolvedChain
-        : fallbackChain
-
-      const params: Record<string, string | number> = {
-        account: address,
-        nonce,
-        fvsig: fvSig,
-        chain: fvChain,
-      }
-
-      if (callbackUrl) {
-        // Check if we're in a Farcaster miniapp and should use Universal Links for callback
-        const isFarcaster = await isInFarcasterMiniApp();
-        
-        if (isFarcaster && FarcasterAppConfigs[this.env]) {
-          // Use Farcaster Universal Link for callback to return to miniapp after verification
-          const farcasterConfig = FarcasterAppConfigs[this.env];
-          const universalLinkCallback = createFarcasterUniversalLink(
-            farcasterConfig,
-            'verify', // Sub-path for verification callback
-            {
-              source: "gooddollar_identity_verification",
-              verified: "true", // Pass verified param as required
-              account: address, // Include account for verification
-              nonce: nonce // Include nonce for verification
-            }
-          );
-          params[popupMode ? "cbu" : "rdu"] = universalLinkCallback;
-          console.log('Using Farcaster Universal Link for callback:', universalLinkCallback);
-        } else {
-          // Fallback to regular callback URL for non-Farcaster environments
-          const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl, {
-            source: "gooddollar_identity_verification",
-            verified: "true" // Pass verified param as required
-          });
-          params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
-          console.log('Using regular callback URL:', callbackUrlWithParams);
-        }
-      }
-
-      url.searchParams.append(
-        "lz",
-        compressToEncodedURIComponent(JSON.stringify(params)),
-      )
-      return url.toString()
-    } catch (error: any) {
-      console.error("generateFVLink Error:", error)
-      throw new Error(
-        `Failed to generate Face Verification link: ${error.message}`,
-      )
+    const { identityUrl } = Envs[this.env]
+    if (!identityUrl) {
+      throw new Error("identityUrl is not defined in environment settings.")
     }
+
+    if (!fvSig) {
+      throw new Error("Missing signature for Face Verification.")
+    }
+
+    if (!popupMode && !callbackUrl) {
+      throw new Error("Callback URL is required for redirect mode.")
+    }
+
+    const url = new URL(identityUrl)
+    const fallbackChain = this.fvDefaultChain ?? this.chainId
+    const resolvedChain =
+      typeof chainId === "number" ? chainId : fallbackChain
+    const fvChain = isSupportedChain(resolvedChain)
+      ? resolvedChain
+      : fallbackChain
+
+    const params: Record<string, string | number> = {
+      account: address,
+      nonce,
+      fvsig: fvSig,
+      chain: fvChain,
+    }
+
+    if (callbackUrl) {
+      const isInFarcaster = await isInFarcasterMiniApp();
+      
+      if (isInFarcaster && FarcasterAppConfigs[this.env]) {
+        const farcasterConfig = FarcasterAppConfigs[this.env];
+        const universalLinkCallback = createFarcasterUniversalLink(
+          farcasterConfig,
+          'verify',
+          {
+            source: "gooddollar_identity_verification",
+            verified: "true",
+            account: address,
+            nonce: nonce
+          }
+        );
+        params[popupMode ? "cbu" : "rdu"] = universalLinkCallback;
+      } else {
+        const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl, {
+          source: "gooddollar_identity_verification",
+          verified: "true"
+        });
+        params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
+      }
+    }
+
+    url.searchParams.append(
+      "lz",
+      compressToEncodedURIComponent(JSON.stringify(params)),
+    )
+    return url.toString()
   }
 
-  /**
-   * Calculates the identity expiry timestamp.
-   * @param lastAuthenticated - The timestamp of last authentication.
-   * @param authPeriod - The authentication period.
-   * @returns The identity expiry data.
-   */
   calculateIdentityExpiry(
     lastAuthenticated: bigint,
     authPeriod: bigint,
@@ -319,21 +259,12 @@ export class IdentitySDK {
     }
   }
 
-  /**
-   * Navigates to face verification with proper Farcaster miniapp support.
-   * Uses sdk.actions.openUrl() to open face verification in external browser.
-   * @param popupMode - Whether to use popup mode.
-   * @param callbackUrl - The URL to callback after verification.
-   * @param chainId - The blockchain network ID.
-   */
   async navigateToFaceVerification(
     popupMode: boolean = false,
     callbackUrl?: string,
     chainId?: number,
   ): Promise<void> {
     const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
-    
-    // Use the corrected navigation that properly opens external browser in Farcaster
     await navigateToUrl(fvLink, !popupMode);
   }
 }
