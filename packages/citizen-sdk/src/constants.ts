@@ -211,6 +211,7 @@ export const faucetABI = parseAbi([
   "function minTopping() view returns (uint8)",
   "function getToppingAmount() view returns (uint256)",
   "function canTop(address _user) view returns (bool)",
+  "function topWallet(address _user) payable",
 ])
 
 export const g$ABI = parseAbi([

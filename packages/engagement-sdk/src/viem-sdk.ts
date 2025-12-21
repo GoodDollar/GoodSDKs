@@ -7,7 +7,10 @@ import {
 import { waitForTransactionReceipt } from "viem/actions"
 import devdeployments from "@goodsdks/engagement-contracts/ignition/deployments/development-celo/deployed_addresses.json"
 import prod from "@goodsdks/engagement-contracts/ignition/deployments/production-celo/deployed_addresses.json"
-import { EngagementRewards as engagementRewardsABI } from "./abi/abis"
+import {
+  EngagementRewards as engagementRewardsABI,
+  IIdentity as identityABI,
+} from "./abi/abis"
 export const DEV_REWARDS_CONTRACT = devdeployments[
   "EngagementRewardsProxy#ERC1967Proxy"
 ] as `0x${string}`
@@ -19,6 +22,7 @@ import {
   DEFAULT_EVENT_LOOKBACK,
   WAIT_DELAY,
   fetchInBlockBatches,
+  promisePool,
 } from "./utils/rpc"
 import {
   type StorageLike,
@@ -55,6 +59,10 @@ export interface RewardEvent {
   inviterAmount: bigint // Changed from optional to required as per contract event
 }
 
+export interface RewardEventExtended extends RewardEvent {
+  userDateAdded?: bigint
+}
+
 export interface AppEvent {
   owner: Address
   rewardReceiver: Address
@@ -85,6 +93,12 @@ export interface GetAppRewardEventsOptions {
   disableCache?: boolean
   /** Remove any stored progress before fetching. */
   resetCache?: boolean
+}
+
+export interface GetAppRewardEventsExtendedOptions
+  extends GetAppRewardEventsOptions {
+  /** Identity contract address for fetching dateAdded. */
+  identityContractAddress?: Address
 }
 
 export class EngagementRewardsSDK {
@@ -455,21 +469,26 @@ export class EngagementRewardsSDK {
           ? 0n
           : latestBlock - blocksAgo
 
-    const storedFromBlock = !disableCache
-      ? await this.getCachedFromBlock(app, inviter, cacheKey, resetCache)
-      : undefined
+    // const storedFromBlock = !disableCache
+    //   ? await this.getCachedFromBlock(app, inviter, cacheKey, resetCache)
+    //   : undefined
 
-    if (storedFromBlock !== undefined && storedFromBlock > latestBlock) {
-      return []
-    }
+    // this.logDebug("storedFromBlock", {
+    //   storedFromBlock,
+    //   fromBlock,
+    //   latestBlock,
+    // })
+    // if (storedFromBlock !== undefined && storedFromBlock > latestBlock) {
+    //   return []
+    // }
 
-    if (storedFromBlock !== undefined && storedFromBlock > fromBlock) {
-      fromBlock = storedFromBlock
-    }
+    // if (storedFromBlock !== undefined && storedFromBlock > fromBlock) {
+    //   fromBlock = storedFromBlock
+    // }
 
-    if (fromBlock > latestBlock) {
-      return []
-    }
+    // if (fromBlock > latestBlock) {
+    //   return []
+    // }
 
     const rewardEvents = await fetchInBlockBatches({
       batchSize,
@@ -515,6 +534,149 @@ export class EngagementRewardsSDK {
       userAmount: log.args.userAmount as bigint,
       inviterAmount: log.args.inviterAmount as bigint,
     }))
+  }
+
+  /**
+   * Fetch dateAdded for multiple addresses using multicall in batches of 500.
+   * Processes with concurrent workers via promisePool for optimal throughput.
+   */
+  private async getIdentitiesDateAdded(
+    addresses: Address[],
+    identityContractAddress: Address,
+    concurrency: number = 3,
+  ): Promise<Map<Address, bigint | undefined>> {
+    const result = new Map<Address, bigint | undefined>()
+
+    if (addresses.length === 0) {
+      return result
+    }
+
+    const BATCH_SIZE = 300
+    const uniqueAddresses = Array.from(new Set(addresses))
+
+    // Create all batches upfront
+    const batches: Address[][] = []
+    for (let i = 0; i < uniqueAddresses.length; i += BATCH_SIZE) {
+      batches.push(uniqueAddresses.slice(i, i + BATCH_SIZE))
+    }
+
+    // Create tasks for promise pool
+    const tasks = batches.map((batch, idx) => async () => {
+      try {
+        const callResults = await this.publicClient.multicall({
+          contracts: batch.map((address) => ({
+            address: identityContractAddress,
+            abi: identityABI,
+            functionName: "identities",
+            args: [address],
+          })),
+          allowFailure: true,
+        })
+
+        batch.forEach((address, callIndex) => {
+          const callResult = callResults[callIndex]
+          if (
+            callResult.status === "success" &&
+            callResult.result &&
+            Array.isArray(callResult.result)
+          ) {
+            // dateAdded is the second element in the Identity struct
+            const dateAdded = callResult.result[1] as bigint | undefined
+            result.set(address, dateAdded)
+          } else {
+            result.set(address, undefined)
+          }
+        })
+
+        this.logDebug("fetched identity dateAdded batch", {
+          batchIndex: idx,
+          batchSize: batch.length,
+          successCount: callResults.filter((r) => r.status === "success")
+            .length,
+        })
+      } catch (error) {
+        this.logDebug("failed to fetch identity dateAdded batch", {
+          batchIndex: idx,
+          error,
+        })
+
+        // Mark all addresses in this batch as undefined
+        batch.forEach((address) => {
+          result.set(address, undefined)
+        })
+      }
+    })
+
+    // Execute tasks with concurrency limit
+    await promisePool(tasks, concurrency)
+
+    return result
+  }
+
+  /**
+   * Fetch RewardClaimed logs for an app with extended identity data (dateAdded).
+   * Combines getAppRewardEvents with identity contract queries in parallel.
+   */
+  async getAppRewardEventsExtended(
+    app: Address,
+    options: GetAppRewardEventsExtendedOptions = {
+      identityContractAddress: "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42",
+    },
+  ): Promise<RewardEventExtended[]> {
+    const { identityContractAddress, ...rewardEventOptions } = options
+
+    // Fetch reward events
+    const rewardEvents = await this.getAppRewardEvents(app, rewardEventOptions)
+
+    if (!identityContractAddress || rewardEvents.length === 0) {
+      this.logDebug("skipping identity augmentation", {
+        hasIdentityAddress: !!identityContractAddress,
+        eventCount: rewardEvents.length,
+      })
+      return rewardEvents.map((event) => ({
+        ...event,
+        userDateAdded: undefined,
+      }))
+    }
+
+    try {
+      // Extract unique user addresses from reward events
+      const userAddresses = Array.from(
+        new Set(rewardEvents.map((event) => event.user)),
+      )
+
+      // Fetch dateAdded in parallel with reward events
+      const dateAddedMap = await this.getIdentitiesDateAdded(
+        userAddresses,
+        identityContractAddress,
+      )
+
+      // Augment reward events with dateAdded
+      const extendedEvents: RewardEventExtended[] = rewardEvents.map(
+        (event) => ({
+          ...event,
+          userDateAdded: dateAddedMap.get(event.user),
+        }),
+      )
+
+      this.logDebug("augmented reward events with identity data", {
+        eventCount: extendedEvents.length,
+        augmentedWithDateAdded: extendedEvents.filter(
+          (e) => e.userDateAdded !== undefined,
+        ).length,
+      })
+
+      return extendedEvents
+    } catch (error) {
+      this.logDebug("failed to augment reward events with identity data", {
+        error,
+      })
+      // Fallback: return events without dateAdded
+      return rewardEvents.map((event) => ({
+        ...event,
+        userDateAdded: undefined,
+      }))
+    }
   }
 
   async getAppHistory(app: Address): Promise<AppEvent[]> {
