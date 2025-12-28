@@ -103,6 +103,20 @@ For Wagmi-based React projects, use the hooks exposed from `@goodsdks/react-hook
 
 Explore the generated TypeScript definitions in `dist/` for the complete surface, including helper enums (`contractEnv`, `SupportedChains`, etc.).
 
+## Farcaster MiniApp Support
+
+The SDK includes support for Farcaster miniapps, which enables proper navigation and callback handling when running inside a Farcaster miniapp environment.
+
+### Configuration
+
+**Important**: The `FarcasterAppConfigs` in `constants.ts` are placeholder values. If you're integrating the SDK into a Farcaster miniapp, you must update these with your actual Farcaster app ID and slug:
+
+1. Go to the [Farcaster Developer Portal](https://warpcast.com/~/developers)
+2. Register your Mini App and obtain your `appId` and `appSlug`
+3. Update `FarcasterAppConfigs` in `packages/citizen-sdk/src/constants.ts` with your values for each environment (production, staging, development)
+
+The SDK will automatically detect if it's running in a Farcaster miniapp and use Universal Links for callbacks, which ensures proper navigation back to your miniapp after face verification.
+
 ## References
 
 - [Demo Identity App](https://demo-identity-app.vercel.app/)

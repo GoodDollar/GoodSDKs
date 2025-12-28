@@ -108,6 +108,11 @@ export class IdentitySDK {
     )
   }
 
+  /**
+   * Initializes the IdentitySDK with an account from the wallet client.
+   * @param props - SDK options without account (account is auto-detected)
+   * @returns A new IdentitySDK instance
+   */
   static async init(
     props: Omit<IdentitySDKOptions, "account">,
   ): Promise<IdentitySDK> {
@@ -115,21 +120,32 @@ export class IdentitySDK {
     return new IdentitySDK({ account, ...props })
   }
 
+  /**
+   * Submits a transaction and waits for its receipt.
+   * @param params - Parameters for simulating the contract call.
+   * @param onHash - Optional callback to receive the transaction hash.
+   * @returns The transaction receipt.
+   * @throws If submission fails or no active wallet address is found.
+   */
   async submitAndWait(
     params: SimulateContractParameters,
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<any> {
-    if (!this.account) throw new Error("No active wallet address found.")
+    try {
+      if (!this.account) throw new Error("No active wallet address found.")
 
-    const { request } = await this.publicClient.simulateContract({
-      account: this.account,
-      ...params,
-    })
+      const { request } = await this.publicClient.simulateContract({
+        account: this.account,
+        ...params,
+      })
 
-    const hash = await this.walletClient.writeContract(request)
-    onHash?.(hash)
+      const hash = await this.walletClient.writeContract(request)
+      onHash?.(hash)
 
-    return waitForTransactionReceipt(this.publicClient, { hash })
+      return waitForTransactionReceipt(this.publicClient, { hash })
+    } catch (error: any) {
+      throw new Error(`Failed to submit transaction: ${error.message}`)
+    }
   }
 
   async getWhitelistedRoot(
@@ -243,6 +259,12 @@ export class IdentitySDK {
     return url.toString()
   }
 
+  /**
+   * Calculates the identity expiry timestamp.
+   * @param lastAuthenticated - The timestamp of last authentication.
+   * @param authPeriod - The authentication period.
+   * @returns The identity expiry data.
+   */
   calculateIdentityExpiry(
     lastAuthenticated: bigint,
     authPeriod: bigint,

@@ -96,96 +96,6 @@ export async function isAddressWhitelisted(
   }
 }
 
-export async function handleVerificationResponse(
-  url?: string,
-  address?: Address,
-  publicClient?: PublicClient,
-  chainId?: number,
-  env: contractEnv = "production"
-): Promise<{
-  isVerified: boolean;
-  params: URLSearchParams;
-  verified?: string;
-  onChainVerified?: boolean;
-}> {
-  const defaultResult = {
-    isVerified: false,
-    params: new URLSearchParams(),
-    verified: undefined,
-    onChainVerified: undefined,
-  };
-
-  try {
-    let targetUrl = url;
-    
-    if (!targetUrl && typeof window !== "undefined") {
-      targetUrl = window.location.href;
-    }
-    
-    if (!targetUrl) {
-      if (address && publicClient) {
-        const onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
-        return {
-          ...defaultResult,
-          isVerified: onChainVerified,
-          onChainVerified,
-        };
-      }
-      return defaultResult;
-    }
-
-    const urlObj = new URL(targetUrl);
-    const params = urlObj.searchParams;
-    const verified = params.get("verified");
-    const urlVerified = verified === "true";
-    
-    let onChainVerified: boolean | undefined;
-    if (address && publicClient) {
-      onChainVerified = await isAddressWhitelisted(address, publicClient, chainId, env);
-    }
-    
-    const isVerified = urlVerified || (onChainVerified ?? false);
-    
-    return {
-      isVerified,
-      verified: verified || undefined,
-      params,
-      onChainVerified
-    };
-  } catch {
-    return defaultResult;
-  }
-}
-
-export function handleVerificationResponseSync(url?: string): {
-  isVerified: boolean;
-  params: URLSearchParams;
-  verified?: string;
-} {
-  const defaultResult = {
-    isVerified: false,
-    params: new URLSearchParams(),
-    verified: undefined,
-  };
-
-  try {
-    const targetUrl = url || (typeof window !== "undefined" ? window.location.href : "");
-    if (!targetUrl) return defaultResult;
-
-    const urlObj = new URL(targetUrl);
-    const params = urlObj.searchParams;
-    const verified = params.get("verified");
-    
-    return {
-      isVerified: verified === "true",
-      verified: verified || undefined,
-      params
-    };
-  } catch {
-    return defaultResult;
-  }
-}
-
 export interface FarcasterAppConfig {
   appId: string;
   appSlug: string;
@@ -214,6 +124,13 @@ export function createFarcasterUniversalLink(
   return universalLink;
 }
 
+/**
+ * Creates a verification callback URL by appending a /verify sub-path and optional query parameters.
+ * Used for non-Farcaster environments to construct callback URLs after face verification.
+ * @param baseUrl - The base callback URL
+ * @param additionalParams - Optional query parameters to include (e.g., verified=true, source)
+ * @returns A callback URL with /verify sub-path and query parameters
+ */
 export async function createVerificationCallbackUrl(
   baseUrl: string,
   additionalParams?: Record<string, string>

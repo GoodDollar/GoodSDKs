@@ -457,13 +457,7 @@ export class ClaimSDK {
     const { isWhitelisted } =
       await this.identitySDK.getWhitelistedRoot(userAddress)
     if (!isWhitelisted) {
-      // Use IdentitySDK's navigation method to eliminate code duplication
-      await this.identitySDK.navigateToFaceVerification(
-        false, // popupMode
-        this.rdu, // callbackUrl
-        42220 // chainId
-      );
-      
+      await this.fvRedirect()
       throw new Error("User requires identity verification.")
     }
 
@@ -492,6 +486,26 @@ export class ClaimSDK {
         throw new Error(`Claim failed: ${error.shortMessage}`)
       }
       throw new Error(`Claim failed: ${error.message}`)
+    }
+  }
+
+  /**
+   * Redirects the user through the face-verification flow.
+   * @throws If face verification redirect fails.
+   */
+  private async fvRedirect(): Promise<void> {
+    const fvChainId = this.fvDefaultChain ?? this.chainId
+    const fvLink = await this.identitySDK.generateFVLink(
+      false,
+      this.rdu,
+      fvChainId,
+    )
+    if (typeof window !== "undefined") {
+      window.location.href = fvLink
+    } else {
+      throw new Error(
+        "Face verification redirect is only supported in browser environments.",
+      )
     }
   }
 

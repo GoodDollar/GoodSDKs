@@ -18,8 +18,10 @@ export const VerifyButton: React.FC = () => {
       )
 
       window.location.href = fvLink
-    } catch {
-      // Silent fail - error will be caught by the identity SDK
+    } catch (error) {
+      // generateFVLink throws errors that should be handled by the caller
+      // Re-throw to allow parent components to handle the error appropriately
+      throw error
     }
   }
 
