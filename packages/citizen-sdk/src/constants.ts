@@ -29,20 +29,24 @@ export const Envs: Record<string, Record<string, string>> = {
 
 /**
  * Farcaster Mini App configurations for different environments
- * You need to replace these with your actual Farcaster app IDs and slugs from the Farcaster Developer Portal
- */
+ * @notice THESE ARE EXAMPLE / PLACEHOLDER VALUES ONLY.
+* Developers integrating the SDK SHOULD:
+* 1. Pass a custom `farcasterConfig` when initializing IdentitySDK / ClaimSDK
+ *
+* The SDK will default to these values if no config is provided, which will likely fail in production.
+*/
 export const FarcasterAppConfigs: Record<string, { appId: string; appSlug: string }> = {
   production: {
-    appId: "your-production-app-id", // Replace with actual app ID from Farcaster Developer Portal
-    appSlug: "gooddollar-identity", // Replace with actual app slug
+    appId: "", // REQUIRED: Replace with actual app ID from Farcaster Developer Portal
+    appSlug: "", // REQUIRED: Replace with actual app slug
   },
   staging: {
-    appId: "your-staging-app-id", // Replace with actual app ID from Farcaster Developer Portal
-    appSlug: "gooddollar-identity-staging", // Replace with actual app slug
+    appId: "", // REQUIRED: Replace with actual app ID from Farcaster Developer Portal
+    appSlug: "", // REQUIRED: Replace with actual app slug
   },
   development: {
-    appId: "your-development-app-id", // Replace with actual app ID from Farcaster Developer Portal
-    appSlug: "gooddollar-identity-dev", // Replace with actual app slug
+    appId: "", // REQUIRED: Replace with actual app ID from Farcaster Developer Portal
+    appSlug: "", // REQUIRED: Replace with actual app slug
   },
 }
 

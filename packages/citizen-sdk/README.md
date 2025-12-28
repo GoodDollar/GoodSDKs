@@ -109,11 +109,23 @@ The SDK includes support for Farcaster miniapps, which enables proper navigation
 
 ### Configuration
 
-**Important**: The `FarcasterAppConfigs` in `constants.ts` are placeholder values. If you're integrating the SDK into a Farcaster miniapp, you must update these with your actual Farcaster app ID and slug:
+**Important**: The `FarcasterAppConfigs` in `constants.ts` are placeholder values. If you're integrating the SDK into a Farcaster miniapp, you must provide your Farcaster app ID and slug when initializing the SDK.
 
 1. Go to the [Farcaster Developer Portal](https://warpcast.com/~/developers)
 2. Register your Mini App and obtain your `appId` and `appSlug`
-3. Update `FarcasterAppConfigs` in `packages/citizen-sdk/src/constants.ts` with your values for each environment (production, staging, development)
+3. Pass these values to `IdentitySDK.init`:
+
+```ts
+const identitySDK = await IdentitySDK.init({
+  publicClient,
+  walletClient,
+  env: "production",
+  farcasterConfig: {
+    appId: "YOUR_APP_ID",
+    appSlug: "YOUR_APP_SLUG"
+  }
+})
+```
 
 The SDK will automatically detect if it's running in a Farcaster miniapp and use Universal Links for callbacks, which ensures proper navigation back to your miniapp after face verification.
 

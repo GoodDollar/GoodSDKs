@@ -26,8 +26,8 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
-import { 
-  navigateToUrl, 
+import {
+  navigateToUrl,
   createVerificationCallbackUrl,
   createFarcasterUniversalLink,
   isInFarcasterMiniApp
@@ -58,6 +58,7 @@ export interface IdentitySDKOptions {
   publicClient: PublicClient
   walletClient: WalletClient<any, Chain | undefined, Account | undefined>
   env: contractEnv
+  farcasterConfig?: { appId: string; appSlug: string }
 }
 
 /**
@@ -71,18 +72,21 @@ export class IdentitySDK {
   public env: contractEnv = "production"
   private readonly chainId: SupportedChains
   private readonly fvDefaultChain: SupportedChains
+  private readonly farcasterConfig?: { appId: string; appSlug: string }
 
   /**
    * Initializes the IdentitySDK.
    * @param publicClient - The PublicClient instance.
    * @param walletClient - The WalletClient with WalletActions.
    * @param env - The environment to use ("production" | "staging" | "development").
+   * @param farcasterConfig - Optional Farcaster App config (appId, appSlug).
    */
   constructor({
     account,
     publicClient,
     walletClient,
     env,
+    farcasterConfig,
   }: IdentitySDKOptions) {
     if (!walletClient.account) {
       throw new Error(
@@ -93,6 +97,7 @@ export class IdentitySDK {
     this.walletClient = walletClient
     this.env = env
     this.account = account ?? walletClient.account.address
+    this.farcasterConfig = farcasterConfig
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
       walletClient,
@@ -142,8 +147,9 @@ export class IdentitySDK {
       const hash = await this.walletClient.writeContract(request)
       onHash?.(hash)
 
-      return waitForTransactionReceipt(this.publicClient, { hash })
+      return await waitForTransactionReceipt(this.publicClient, { hash })
     } catch (error: any) {
+      console.error("submitAndWait Error:", error)
       throw new Error(`Failed to submit transaction: ${error.message}`)
     }
   }
@@ -228,26 +234,24 @@ export class IdentitySDK {
     }
 
     if (callbackUrl) {
+      // Add callback URL with verification parameters
       const isInFarcaster = await isInFarcasterMiniApp();
-      
-      if (isInFarcaster && FarcasterAppConfigs[this.env]) {
-        const farcasterConfig = FarcasterAppConfigs[this.env];
+      const farcasterAppConfig = this.farcasterConfig ?? FarcasterAppConfigs[this.env];
+
+      if (isInFarcaster && farcasterAppConfig) {
+        const farcasterConfig = farcasterAppConfig;
         const universalLinkCallback = createFarcasterUniversalLink(
           farcasterConfig,
           'verify',
           {
             source: "gooddollar_identity_verification",
-            verified: "true",
             account: address,
             nonce: nonce
           }
         );
         params[popupMode ? "cbu" : "rdu"] = universalLinkCallback;
       } else {
-        const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl, {
-          source: "gooddollar_identity_verification",
-          verified: "true"
-        });
+        const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl);
         params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
       }
     }
@@ -287,6 +291,6 @@ export class IdentitySDK {
     chainId?: number,
   ): Promise<void> {
     const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
-    await navigateToUrl(fvLink, !popupMode);
+    await navigateToUrl(fvLink, popupMode);
   }
 }

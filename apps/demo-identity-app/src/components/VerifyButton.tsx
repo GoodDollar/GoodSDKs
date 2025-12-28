@@ -14,14 +14,12 @@ export const VerifyButton: React.FC = () => {
       const fvLink = await identitySDK.generateFVLink(
         false,
         window.location.href,
-        42220,
+        undefined,
       )
 
       window.location.href = fvLink
-    } catch (error) {
-      // generateFVLink throws errors that should be handled by the caller
-      // Re-throw to allow parent components to handle the error appropriately
-      throw error
+    } catch (e) {
+      console.error("Verification failed:", e)
     }
   }
 

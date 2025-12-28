@@ -71,25 +71,25 @@ export async function isAddressWhitelisted(
 ): Promise<boolean> {
   try {
     const targetChainId = chainId || await publicClient.getChainId();
-    
+
     if (!isSupportedChain(targetChainId)) {
       return false;
     }
-    
+
     const chainConfig = chainConfigs[targetChainId as SupportedChains];
     const identityContract = chainConfig?.contracts?.[env]?.identityContract;
-    
+
     if (!identityContract) {
       return false;
     }
-    
+
     const result = await publicClient.readContract({
       address: identityContract as Address,
       abi: identityV2ABI,
       functionName: "lastAuthenticated",
       args: [address],
     });
-    
+
     return result ? BigInt(result) > 0n : false;
   } catch {
     return false;
@@ -107,12 +107,12 @@ export function createFarcasterUniversalLink(
   queryParams?: Record<string, string>
 ): string {
   let universalLink = `https://farcaster.xyz/miniapps/${config.appId}/${config.appSlug}`;
-  
+
   if (subPath) {
     const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
     universalLink += `/${cleanSubPath}`;
   }
-  
+
   if (queryParams && Object.keys(queryParams).length > 0) {
     const urlObj = new URL(universalLink);
     Object.entries(queryParams).forEach(([key, value]) => {
@@ -120,16 +120,22 @@ export function createFarcasterUniversalLink(
     });
     universalLink = urlObj.toString();
   }
-  
+
   return universalLink;
 }
 
 /**
- * Creates a verification callback URL by appending a /verify sub-path and optional query parameters.
- * Used for non-Farcaster environments to construct callback URLs after face verification.
- * @param baseUrl - The base callback URL
- * @param additionalParams - Optional query parameters to include (e.g., verified=true, source)
- * @returns A callback URL with /verify sub-path and query parameters
+ * Helper to construct a normalized callback URL for Face Verification.
+ * 
+ * What this handles:
+ * 1. Validates that the base URL is an HTTP/HTTPS URL.
+ * 2. Enforces a routing convention: if the path does not already include '/verify' or '/callback',
+ *    it appends '/verify'. This ensures the user is redirected to a route that handles the verification response.
+ * 3. Appends necessary query parameters (like `source`).
+ * 
+ * @param baseUrl - The base callback URL provided by the developer.
+ * @param additionalParams - Optional query parameters to append.
+ * @returns A fully constructed, normalized callback URL.
  */
 export async function createVerificationCallbackUrl(
   baseUrl: string,
@@ -139,19 +145,19 @@ export async function createVerificationCallbackUrl(
   if (!url.protocol.startsWith("http")) {
     return baseUrl;
   }
-  
+
   if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
     url.pathname = url.pathname.endsWith('/')
       ? `${url.pathname}verify`
       : `${url.pathname}/verify`;
   }
-  
+
   if (additionalParams) {
     Object.entries(additionalParams).forEach(([key, value]) => {
       url.searchParams.set(key, value);
     });
   }
-  
+
   return url.toString();
 }
 

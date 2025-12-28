@@ -25,10 +25,11 @@ import {
 } from "../constants"
 import type { ContractAddresses } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
-import { 
-  createVerificationCallbackUrl, 
+import {
+  createVerificationCallbackUrl,
   createFarcasterCallbackUniversalLink,
-  isInFarcasterMiniApp 
+  isInFarcasterMiniApp,
+  navigateToUrl
 } from "../utils/auth"
 import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
 import {
@@ -161,7 +162,7 @@ export class ClaimSDK {
     try {
       // Check if we're in a Farcaster context and should use Universal Links
       const isFarcaster = await isInFarcasterMiniApp();
-      
+
       if (isFarcaster && FarcasterAppConfigs[this.env]) {
         // Create proper Farcaster Universal Link
         const farcasterConfig = FarcasterAppConfigs[this.env];
@@ -494,19 +495,21 @@ export class ClaimSDK {
    * @throws If face verification redirect fails.
    */
   private async fvRedirect(): Promise<void> {
-    const fvChainId = this.fvDefaultChain ?? this.chainId
+    // Generate link with current chain ID as default, respecting identity-contract logic
     const fvLink = await this.identitySDK.generateFVLink(
       false,
       this.rdu,
-      fvChainId,
+      this.chainId // Pass explicit chainId to avoid hardcoded fallbacks if possible, or let SDK handle it.
     )
-    if (typeof window !== "undefined") {
-      window.location.href = fvLink
-    } else {
-      throw new Error(
-        "Face verification redirect is only supported in browser environments.",
-      )
+
+    // Handle Farcaster Context
+    if (await isInFarcasterMiniApp()) {
+      await navigateToUrl(fvLink, false)
+      return
     }
+
+    // Default legacy behavior
+    window.location.href = fvLink
   }
 
   /**
