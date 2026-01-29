@@ -16,6 +16,7 @@
     "upgrade:dev": "hardhat ignition wipe development-celo EngagementRewardsUpgrade#EngagementRewards.upgradeToAndCall && hardhat ignition wipe development-celo EngagementRewardsUpgrade#EngagementRewards && hardhat ignition wipe development-celo EngagementRewards#EngagementRewards && hardhat ignition deploy --network development-celo --deployment-id development-celo ignition/modules/EngagementRewardsUpgrade.ts"
   },
   "devDependencies": {
+    "@chainlink/env-enc": "^1.0.5",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
     "@nomicfoundation/hardhat-ignition": "^0.15.9",
