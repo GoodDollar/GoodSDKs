@@ -1,6 +1,6 @@
 {
   "name": "@goodsdks/engagement-sdk",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
