@@ -241,6 +241,22 @@ export class EngagementRewardsSDK {
     )
   }
 
+  // Revoke approval for an app (calls revokeAppApproval on-chain)
+  async revokeAppApproval(
+    app: Address,
+    onHash?: (hash: `0x${string}`) => void,
+  ) {
+    return this.submitAndWait(
+      {
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        functionName: "revokeAppApproval",
+        args: [app],
+      },
+      onHash,
+    )
+  }
+
   async updateAppSettings(
     app: Address,
     rewardReceiver: Address,

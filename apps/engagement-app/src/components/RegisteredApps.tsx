@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table"
-import { formatEther } from "viem"
+import { Address, formatEther } from "viem"
 import { Loader2 } from "lucide-react"
 import env from "@/env"
 import { TruncatedAddress } from "./ui/TruncatedAddress"
@@ -39,30 +39,46 @@ const RegisteredAppsPage: React.FC = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [apps, setApps] = useState<AppInfo[]>([])
+  const [processingRevoke, setProcessingRevoke] = useState<string | null>(null)
+
+  const fetchApps = async () => {
+    if (!engagementRewards) return
+    setLoading(true)
+    const registeredApps = await engagementRewards.getRegisteredApps()
+    const appsInfo = await Promise.all(
+      registeredApps.map(async (app) => {
+        const rewards = await engagementRewards.getAppRewards(app.app)
+        return {
+          ...app,
+          ...rewards,
+        }
+      }),
+    )
+    setApps(appsInfo)
+    setLoading(false)
+  }
 
   useEffect(() => {
-    const fetchApps = async () => {
-      if (!engagementRewards) return
-      const registeredApps = await engagementRewards.getRegisteredApps()
-      const appsInfo = await Promise.all(
-        registeredApps.map(async (app) => {
-          const [rewards] = await Promise.all([
-            engagementRewards.getAppRewards(app.app),
-          ])
-          return {
-            ...app,
-            ...rewards,
-          }
-        }),
-      )
-      setApps(appsInfo)
-      setLoading(false)
-    }
-
     if (isConnected) {
       fetchApps()
+    } else {
+      setApps([])
+      setLoading(false)
     }
   }, [isConnected, !!engagementRewards])
+
+  const revokeApproval = async (appAddress: Address) => {
+    if (!engagementRewards) return
+    try {
+      setProcessingRevoke(appAddress)
+      await engagementRewards.revokeAppApproval(appAddress)
+      await fetchApps()
+    } catch (err) {
+      console.error("failed to revoke app approval", err)
+    } finally {
+      setProcessingRevoke(null)
+    }
+  }
 
   if (!isConnected) {
     return (
@@ -171,6 +187,17 @@ const RegisteredAppsPage: React.FC = () => {
                       onClick={() => navigate(`/apply/${app.app}`)}
                     >
                       Re-Apply
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => revokeApproval(app.app)}
+                      disabled={processingRevoke !== null}
+                    >
+                      {processingRevoke === app.app
+                        ? "Revoking…"
+                        : "Revoke Approval"}
                     </Button>
                   </div>
                 </TableCell>

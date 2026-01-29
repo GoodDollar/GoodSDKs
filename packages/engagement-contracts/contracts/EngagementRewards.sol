@@ -94,6 +94,7 @@ contract EngagementRewards is
         string email
     );
     event AppApproved(address indexed app);
+    event AppUnapproved(address indexed app);
     event AppSettingsUpdated(
         address indexed app,
         uint256 userAndInviterPercentage,
@@ -207,6 +208,7 @@ contract EngagementRewards is
             existingApp.email = email;
             existingApp.registeredAt = uint32(block.timestamp);
         } else {
+            appliedApps.push(app);
             // New registration
             appliedApps.push(app);
             registeredApps[app] = AppInfo({
@@ -243,9 +245,25 @@ contract EngagementRewards is
         require(registeredApps[app].isRegistered, "App not registered");
         require(!registeredApps[app].isApproved, "App already approved");
 
+        if (registeredApps[app].registeredAt < 175517674) {
+            appliedApps.push(app);
+        }
         registeredApps[app].isApproved = true;
 
         emit AppApproved(app);
+    }
+
+    /**
+     * @notice Revoke approval for a registered app. Can be called by ADMIN_ROLE or in dev env.
+     * @param app The app address to revoke approval for.
+     */
+    function revokeAppApproval(address app) external onlyRoleOrDev(ADMIN_ROLE) {
+        require(registeredApps[app].isRegistered, "App not registered");
+        require(registeredApps[app].isApproved, "App not approved");
+
+        registeredApps[app].isApproved = false;
+
+        emit AppUnapproved(app);
     }
 
     function setAppSigner(address app, address signer) external {
