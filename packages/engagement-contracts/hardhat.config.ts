@@ -34,9 +34,7 @@ const config: HardhatUserConfig = {
     enabled: true,
   },
   etherscan: {
-    apiKey: {
-      celo: celoscan_key,
-    },
+    apiKey: etherscan_key,
     customChains: [
       {
         network: "celo",
@@ -62,7 +60,7 @@ const config: HardhatUserConfig = {
       accounts: [deployerPrivateKey],
       url: "https://forno.celo.org",
       gas: 8000000,
-      gasPrice: 5000000000,
+      gasPrice: 25.1e9,
       chainId: 42220,
     },
     "development-celo": {

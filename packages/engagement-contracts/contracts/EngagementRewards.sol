@@ -95,6 +95,7 @@ contract EngagementRewards is
     );
     event AppApproved(address indexed app);
     event AppUnapproved(address indexed app);
+    event AppRemoved(address indexed app);
     event AppSettingsUpdated(
         address indexed app,
         uint256 userAndInviterPercentage,
@@ -251,6 +252,38 @@ contract EngagementRewards is
         registeredApps[app].isApproved = true;
 
         emit AppApproved(app);
+    }
+
+    /**
+     * @notice Delete a pending (registered but not approved) app.
+     * @dev Can be called by the app owner or by ADMIN_ROLE (or in dev env).
+     *      Removes the mapping entry and the app address from appliedApps.
+     */
+    function deletePendingApp(address app) external {
+        require(registeredApps[app].isRegistered, "App not registered");
+        require(!registeredApps[app].isApproved, "App already approved");
+
+        address owner = registeredApps[app].owner;
+        require(
+            msg.sender == owner ||
+                hasRole(ADMIN_ROLE, msg.sender) ||
+                IS_DEV_ENV,
+            "Not authorized"
+        );
+
+        // Remove mapping entry
+        delete registeredApps[app];
+
+        // Remove from appliedApps array (swap-pop)
+        for (uint256 i = 0; i < appliedApps.length; i++) {
+            if (appliedApps[i] == app) {
+                appliedApps[i] = appliedApps[appliedApps.length - 1];
+                appliedApps.pop();
+                break;
+            }
+        }
+
+        emit AppRemoved(app);
     }
 
     /**

@@ -257,6 +257,19 @@ export class EngagementRewardsSDK {
     )
   }
 
+  // Delete a pending (registered but not approved) app on-chain
+  async deletePendingApp(app: Address, onHash?: (hash: `0x${string}`) => void) {
+    return this.submitAndWait(
+      {
+        address: this.contractAddress,
+        abi: engagementRewardsABI,
+        functionName: "deletePendingApp",
+        args: [app],
+      },
+      onHash,
+    )
+  }
+
   async updateAppSettings(
     app: Address,
     rewardReceiver: Address,

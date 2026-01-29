@@ -1,6 +1,6 @@
 {
   "name": "@goodsdks/engagement-contracts",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "scripts": {
     "dev": "echo 'Add dev script here'",
