@@ -23,9 +23,9 @@ import { celo } from 'viem/chains'
 
 // Configuration
 const config = {
-    mainAccount: process.env.MAIN_ACCOUNT || '0x0000000000000000000000000000000000000000',
-    connectedAccount: process.env.CONNECTED_ACCOUNT || '0x0000000000000000000000000000000000000000',
-    nonWhitelistedAccount: process.env.NON_WHITELISTED_ACCOUNT || '0x0000000000000000000000000000000000000000',
+    mainAccount: process.env.MAIN_ACCOUNT || '0x0Fe3A9B6D34693e6e0DEd6BD006dD062D6F59d2c',
+    connectedAccount: process.env.CONNECTED_ACCOUNT || '0x0Fe3A9B6D34693e6e0DEd6BD006dD062D6F59d2c',
+    nonWhitelistedAccount: process.env.NON_WHITELISTED_ACCOUNT || '0x0000000000000000000000000000000000000001',
     rpcUrl: process.env.RPC_URL || 'https://forno.celo.org',
     env: process.env.ENV || 'development',
 }
