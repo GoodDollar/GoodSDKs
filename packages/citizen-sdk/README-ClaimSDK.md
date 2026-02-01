@@ -5,9 +5,11 @@ The Claim SDK ships with `@goodsdks/citizen-sdk` and builds on the Identity SDK 
 ## Claim Flow at a Glance
 
 1. **Verify identity** – confirm the wallet is whitelisted through the Identity SDK.
-2. **Check entitlement** – determine the claimable amount on the active chain and look for fallbacks (Fuse ⇄ Celo ⇄ XDC).
-3. **Trigger faucet (optional)** – tops up the claim contract if required.
-4. **Submit claim** – send the `claim()` transaction and wait for confirmation.
+2. **Resolve whitelisted root** – for connected accounts, resolve the main whitelisted address.
+3. **Check entitlement** – determine the claimable amount on the active chain using the whitelisted root address.
+4. **Look for fallbacks** – if no entitlement on current chain, check alternatives (Fuse ⇄ Celo ⇄ XDC).
+5. **Trigger faucet (optional)** – tops up the claim contract if required.
+6. **Submit claim** – send the `claim()` transaction and wait for confirmation.
 
 ```
 User connects wallet
@@ -16,9 +18,11 @@ IdentitySDK.getWhitelistedRoot
         ↓
 Whitelisted? ── no ──▶ Face verification
         │
-        yes
+        yes (returns root address)
         ↓
-ClaimSDK.checkEntitlement
+ClaimSDK uses root address
+        ↓
+ClaimSDK.checkEntitlement(root)
         ↓
 Can claim? ── no ──▶ nextClaimTime timer
         │
@@ -90,6 +94,46 @@ if (amount > 0n) {
 > switch networks and then re-run `ClaimSDK.init` so the SDK binds to that
 > environment before calling `claimSDK.claim()` again.
 
+## Connected Accounts
+
+Users can connect secondary wallets to their main whitelisted account. When a connected account attempts to claim:
+
+1. **`getWhitelistedRoot(connectedAddress)`** returns the main whitelisted address
+2. **`checkEntitlement`** is automatically called with the whitelisted root address (not the connected wallet)
+3. **Claiming proceeds** as if the main account is claiming
+
+This allows users to claim from any connected wallet without re-verification.
+
+### How it Works
+
+The `IdentityV2.getWhitelistedRoot(address)` contract method returns:
+- `0x0` = address is neither whitelisted nor connected
+- `input address` = address is the main whitelisted account  
+- `different address` = input is a connected account, returns the main whitelisted address
+
+The ClaimSDK automatically resolves the whitelisted root and uses it for all entitlement checks, making connected accounts work transparently.
+
+### Example
+
+```ts
+// User connects with a secondary wallet (Account B)
+// Account B is connected to main whitelisted Account A
+
+const identitySDK = await IdentitySDK.init({ publicClient, walletClient, env: "production" })
+const claimSDK = await ClaimSDK.init({ publicClient, walletClient, identitySDK, env: "production" })
+
+// Behind the scenes:
+// 1. getWhitelistedRoot(Account B) → returns Account A
+// 2. checkEntitlement(Account A) → returns entitlement for Account A
+// 3. User can claim on behalf of Account A
+
+const { amount } = await claimSDK.checkEntitlement()
+if (amount > 0n) {
+  const receipt = await claimSDK.claim()
+  console.log("Claimed successfully from connected account!", receipt.transactionHash)
+}
+```
+
 ## Using with React
 
 For Wagmi-based React projects, use the hooks exposed from `@goodsdks/react-hooks`. They wrap these Viem clients with loading/error state and should be the default integration layer for UI code. See `packages/react-hooks/README.md` for full guidance and examples.
@@ -118,6 +162,7 @@ Refer to the generated TypeScript declarations in `packages/citizen-sdk/dist/` f
 ## Best Practices
 
 - Check `identitySDK.getWhitelistedRoot` before instantiating the Claim SDK UI.
+- **Handle connected accounts**: The SDK automatically resolves the whitelisted root, but you may want to display which account is being claimed for in your UI.
 - Surface `altClaimAvailable` hints so users can switch to chains with available allocations.
 - Provide loading and error states around every async interaction.
 - Log transaction hashes and explorer links after a successful claim for supportability.
