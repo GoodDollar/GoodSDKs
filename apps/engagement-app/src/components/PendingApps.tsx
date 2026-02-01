@@ -18,6 +18,7 @@ import env from "@/env"
 import { useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { TruncatedAddress } from "./ui/TruncatedAddress"
+import { Address } from "viem"
 
 // Derive AppInfo type from EngagementRewardsSDK type
 export type AppInfo = Awaited<
@@ -62,7 +63,7 @@ const PendingAppsPage: React.FC = () => {
     if (!ok) return
     try {
       setProcessingDelete(app)
-      await engagementRewards.deletePendingApp(app)
+      await engagementRewards.deletePendingApp(app as Address)
       await fetchPendingApps()
     } catch (err) {
       console.error("failed to delete pending app", err)
