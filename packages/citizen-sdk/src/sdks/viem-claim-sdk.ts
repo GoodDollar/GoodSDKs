@@ -83,6 +83,7 @@ export class ClaimSDK {
   private readonly account: Address
   private readonly env: contractEnv
   public readonly rdu: string
+  private whitelistedRootCache: Address | null = null
 
   constructor({
     account,
@@ -164,6 +165,27 @@ export class ClaimSDK {
     return this.chainId
   }
 
+  /**
+   * Resolves the whitelisted root address for the connected account.
+   * This enables connected accounts to claim on behalf of their main whitelisted account.
+   * @returns The whitelisted root address to use for entitlement checks.
+   * @throws If unable to resolve the whitelisted root.
+   */
+  private async getWhitelistedRootAddress(): Promise<Address> {
+    // Return cached value if available
+    if (this.whitelistedRootCache) {
+      return this.whitelistedRootCache
+    }
+
+    // Resolve the whitelisted root for this account
+    const { root } = await this.identitySDK.getWhitelistedRoot(this.account)
+
+    // Cache the result
+    this.whitelistedRootCache = root
+
+    return root
+  }
+
   private async readChainEntitlement(
     chainId: SupportedChains,
     client?: PublicClient,
@@ -184,12 +206,16 @@ export class ClaimSDK {
       altClient = resolvedClient
     }
 
+    // Use whitelisted root address for entitlement check
+    // This enables connected accounts to claim on behalf of their main account
+    const rootAddress = await this.getWhitelistedRootAddress()
+
     return this.readContract<bigint>(
       {
         address: contracts.ubiContract as Address,
         abi: ubiSchemeV2ABI,
         functionName: "checkEntitlement",
-        args: [this.account],
+        args: [rootAddress],
       },
       altClient,
       chainId,
