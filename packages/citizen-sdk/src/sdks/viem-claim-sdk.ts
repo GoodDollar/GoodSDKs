@@ -169,7 +169,7 @@ export class ClaimSDK {
    * Resolves the whitelisted root address for the connected account.
    * This enables connected accounts to claim on behalf of their main whitelisted account.
    * @returns The whitelisted root address to use for entitlement checks.
-   * @throws If unable to resolve the whitelisted root.
+   * @throws If the account is not whitelisted (root is 0x0).
    */
   private async getWhitelistedRootAddress(): Promise<Address> {
     // Return cached value if available
@@ -179,6 +179,13 @@ export class ClaimSDK {
 
     // Resolve the whitelisted root for this account
     const { root } = await this.identitySDK.getWhitelistedRoot(this.account)
+
+    // Check if the account is whitelisted
+    if (root === "0x0000000000000000000000000000000000000000") {
+      throw new Error(
+        `Account ${this.account} is not whitelisted. Only whitelisted accounts and their connected accounts can claim.`,
+      )
+    }
 
     // Cache the result
     this.whitelistedRootCache = root

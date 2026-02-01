@@ -20,6 +20,7 @@
 
 import { createPublicClient, http, parseAbi } from 'viem'
 import { celo } from 'viem/chains'
+import { chainConfigs } from './src/constants.js'
 
 // Configuration
 const config = {
@@ -30,20 +31,13 @@ const config = {
     env: process.env.ENV || 'development',
 }
 
-// Contract addresses (development environment on Celo)
-const contracts = {
-    development: {
-        identity: '0xF25fA0D4896271228193E782831F6f3CFCcF169C',
-        ubi: '0x6B86F82293552C3B9FE380FC038A89e0328C7C5f',
-    },
-    staging: {
-        identity: '0x0108BBc09772973aC27983Fc17c7D82D8e87ef4D',
-        ubi: '0x2881d417dA066600372753E73A3570F0781f18cB',
-    },
-    production: {
-        identity: '0xC361A6E67822a0EDc17D899227dd9FC50BD62F42',
-        ubi: '0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1',
-    },
+// Get contract addresses from SDK configuration
+const celoConfig = chainConfigs[42220] // Celo mainnet chain ID
+const contracts = celoConfig.contracts[config.env]
+
+if (!contracts) {
+    console.error(`No contract configuration found for environment: ${config.env}`)
+    process.exit(1)
 }
 
 // ABIs
@@ -82,8 +76,8 @@ async function testConnectedAccounts() {
     log('\n🧪 Testing Connected Accounts Claiming Flow\n', 'blue')
     log(`Environment: ${config.env}`, 'gray')
     log(`RPC: ${config.rpcUrl}`, 'gray')
-    log(`Identity Contract: ${contracts[config.env].identity}`, 'gray')
-    log(`UBI Contract: ${contracts[config.env].ubi}\n`, 'gray')
+    log(`Identity Contract: ${contracts.identityContract}`, 'gray')
+    log(`UBI Contract: ${contracts.ubiContract}\n`, 'gray')
 
     // Create client
     const publicClient = createPublicClient({
@@ -99,7 +93,7 @@ async function testConnectedAccounts() {
     try {
         log('Test 1: Main whitelisted account', 'yellow')
         const root = await publicClient.readContract({
-            address: contracts[config.env].identity,
+            address: contracts.identityContract,
             abi: identityABI,
             functionName: 'getWhitelistedRoot',
             args: [config.mainAccount],
@@ -123,7 +117,7 @@ async function testConnectedAccounts() {
     try {
         log('\nTest 2: Connected account resolution', 'yellow')
         const root = await publicClient.readContract({
-            address: contracts[config.env].identity,
+            address: contracts.identityContract,
             abi: identityABI,
             functionName: 'getWhitelistedRoot',
             args: [config.connectedAccount],
@@ -146,7 +140,7 @@ async function testConnectedAccounts() {
     try {
         log('\nTest 3: Non-whitelisted account', 'yellow')
         const root = await publicClient.readContract({
-            address: contracts[config.env].identity,
+            address: contracts.identityContract,
             abi: identityABI,
             functionName: 'getWhitelistedRoot',
             args: [config.nonWhitelistedAccount],
@@ -169,7 +163,7 @@ async function testConnectedAccounts() {
     try {
         log('\nTest 4: Entitlement check (main account)', 'yellow')
         const entitlement = await publicClient.readContract({
-            address: contracts[config.env].ubi,
+            address: contracts.ubiContract,
             abi: ubiABI,
             functionName: 'checkEntitlement',
             args: [config.mainAccount],
@@ -188,7 +182,7 @@ async function testConnectedAccounts() {
 
         // First get the root
         const root = await publicClient.readContract({
-            address: contracts[config.env].identity,
+            address: contracts.identityContract,
             abi: identityABI,
             functionName: 'getWhitelistedRoot',
             args: [config.connectedAccount],
@@ -196,7 +190,7 @@ async function testConnectedAccounts() {
 
         // Then check entitlement using root (this is what SDK does)
         const entitlement = await publicClient.readContract({
-            address: contracts[config.env].ubi,
+            address: contracts.ubiContract,
             abi: ubiABI,
             functionName: 'checkEntitlement',
             args: [root], // Using root, not connected account
