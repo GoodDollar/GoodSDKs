@@ -168,8 +168,13 @@ export class ClaimSDK {
   /**
    * Resolves the whitelisted root address for the connected account.
    * This enables connected accounts to claim on behalf of their main whitelisted account.
+   * 
+   * Failure modes are normalized so callers see predictable behavior:
+   * - Throws when no whitelisted root exists for the connected account.
+   * - Throws when the SDK cannot resolve a whitelisted root (network / domain errors).
+   * 
    * @returns The whitelisted root address to use for entitlement checks.
-   * @throws If the account is not whitelisted (root is 0x0).
+   * @throws Error if no whitelisted root exists or resolution fails for any reason.
    */
   private async getWhitelistedRootAddress(): Promise<Address> {
     // Return cached value if available
@@ -177,20 +182,32 @@ export class ClaimSDK {
       return this.whitelistedRootCache
     }
 
-    // Resolve the whitelisted root for this account
-    const { root } = await this.identitySDK.getWhitelistedRoot(this.account)
+    try {
+      // Resolve the whitelisted root for this account
+      const { root } = await this.identitySDK.getWhitelistedRoot(this.account)
 
-    // Check if the account is whitelisted
-    if (root === "0x0000000000000000000000000000000000000000") {
+      // Normalize "no root" / "not whitelisted" cases
+      if (!root) {
+        throw new Error(
+          "No whitelisted root address found for connected account; the user may not be whitelisted.",
+        )
+      }
+
+      // Cache the result
+      this.whitelistedRootCache = root
+
+      return root
+    } catch (error) {
+      // Normalize SDK and transport errors into a predictable failure mode
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : String(error)
+
       throw new Error(
-        `Account ${this.account} is not whitelisted. Only whitelisted accounts and their connected accounts can claim.`,
+        `Unable to resolve whitelisted root address for connected account: ${message}`,
       )
     }
-
-    // Cache the result
-    this.whitelistedRootCache = root
-
-    return root
   }
 
   private async readChainEntitlement(

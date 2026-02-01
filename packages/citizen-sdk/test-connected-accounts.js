@@ -217,7 +217,8 @@ async function testConnectedAccounts() {
 
 // Run tests
 testConnectedAccounts().catch((error) => {
-    log(`\n❌ Test execution failed: ${error.message}\n`, 'red')
+    const message = error instanceof Error ? error.message : String(error)
+    log(`\n❌ Test execution failed: ${message}\n`, 'red')
     console.error(error)
     process.exit(1)
 })

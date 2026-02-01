@@ -7,7 +7,7 @@ The Claim SDK ships with `@goodsdks/citizen-sdk` and builds on the Identity SDK 
 1. **Verify identity** – confirm the wallet is whitelisted through the Identity SDK.
 2. **Resolve whitelisted root** – for connected accounts, resolve the main whitelisted address.
 3. **Check entitlement** – determine the claimable amount on the active chain using the whitelisted root address.
-4. **Look for fallbacks** – if no entitlement on current chain, check alternatives (Fuse ⇄ Celo ⇄ XDC).
+4. **Look for fallbacks** – if no entitlement on the current chain, check alternatives (Fuse ⇄ Celo ⇄ XDC).
 5. **Trigger faucet (optional)** – tops up the claim contract if required.
 6. **Submit claim** – send the `claim()` transaction and wait for confirmation.
 
