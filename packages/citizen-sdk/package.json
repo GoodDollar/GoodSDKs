@@ -1,6 +1,6 @@
 {
   "name": "@goodsdks/citizen-sdk",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
@@ -26,6 +26,7 @@
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "tsx": "^4.19.2",
     "typescript": "latest",
     "viem": "latest",
     "wagmi": "latest"
