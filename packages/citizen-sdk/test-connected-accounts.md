@@ -7,7 +7,7 @@ This directory contains a standalone test script to verify the connected account
 ### Basic Usage
 
 ```bash
-node test-connected-accounts.js
+npx tsx test-connected-accounts.ts
 ```
 
 ### With Environment Variables
@@ -17,7 +17,7 @@ MAIN_ACCOUNT=0x1234... \
 CONNECTED_ACCOUNT=0x5678... \
 NON_WHITELISTED_ACCOUNT=0x9abc... \
 ENV=development \
-node test-connected-accounts.js
+npx tsx test-connected-accounts.ts
 ```
 
 ## Environment Variables

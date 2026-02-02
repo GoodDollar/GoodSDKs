@@ -14,7 +14,7 @@ CONNECTED_ACCOUNT=${CONNECTED_ACCOUNT:-"0x00000000000000000000000000000000000000
 NON_WHITELISTED_ACCOUNT=${NON_WHITELISTED_ACCOUNT:-"0x0000000000000000000000000000000000000000"}
 ENV=${ENV:-"development"}
 
-echo "🧪 Running Connected Accounts Test"
+echo "🧪 Running Connected Accounts SDK Test (TypeScript)"
 echo ""
 echo "Configuration:"
 echo "  Main Account: $MAIN_ACCOUNT"
@@ -27,4 +27,4 @@ MAIN_ACCOUNT=$MAIN_ACCOUNT \
 CONNECTED_ACCOUNT=$CONNECTED_ACCOUNT \
 NON_WHITELISTED_ACCOUNT=$NON_WHITELISTED_ACCOUNT \
 ENV=$ENV \
-node test-connected-accounts.js
+npx tsx test-connected-accounts.ts
