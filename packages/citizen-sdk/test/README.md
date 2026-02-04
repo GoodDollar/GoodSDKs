@@ -7,7 +7,13 @@ This directory contains a standalone test script to verify the connected account
 ### Basic Usage
 
 ```bash
-npx tsx test-connected-accounts.ts
+npx tsx test/connected-accounts.ts
+```
+
+Or use the npm script:
+
+```bash
+npm run test:connected
 ```
 
 ### With Environment Variables
@@ -17,7 +23,7 @@ MAIN_ACCOUNT=0x1234... \
 CONNECTED_ACCOUNT=0x5678... \
 NON_WHITELISTED_ACCOUNT=0x9abc... \
 ENV=development \
-npx tsx test-connected-accounts.ts
+npx tsx test/connected-accounts.ts
 ```
 
 ## Environment Variables
@@ -88,7 +94,7 @@ Add to your CI pipeline:
     CONNECTED_ACCOUNT=${{ secrets.TEST_CONNECTED_ACCOUNT }} \
     NON_WHITELISTED_ACCOUNT=${{ secrets.TEST_NON_WHITELISTED }} \
     ENV=development \
-    node test-connected-accounts.js
+    npm run test:connected
 ```
 
 ## Notes

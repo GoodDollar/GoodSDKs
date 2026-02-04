@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsup --clean",
     "dev": "tsc --watch",
-    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
+    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
+    "test:connected": "npx tsx test/connected-accounts.ts"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

@@ -1,13 +1,4 @@
-import {
-  type Account,
-  type Address,
-  type Chain,
-  type PublicClient,
-  type SimulateContractParameters,
-  type WalletClient,
-  ContractFunctionExecutionError,
-  TransactionReceipt,
-} from "viem"
+import { zeroAddress, type Account, type Address, type Chain, type PublicClient, type SimulateContractParameters, type WalletClient, ContractFunctionExecutionError, TransactionReceipt } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
 
@@ -184,10 +175,10 @@ export class ClaimSDK {
 
     try {
       // Resolve the whitelisted root for this account
-      const { root } = await this.identitySDK.getWhitelistedRoot(this.account)
+      const { root, isWhitelisted } = await this.identitySDK.getWhitelistedRoot(this.account)
 
       // Normalize "no root" / "not whitelisted" cases
-      if (!root) {
+      if (!isWhitelisted || !root || root === zeroAddress) {
         throw new Error(
           "No whitelisted root address found for connected account; the user may not be whitelisted.",
         )

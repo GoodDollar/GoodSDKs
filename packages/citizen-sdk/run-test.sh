@@ -27,4 +27,4 @@ MAIN_ACCOUNT=$MAIN_ACCOUNT \
 CONNECTED_ACCOUNT=$CONNECTED_ACCOUNT \
 NON_WHITELISTED_ACCOUNT=$NON_WHITELISTED_ACCOUNT \
 ENV=$ENV \
-npx tsx test-connected-accounts.ts
+npx tsx test/connected-accounts.ts
