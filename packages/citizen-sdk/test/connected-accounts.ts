@@ -102,10 +102,10 @@ async function runTests() {
         logTest('Connected account test error', false, error.message)
     }
 
-    // Test 3: SDK Error Handling for Non-Whitelisted (Verifying PR Fix)
+    // Test 3: Verify SDK throws correct error for non-whitelisted accounts
     totalTests++
     try {
-        log('\nTest 3: SDK check for non-whitelisted (PR Fix Verification)', 'yellow')
+        log('\nTest 3: SDK check for non-whitelisted account', 'yellow')
 
         // Use ClaimSDK with non-whitelisted account
         const nonWhitelistedWallet = createWalletClient({
@@ -125,7 +125,6 @@ async function runTests() {
         await claimSDK.checkEntitlement()
         logTest('Non-whitelisted check did not throw', false, 'Expected error was not thrown')
     } catch (error: any) {
-        const expectedMessage = "Unable to resolve whitelisted root address for connected account: No whitelisted root address found for connected account; the user may not be whitelisted."
         const match = error.message.includes("No whitelisted root address found")
 
         if (match) {
