@@ -1,11 +1,12 @@
 {
   "name": "@goodsdks/citizen-sdk",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
     "dev": "tsc --watch",
-    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
+    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
+    "test:connected": "npx tsx test/connected-accounts.ts"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -26,6 +27,7 @@
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "tsx": "^4.19.2",
     "typescript": "latest",
     "viem": "latest",
     "wagmi": "latest"
