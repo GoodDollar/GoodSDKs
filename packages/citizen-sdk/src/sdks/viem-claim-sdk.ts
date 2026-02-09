@@ -1,4 +1,14 @@
-import { zeroAddress, type Account, type Address, type Chain, type PublicClient, type SimulateContractParameters, type WalletClient, ContractFunctionExecutionError, TransactionReceipt } from "viem"
+import {
+  zeroAddress,
+  type Account,
+  type Address,
+  type Chain,
+  type PublicClient,
+  type SimulateContractParameters,
+  type WalletClient,
+  ContractFunctionExecutionError,
+  TransactionReceipt,
+} from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
 
@@ -159,11 +169,11 @@ export class ClaimSDK {
   /**
    * Resolves the whitelisted root address for the connected account.
    * This enables connected accounts to claim on behalf of their main whitelisted account.
-   * 
+   *
    * Failure modes are normalized so callers see predictable behavior:
    * - Throws when no whitelisted root exists for the connected account.
    * - Throws when the SDK cannot resolve a whitelisted root (network / domain errors).
-   * 
+   *
    * @returns The whitelisted root address to use for entitlement checks.
    * @throws Error if no whitelisted root exists or resolution fails for any reason.
    */
@@ -175,7 +185,9 @@ export class ClaimSDK {
 
     try {
       // Resolve the whitelisted root for this account
-      const { root, isWhitelisted } = await this.identitySDK.getWhitelistedRoot(this.account)
+      const { root, isWhitelisted } = await this.identitySDK.getWhitelistedRoot(
+        this.account,
+      )
 
       // Normalize "no root" / "not whitelisted" cases
       if (!isWhitelisted || !root || root === zeroAddress) {
@@ -191,9 +203,7 @@ export class ClaimSDK {
     } catch (error) {
       // Normalize SDK and transport errors into a predictable failure mode
       const message =
-        error instanceof Error && error.message
-          ? error.message
-          : String(error)
+        error instanceof Error && error.message ? error.message : String(error)
 
       throw new Error(
         `Unable to resolve whitelisted root address for connected account: ${message}`,

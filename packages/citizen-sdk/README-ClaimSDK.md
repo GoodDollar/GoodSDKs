@@ -107,8 +107,9 @@ This allows users to claim from any connected wallet without re-verification.
 ### How it Works
 
 The `IdentityV2.getWhitelistedRoot(address)` contract method returns:
+
 - `0x0` = address is neither whitelisted nor connected
-- `input address` = address is the main whitelisted account  
+- `input address` = address is the main whitelisted account
 - `different address` = input is a connected account, returns the main whitelisted address
 
 The ClaimSDK automatically resolves the whitelisted root and uses it for all entitlement checks, making connected accounts work transparently.
@@ -119,8 +120,17 @@ The ClaimSDK automatically resolves the whitelisted root and uses it for all ent
 // User connects with a secondary wallet (Account B)
 // Account B is connected to main whitelisted Account A
 
-const identitySDK = await IdentitySDK.init({ publicClient, walletClient, env: "production" })
-const claimSDK = await ClaimSDK.init({ publicClient, walletClient, identitySDK, env: "production" })
+const identitySDK = await IdentitySDK.init({
+  publicClient,
+  walletClient,
+  env: "production",
+})
+const claimSDK = await ClaimSDK.init({
+  publicClient,
+  walletClient,
+  identitySDK,
+  env: "production",
+})
 
 // Behind the scenes:
 // 1. getWhitelistedRoot(Account B) → returns Account A
@@ -130,7 +140,10 @@ const claimSDK = await ClaimSDK.init({ publicClient, walletClient, identitySDK, 
 const { amount } = await claimSDK.checkEntitlement()
 if (amount > 0n) {
   const receipt = await claimSDK.claim()
-  console.log("Claimed successfully from connected account!", receipt.transactionHash)
+  console.log(
+    "Claimed successfully from connected account!",
+    receipt.transactionHash,
+  )
 }
 ```
 
