@@ -167,15 +167,8 @@ export class ClaimSDK {
   }
 
   /**
-   * Resolves the whitelisted root address for the connected account.
-   * This enables connected accounts to claim on behalf of their main whitelisted account.
-   *
-   * Failure modes are normalized so callers see predictable behavior:
-   * - Throws when no whitelisted root exists for the connected account.
-   * - Throws when the SDK cannot resolve a whitelisted root (network / domain errors).
-   *
-   * @returns The whitelisted root address to use for entitlement checks.
-   * @throws Error if no whitelisted root exists or resolution fails for any reason.
+   * Resolves the main whitelisted address for this account.
+   * Useful for connected accounts to claim on behalf of their root address.
    */
   private async getWhitelistedRootAddress(): Promise<Address> {
     // Return cached value if available

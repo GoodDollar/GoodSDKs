@@ -1,7 +1,4 @@
-#!/usr/bin/env npx tsx
-/**
- * Test script to verify connected accounts claiming flow using SDK classes
- */
+// simple test script for connected accounts
 import {
   createPublicClient,
   createWalletClient,
