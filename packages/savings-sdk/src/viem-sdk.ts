@@ -156,6 +156,16 @@ export class GooddollarSavingsSDK {
     const [account] = await this.walletClient.getAddresses()
     if (!account) throw new Error("No account found in wallet client")
 
+    const balance = await this.publicClient.readContract({
+      ...gdollarContract,
+      functionName: "balanceOf",
+      args: [account],
+    })
+
+    if (balance < amount) {
+      throw new Error("Insufficient G$ balance for staking")
+    }
+
     // Check current allowance for the staking contract
     const allowance = await this.publicClient.readContract({
       address: GDOLLAR_CONTRACT_ADDRESS,
@@ -174,6 +184,7 @@ export class GooddollarSavingsSDK {
           functionName: "approve",
           args: [STAKING_CONTRACT_ADDRESS, amount],
         },
+        account,
         onHash,
       )
       console.log("Approval successful, proceeding to stake.")
@@ -186,6 +197,7 @@ export class GooddollarSavingsSDK {
         functionName: "stake",
         args: [amount],
       },
+      account,
       onHash,
     )
   }
@@ -194,12 +206,16 @@ export class GooddollarSavingsSDK {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
     if (amount <= BigInt(0)) throw new Error("Amount must be greater than zero")
 
+    const [account] = await this.walletClient.getAddresses()
+    if (!account) throw new Error("No account found in wallet client")
+
     return this.submitAndWait(
       {
         ...stakingContract,
         functionName: "withdraw",
         args: [amount],
       },
+      account,
       onHash,
     )
   }
@@ -207,23 +223,26 @@ export class GooddollarSavingsSDK {
   async claimReward(onHash?: (hash: `0x${string}`) => void) {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
 
+    const [account] = await this.walletClient.getAddresses()
+    if (!account) throw new Error("No account found in wallet client")
+
     return this.submitAndWait(
       {
         ...stakingContract,
         functionName: "getReward",
         args: [],
       },
+      account,
       onHash,
     )
   }
 
   private async submitAndWait(
     simulateParams: SimulateContractParameters,
+    account: `0x${string}`,
     onHash?: (hash: `0x${string}`) => void,
   ) {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
-    const [account] = await this.walletClient.getAddresses()
-    if (!account) throw new Error("No account found in wallet client")
 
     const { request } = await this.publicClient.simulateContract({
       account,
