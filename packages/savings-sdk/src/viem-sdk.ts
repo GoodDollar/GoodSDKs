@@ -166,7 +166,6 @@ export class GooddollarSavingsSDK {
       throw new Error("Insufficient G$ balance for staking")
     }
 
-    // Check current allowance for the staking contract
     const allowance = await this.publicClient.readContract({
       address: GDOLLAR_CONTRACT_ADDRESS,
       abi: G$__ABI,
@@ -174,9 +173,7 @@ export class GooddollarSavingsSDK {
       args: [account, STAKING_CONTRACT_ADDRESS],
     })
 
-    // If allowance is insufficient, request approval before proceeding
     if (allowance < amount) {
-      console.log("Insufficient allowance, requesting approval...")
       await this.submitAndWait(
         {
           address: GDOLLAR_CONTRACT_ADDRESS,
@@ -187,10 +184,8 @@ export class GooddollarSavingsSDK {
         account,
         onHash,
       )
-      console.log("Approval successful, proceeding to stake.")
     }
 
-    // Call the staking contract's stake function
     return this.submitAndWait(
       {
         ...stakingContract,
@@ -254,6 +249,7 @@ export class GooddollarSavingsSDK {
 
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash })
 
+    // Provide a small delay for indexers/subgraphs to catch up
     await new Promise((resolve) => setTimeout(resolve, 3000))
 
     return receipt
