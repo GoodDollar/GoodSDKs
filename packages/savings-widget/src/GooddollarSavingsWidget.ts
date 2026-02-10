@@ -353,11 +353,10 @@ export class GooddollarSavingsWidget extends LitElement {
         <div class="input-section">
           <div class="balance-info ${!isConnected ? "hidden" : ""}">
             <span>
-              ${
-                this.activeTab === "stake"
-                  ? `Wallet Balance: ${this.isLoading ? 'Loading...' : this.formatBigInt(this.walletBalance)}`
-                  : `Current Stake: ${this.isLoading ? 'Loading...' : this.formatBigInt(this.currentStake)}`
-              }
+              ${this.activeTab === "stake"
+        ? `Wallet Balance: ${this.isLoading ? 'Loading...' : this.formatBigInt(this.walletBalance)}`
+        : `Current Stake: ${this.isLoading ? 'Loading...' : this.formatBigInt(this.currentStake)}`
+      }
             </span>
           </div>
           <div class="input-container">
@@ -383,14 +382,13 @@ export class GooddollarSavingsWidget extends LitElement {
           </div>
         </div>
 
-        ${
-          !isConnected
-            ? html`
+        ${!isConnected
+        ? html`
           <button class="main-button primary" @click=${this.handleConnectWallet}>
             Connect Wallet
           </button>
         `
-            : html`
+        : html`
           <button
             class="main-button"
             @click=${this.activeTab === "stake" ? this.handleStake : this.handleUnstake}
@@ -399,7 +397,7 @@ export class GooddollarSavingsWidget extends LitElement {
             ${this.txLoading ? 'Processing...' : (this.activeTab === "stake" ? "Stake" : "Unstake")}
           </button>
         `
-        }
+      }
 
         <div class="stats-section">
           <h3 class="stats-title">Staking Statistics</h3>
@@ -409,9 +407,8 @@ export class GooddollarSavingsWidget extends LitElement {
             <span class="stat-value">${this.isLoading ? 'Loading...' : this.formatBigInt(this.totalStaked)}</span>
           </div>
 
-          ${
-            isConnected
-              ? html`
+          ${isConnected
+        ? html`
             <div class="stat-row">
               <span class="stat-label">Your G$ Stake Pool Share</span>
               <span class="stat-value">${this.isLoading ? 'Loading...' : this.formatBigInt(this.currentStake)}</span>
@@ -422,8 +419,8 @@ export class GooddollarSavingsWidget extends LitElement {
               <span class="stat-value">${this.isLoading ? 'Loading...' : this.formatBigInt(this.userWeeklyRewards)}</span>
             </div>
           `
-              : ""
-          }
+        : ""
+      }
 
           <div class="stat-row">
             <span class="stat-label">Annual Stake APR</span>
@@ -586,8 +583,9 @@ export class GooddollarSavingsWidget extends LitElement {
         this.inputAmount = '0.0';
         this.inputError = '';
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Staking error:', error);
+      this.inputError = error.message || 'Staking failed';
     } finally {
       this.txLoading = false;
     }
@@ -609,8 +607,9 @@ export class GooddollarSavingsWidget extends LitElement {
         this.inputAmount = '0.0';
         this.inputError = '';
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Unstaking error:', error);
+      this.inputError = error.message || 'Unstaking failed';
     } finally {
       this.txLoading = false;
     }
@@ -625,8 +624,9 @@ export class GooddollarSavingsWidget extends LitElement {
       if (receipt.status === 'success') {
         await this.refreshData();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Claim error:', error);
+      this.inputError = error.message || 'Claim failed';
     } finally {
       this.isClaiming = false;
     }
