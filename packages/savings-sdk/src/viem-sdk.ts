@@ -17,6 +17,13 @@ const STAKING_CONTRACT_ABI = parseAbi([
   "function getReward()",
 ])
 
+const G$__ABI = parseAbi([
+  "function balanceOf(address account) view returns (uint256)",
+  "function transferAndCall(address to, uint256 amount, bytes data) returns (bool)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+])
+
 const STAKING_CONTRACT_ADDRESS =
   "0x799a23dA264A157Db6F9c02BE62F82CE8d602A45" as const
 const GDOLLAR_CONTRACT_ADDRESS =
@@ -24,6 +31,11 @@ const GDOLLAR_CONTRACT_ADDRESS =
 const stakingContract = {
   address: STAKING_CONTRACT_ADDRESS,
   abi: STAKING_CONTRACT_ABI,
+} as const
+
+const gdollarContract = {
+  address: GDOLLAR_CONTRACT_ADDRESS,
+  abi: G$__ABI,
 } as const
 
 export interface GlobalStats {
@@ -105,8 +117,7 @@ export class GooddollarSavingsSDK {
 
     const [balance, staked, earned] = await Promise.all([
       this.publicClient.readContract({
-        address: GDOLLAR_CONTRACT_ADDRESS,
-        abi: STAKING_CONTRACT_ABI,
+        ...gdollarContract,
         functionName: "balanceOf",
         args: [account],
       }),
@@ -142,6 +153,33 @@ export class GooddollarSavingsSDK {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
     if (amount <= BigInt(0)) throw new Error("Amount must be greater than zero")
 
+    const [account] = await this.walletClient.getAddresses()
+    if (!account) throw new Error("No account found in wallet client")
+
+    // Check current allowance for the staking contract
+    const allowance = await this.publicClient.readContract({
+      address: GDOLLAR_CONTRACT_ADDRESS,
+      abi: G$__ABI,
+      functionName: "allowance",
+      args: [account, STAKING_CONTRACT_ADDRESS],
+    })
+
+    // If allowance is insufficient, request approval before proceeding
+    if (allowance < amount) {
+      console.log("Insufficient allowance, requesting approval...")
+      await this.submitAndWait(
+        {
+          address: GDOLLAR_CONTRACT_ADDRESS,
+          abi: G$__ABI,
+          functionName: "approve",
+          args: [STAKING_CONTRACT_ADDRESS, amount],
+        },
+        onHash,
+      )
+      console.log("Approval successful, proceeding to stake.")
+    }
+
+    // Call the staking contract's stake function
     return this.submitAndWait(
       {
         ...stakingContract,
