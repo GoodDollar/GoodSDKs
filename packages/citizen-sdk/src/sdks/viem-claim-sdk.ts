@@ -499,7 +499,7 @@ export class ClaimSDK {
     const fvLink = await this.identitySDK.generateFVLink(
       false,
       this.rdu,
-      this.chainId // Pass explicit chainId to avoid hardcoded fallbacks if possible, or let SDK handle it.
+      this.chainId
     )
 
     // Handle Farcaster Context

@@ -150,23 +150,28 @@ export class IdentitySDK {
       return await waitForTransactionReceipt(this.publicClient, { hash })
     } catch (error: any) {
       console.error("submitAndWait Error:", error)
-      throw new Error(`Failed to submit transaction: ${error.message}`)
+      throw error
     }
   }
 
   async getWhitelistedRoot(
     account: Address,
   ): Promise<{ isWhitelisted: boolean; root: Address }> {
-    const root = await this.publicClient.readContract({
-      address: this.contract.contractAddress,
-      abi: identityV2ABI,
-      functionName: "getWhitelistedRoot",
-      args: [account],
-    })
+    try {
+      const root = await this.publicClient.readContract({
+        address: this.contract.contractAddress,
+        abi: identityV2ABI,
+        functionName: "getWhitelistedRoot",
+        args: [account],
+      })
 
-    return {
-      isWhitelisted: root !== zeroAddress,
-      root,
+      return {
+        isWhitelisted: root !== zeroAddress,
+        root,
+      }
+    } catch (error: any) {
+      console.error("getWhitelistedRoot Error:", error)
+      throw new Error(`Failed to check whitelist status: ${error.message}`)
     }
   }
 
@@ -285,12 +290,4 @@ export class IdentitySDK {
     }
   }
 
-  async navigateToFaceVerification(
-    popupMode: boolean = false,
-    callbackUrl?: string,
-    chainId?: number,
-  ): Promise<void> {
-    const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
-    await navigateToUrl(fvLink, popupMode);
-  }
 }

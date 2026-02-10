@@ -125,17 +125,12 @@ export function createFarcasterUniversalLink(
 }
 
 /**
- * Helper to construct a normalized callback URL for Face Verification.
- * 
- * What this handles:
- * 1. Validates that the base URL is an HTTP/HTTPS URL.
- * 2. Enforces a routing convention: if the path does not already include '/verify' or '/callback',
- *    it appends '/verify'. This ensures the user is redirected to a route that handles the verification response.
- * 3. Appends necessary query parameters (like `source`).
- * 
- * @param baseUrl - The base callback URL provided by the developer.
+ * Appends query parameters to a callback URL for Face Verification.
+ * Does not modify the URL path — developers control their own routing.
+ *
+ * @param baseUrl - The callback URL provided by the developer.
  * @param additionalParams - Optional query parameters to append.
- * @returns A fully constructed, normalized callback URL.
+ * @returns The callback URL with appended parameters.
  */
 export async function createVerificationCallbackUrl(
   baseUrl: string,
@@ -146,12 +141,6 @@ export async function createVerificationCallbackUrl(
     return baseUrl;
   }
 
-  if (!url.pathname.includes('/verify') && !url.pathname.includes('/callback')) {
-    url.pathname = url.pathname.endsWith('/')
-      ? `${url.pathname}verify`
-      : `${url.pathname}/verify`;
-  }
-
   if (additionalParams) {
     Object.entries(additionalParams).forEach(([key, value]) => {
       url.searchParams.set(key, value);
@@ -159,6 +148,19 @@ export async function createVerificationCallbackUrl(
   }
 
   return url.toString();
+}
+
+/**
+ * Parses the `verified` query parameter from the current URL (or a provided URL/search string).
+ * Returns true if the user has been successfully face-verified.
+ *
+ * @param searchString - Optional URL search string to parse. Defaults to window.location.search.
+ * @returns Whether the verification was successful.
+ */
+export function parseVerificationResult(searchString?: string): boolean {
+  const search = searchString ?? (typeof window !== "undefined" ? window.location.search : "");
+  const params = new URLSearchParams(search);
+  return params.get("verified") === "true";
 }
 
 export function createFarcasterCallbackUniversalLink(

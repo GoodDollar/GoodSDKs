@@ -70,7 +70,8 @@ const App: React.FC = () => {
             (await identitySDK?.getWhitelistedRoot(address)) ?? {}
           setIsWhitelisted(isWhitelisted)
           setIsVerified(isWhitelisted ?? false)
-        } catch {
+        } catch (error) {
+          console.error("Error checking whitelist:", error)
           setIsWhitelisted(false)
         } finally {
           setLoadingWhitelist(false)
