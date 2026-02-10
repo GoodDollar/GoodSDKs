@@ -297,6 +297,9 @@ export class GooddollarSavingsWidget extends LitElement {
   @state()
   inputError: string = '';
 
+  @state()
+  transactionError: string = '';
+
   private walletClient: WalletClient | null = null;
   private publicClient: PublicClient | null = null;
   private sdk: GooddollarSavingsSDK | null = null;
@@ -381,6 +384,8 @@ export class GooddollarSavingsWidget extends LitElement {
             <span>${this.isLoading ? 'Loading...' : this.formatBigInt(this.unclaimedRewards)}</span>
           </div>
         </div>
+
+        ${this.transactionError ? html`<div class="error-message" style="margin-bottom: 16px; text-align: center;">${this.transactionError}</div>` : ''}
 
         ${!isConnected
         ? html`
@@ -504,6 +509,7 @@ export class GooddollarSavingsWidget extends LitElement {
   handleTabClick(tab: string) {
     this.activeTab = tab;
     this.inputError = '';
+    this.transactionError = '';
   }
 
   handleMaxClick() {
@@ -576,16 +582,18 @@ export class GooddollarSavingsWidget extends LitElement {
 
     try {
       this.txLoading = true;
+      this.transactionError = '';
       const amount = parseEther(this.inputAmount);
       const receipt = await this.sdk.stake(amount);
       if (receipt.status === 'success') {
         await this.refreshData();
         this.inputAmount = '0.0';
         this.inputError = '';
+        this.transactionError = '';
       }
     } catch (error: any) {
       console.error('Staking error:', error);
-      this.inputError = error.message || 'Staking failed';
+      this.transactionError = error.message || 'Staking failed';
     } finally {
       this.txLoading = false;
     }
@@ -600,16 +608,18 @@ export class GooddollarSavingsWidget extends LitElement {
 
     try {
       this.txLoading = true;
+      this.transactionError = '';
       const amount = parseEther(this.inputAmount);
       const receipt = await this.sdk.unstake(amount);
       if (receipt.status === 'success') {
         await this.refreshData();
         this.inputAmount = '0.0';
         this.inputError = '';
+        this.transactionError = '';
       }
     } catch (error: any) {
       console.error('Unstaking error:', error);
-      this.inputError = error.message || 'Unstaking failed';
+      this.transactionError = error.message || 'Unstaking failed';
     } finally {
       this.txLoading = false;
     }
@@ -620,13 +630,15 @@ export class GooddollarSavingsWidget extends LitElement {
 
     try {
       this.isClaiming = true;
+      this.transactionError = '';
       const receipt = await this.sdk.claimReward();
       if (receipt.status === 'success') {
         await this.refreshData();
+        this.transactionError = '';
       }
     } catch (error: any) {
       console.error('Claim error:', error);
-      this.inputError = error.message || 'Claim failed';
+      this.transactionError = error.message || 'Claim failed';
     } finally {
       this.isClaiming = false;
     }
