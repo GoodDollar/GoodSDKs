@@ -28,6 +28,10 @@ const STAKING_CONTRACT_ADDRESS =
   "0x799a23dA264A157Db6F9c02BE62F82CE8d602A45" as const
 const GDOLLAR_CONTRACT_ADDRESS =
   "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const
+
+// Configurable delay to allow indexers/subgraphs to catch up after transactions
+export const INDEXING_DELAY_MS = 3000
+
 const stakingContract = {
   address: STAKING_CONTRACT_ADDRESS,
   abi: STAKING_CONTRACT_ABI,
@@ -55,14 +59,20 @@ export class GooddollarSavingsSDK {
   private walletClient: WalletClient | null = null
   private totalStaked: bigint = BigInt(0)
   private cachedRewardRate: bigint = BigInt(0)
+  private indexingDelayMs: number
 
-  constructor(publicClient: PublicClient, walletClient?: WalletClient) {
+  constructor(
+    publicClient: PublicClient,
+    walletClient?: WalletClient,
+    indexingDelayMs: number = INDEXING_DELAY_MS,
+  ) {
     if (!publicClient) throw new Error("Public client is required")
     if (!(publicClient.chain?.id === 42220)) {
       throw new Error("Public client must be connected to Celo mainnet")
     }
     this.publicClient = publicClient
     this.walletClient = null
+    this.indexingDelayMs = indexingDelayMs
     if (walletClient) {
       this.setWalletClient(walletClient)
     }
@@ -111,9 +121,7 @@ export class GooddollarSavingsSDK {
   }
 
   async getUserStats(): Promise<UserStats> {
-    if (!this.walletClient) throw new Error("Wallet client not initialized")
-    const [account] = await this.walletClient.getAddresses()
-    if (!account) throw new Error("No account found in wallet client")
+    const account = await this.getAccount()
 
     const [balance, staked, earned] = await Promise.all([
       this.publicClient.readContract({
@@ -150,11 +158,9 @@ export class GooddollarSavingsSDK {
   }
 
   async stake(amount: bigint, onHash?: (hash: `0x${string}`) => void) {
-    if (!this.walletClient) throw new Error("Wallet client not initialized")
     if (amount <= BigInt(0)) throw new Error("Amount must be greater than zero")
 
-    const [account] = await this.walletClient.getAddresses()
-    if (!account) throw new Error("No account found in wallet client")
+    const account = await this.getAccount()
 
     const balance = await this.publicClient.readContract({
       ...gdollarContract,
@@ -166,25 +172,7 @@ export class GooddollarSavingsSDK {
       throw new Error("Insufficient G$ balance for staking")
     }
 
-    const allowance = await this.publicClient.readContract({
-      address: GDOLLAR_CONTRACT_ADDRESS,
-      abi: G$__ABI,
-      functionName: "allowance",
-      args: [account, STAKING_CONTRACT_ADDRESS],
-    })
-
-    if (allowance < amount) {
-      await this.submitAndWait(
-        {
-          address: GDOLLAR_CONTRACT_ADDRESS,
-          abi: G$__ABI,
-          functionName: "approve",
-          args: [STAKING_CONTRACT_ADDRESS, amount],
-        },
-        account,
-        onHash,
-      )
-    }
+    await this.ensureAllowance(account, amount, onHash)
 
     return this.submitAndWait(
       {
@@ -198,11 +186,9 @@ export class GooddollarSavingsSDK {
   }
 
   async unstake(amount: bigint, onHash?: (hash: `0x${string}`) => void) {
-    if (!this.walletClient) throw new Error("Wallet client not initialized")
     if (amount <= BigInt(0)) throw new Error("Amount must be greater than zero")
 
-    const [account] = await this.walletClient.getAddresses()
-    if (!account) throw new Error("No account found in wallet client")
+    const account = await this.getAccount()
 
     return this.submitAndWait(
       {
@@ -216,10 +202,7 @@ export class GooddollarSavingsSDK {
   }
 
   async claimReward(onHash?: (hash: `0x${string}`) => void) {
-    if (!this.walletClient) throw new Error("Wallet client not initialized")
-
-    const [account] = await this.walletClient.getAddresses()
-    if (!account) throw new Error("No account found in wallet client")
+    const account = await this.getAccount()
 
     return this.submitAndWait(
       {
@@ -250,9 +233,47 @@ export class GooddollarSavingsSDK {
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash })
 
     // Provide a small delay for indexers/subgraphs to catch up
-    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await new Promise((resolve) => setTimeout(resolve, this.indexingDelayMs))
 
     return receipt
+  }
+
+  /**
+   * Helper method to get the current account address from wallet client
+   */
+  private async getAccount(): Promise<`0x${string}`> {
+    if (!this.walletClient) throw new Error("Wallet client not initialized")
+    const [account] = await this.walletClient.getAddresses()
+    if (!account) throw new Error("No account found in wallet client")
+    return account
+  }
+
+  /**
+   * Helper method to ensure the staking contract has sufficient allowance to spend G$ tokens
+   * If allowance is insufficient, it will request approval from the user
+   */
+  private async ensureAllowance(
+    account: `0x${string}`,
+    amount: bigint,
+    onHash?: (hash: `0x${string}`) => void,
+  ) {
+    const allowance = await this.publicClient.readContract({
+      ...gdollarContract,
+      functionName: "allowance",
+      args: [account, STAKING_CONTRACT_ADDRESS],
+    })
+
+    if (allowance < amount) {
+      await this.submitAndWait(
+        {
+          ...gdollarContract,
+          functionName: "approve",
+          args: [STAKING_CONTRACT_ADDRESS, amount],
+        },
+        account,
+        onHash,
+      )
+    }
   }
 
   private toEtherNumber(num: bigint) {
