@@ -29,8 +29,6 @@ const STAKING_CONTRACT_ADDRESS =
 const GDOLLAR_CONTRACT_ADDRESS =
   "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const
 
-// Configurable delay to allow indexers/subgraphs to catch up after transactions
-export const INDEXING_DELAY_MS = 3000
 
 const stakingContract = {
   address: STAKING_CONTRACT_ADDRESS,
@@ -59,12 +57,10 @@ export class GooddollarSavingsSDK {
   private walletClient: WalletClient | null = null
   private totalStaked: bigint = BigInt(0)
   private cachedRewardRate: bigint = BigInt(0)
-  private indexingDelayMs: number
 
   constructor(
     publicClient: PublicClient,
     walletClient?: WalletClient,
-    indexingDelayMs: number = INDEXING_DELAY_MS,
   ) {
     if (!publicClient) throw new Error("Public client is required")
     if (!(publicClient.chain?.id === 42220)) {
@@ -72,7 +68,6 @@ export class GooddollarSavingsSDK {
     }
     this.publicClient = publicClient
     this.walletClient = null
-    this.indexingDelayMs = indexingDelayMs
     if (walletClient) {
       this.setWalletClient(walletClient)
     }
@@ -172,7 +167,7 @@ export class GooddollarSavingsSDK {
       throw new Error("Insufficient G$ balance for staking")
     }
 
-    await this.ensureAllowance(account, amount, onHash)
+    await this.ensureAllowance(amount, onHash)
 
     return this.submitAndWait(
       {
@@ -180,7 +175,6 @@ export class GooddollarSavingsSDK {
         functionName: "stake",
         args: [amount],
       },
-      account,
       onHash,
     )
   }
@@ -188,39 +182,34 @@ export class GooddollarSavingsSDK {
   async unstake(amount: bigint, onHash?: (hash: `0x${string}`) => void) {
     if (amount <= BigInt(0)) throw new Error("Amount must be greater than zero")
 
-    const account = await this.getAccount()
-
     return this.submitAndWait(
       {
         ...stakingContract,
         functionName: "withdraw",
         args: [amount],
       },
-      account,
       onHash,
     )
   }
 
   async claimReward(onHash?: (hash: `0x${string}`) => void) {
-    const account = await this.getAccount()
-
     return this.submitAndWait(
       {
         ...stakingContract,
         functionName: "getReward",
         args: [],
       },
-      account,
       onHash,
     )
   }
 
   private async submitAndWait(
     simulateParams: SimulateContractParameters,
-    account: `0x${string}`,
     onHash?: (hash: `0x${string}`) => void,
   ) {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
+
+    const account = await this.getAccount()
 
     const { request } = await this.publicClient.simulateContract({
       account,
@@ -231,9 +220,6 @@ export class GooddollarSavingsSDK {
     if (onHash) onHash(hash)
 
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash })
-
-    // Provide a small delay for indexers/subgraphs to catch up
-    await new Promise((resolve) => setTimeout(resolve, this.indexingDelayMs))
 
     return receipt
   }
@@ -253,10 +239,10 @@ export class GooddollarSavingsSDK {
    * If allowance is insufficient, it will request approval from the user
    */
   private async ensureAllowance(
-    account: `0x${string}`,
     amount: bigint,
     onHash?: (hash: `0x${string}`) => void,
   ) {
+    const account = await this.getAccount()
     const allowance = await this.publicClient.readContract({
       ...gdollarContract,
       functionName: "allowance",
@@ -270,7 +256,6 @@ export class GooddollarSavingsSDK {
           functionName: "approve",
           args: [STAKING_CONTRACT_ADDRESS, amount],
         },
-        account,
         onHash,
       )
     }
