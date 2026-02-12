@@ -6,7 +6,9 @@
     "build": "tsup --clean",
     "dev": "tsc --watch",
     "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
-    "test:connected": "npx tsx ../../test/citizen-sdk/connected-accounts.ts"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:connected": "vitest run src/sdks/__tests__/connected-accounts.test.ts"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -27,9 +29,11 @@
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@vitest/ui": "^4.0.18",
     "tsx": "^4.19.2",
     "typescript": "latest",
     "viem": "latest",
+    "vitest": "^4.0.18",
     "wagmi": "latest"
   },
   "peerDependencies": {
