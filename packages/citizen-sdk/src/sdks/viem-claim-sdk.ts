@@ -1,4 +1,5 @@
 import {
+  zeroAddress,
   type Account,
   type Address,
   type Chain,
@@ -164,6 +165,16 @@ export class ClaimSDK {
     return this.chainId
   }
 
+  /**
+   * Resolves the main whitelisted address for this account.
+   * Useful for connected accounts to claim on behalf of their root address.
+   * Returns the root address even if it is zeroAddress (for non-whitelisted accounts).
+   */
+  private async getWhitelistedRootAddress(): Promise<Address> {
+    const { root } = await this.identitySDK.getWhitelistedRoot(this.account)
+    return root
+  }
+
   private async readChainEntitlement(
     chainId: SupportedChains,
     client?: PublicClient,
@@ -184,12 +195,16 @@ export class ClaimSDK {
       altClient = resolvedClient
     }
 
+    // Use whitelisted root address for entitlement check
+    // This enables connected accounts to claim on behalf of their main account
+    const rootAddress = await this.getWhitelistedRootAddress()
+
     return this.readContract<bigint>(
       {
         address: contracts.ubiContract as Address,
         abi: ubiSchemeV2ABI,
         functionName: "checkEntitlement",
-        args: [this.account],
+        args: [rootAddress],
       },
       altClient,
       chainId,
@@ -260,7 +275,7 @@ export class ClaimSDK {
     } catch (error: any) {
       // While fuse/celo work out of the box, there is a transport issue while connecting to XDC.
       // Resulting in --> Details: transports[i] is not a function
-      // we implement a one-time retry with a fallback RPC from our list
+      // Retry once with a fallback RPC from the list
       const combinedMessage = extractErrorMessage(error)
       if (shouldRetryRpcFallback(combinedMessage, chainId, attempt)) {
         const fallbackClient = getRpcFallbackClient(chainId, this.rpcIterators)
@@ -299,8 +314,7 @@ export class ClaimSDK {
     const hash = await this.walletClient.writeContract(request)
     onHash?.(hash)
 
-    // we wait one block
-    // to prevent waitFor... to immediately throw an error
+    // Wait one block to prevent waitFor... from immediately throwing an error
     await new Promise((res) => setTimeout(res, 5000))
 
     return waitForTransactionReceipt(this.publicClient, {
@@ -610,10 +624,10 @@ export class ClaimSDK {
         throttleMs: 60 * 60 * 1000, // 1 hour
       })
 
-      // If we got "skipped" it means balance is sufficient or already topped recently
+      // "skipped" means balance is sufficient or already topped recently
       if (result === "skipped") return true
 
-      // If we successfully topped up, return true
+      // Successfully topped up, return true
       if (result === "topped_via_contract" || result === "topped_via_api")
         return true
 
