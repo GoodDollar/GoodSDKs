@@ -72,7 +72,7 @@ if (amount > 0n) {
     `No allocation on the connected chain. ${altChain.label} exposes ${altAmount.toString()} wei.`,
   )
 
-  // Optional: inspect the fallback chain without reconnecting the wallet
+  // inspect the fallback chain without reconnecting the wallet
   const fallbackClient = createPublicClient({
     transport: http(altChain.rpcUrls[0]!),
   })
