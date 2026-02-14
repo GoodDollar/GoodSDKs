@@ -11,9 +11,10 @@ From the repository root, run the **fast-path** command (recommended):
 ```bash
 yarn turbo dev --filter=demo-identity-app...
 ```
-*Note: This only builds the demo app and its necessary dependencies, which is significantly faster than a full `yarn dev`.*
+*Note: This builds the app and SDKs. When you see **"Found 0 errors. Watching for file changes"** in the terminal, the system is ready!*
 
-Alternatively, navigate to this directory:
+### ⚡ Direct URL 
+Navigate to: **[http://localhost:3000/streaming](http://localhost:3000/streaming)**
 1. `cd apps/demo-identity-app`
 2. `yarn dev`
 
