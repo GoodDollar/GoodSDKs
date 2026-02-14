@@ -37,6 +37,8 @@
   },
   "dependencies": {
     "@goodsdks/citizen-sdk": "*",
+    "@goodsdks/streaming-sdk": "workspace:*",
+    "@tanstack/react-query": "^4.36.1",
     "lz-string": "^1.5.0",
     "react": "^19.1.1",
     "tsup": "^8.4.0"
