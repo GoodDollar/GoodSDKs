@@ -1,0 +1,58 @@
+{
+  "name": "@goodsdks/bridging-sdk",
+  "version": "1.0.0",
+  "description": "GoodDollar bridging SDK for cross-chain G$ token transfers using Axelar and LayerZero",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src --ext .ts,.tsx",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gooddollar/bridge-contracts": "^1.0.0",
+    "viem": "^2.28.0"
+  },
+  "peerDependencies": {
+    "wagmi": "^2.14.8"
+  },
+  "devDependencies": {
+    "@goodsdks/eslint-config": "workspace:*",
+    "@goodsdks/typescript-config": "workspace:*",
+    "@types/node": "^20.14.9",
+    "eslint": "^8.57.0",
+    "tsup": "^8.2.4",
+    "typescript": "5.5.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GoodDollar/GoodSDKs.git",
+    "directory": "packages/bridging-sdk"
+  },
+  "keywords": [
+    "gooddollar",
+    "bridging",
+    "cross-chain",
+    "axelar",
+    "layerzero",
+    "blockchain",
+    "sdk"
+  ],
+  "author": "GoodDollar",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}
