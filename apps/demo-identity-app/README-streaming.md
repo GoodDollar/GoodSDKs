@@ -15,6 +15,8 @@ yarn turbo dev --filter=demo-identity-app...
 
 ### ⚡ Direct URL 
 Navigate to: **[http://localhost:3000/streaming](http://localhost:3000/streaming)**
+### 🕰️ Alternative (Standard)
+If you prefer the standard way:
 1. `cd apps/demo-identity-app`
 2. `yarn dev`
 
