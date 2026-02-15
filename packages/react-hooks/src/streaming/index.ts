@@ -47,7 +47,6 @@ export interface UseStreamListParams {
 }
 
 export interface UseGDAPoolsParams {
-    environment?: Environment
     enabled?: boolean
 }
 
@@ -210,7 +209,6 @@ export function useStreamList({
 }
 
 export function useGDAPools({
-    environment = "production",
     enabled = true
 }: UseGDAPoolsParams = {}) {
     const publicClient = usePublicClient()
@@ -220,7 +218,7 @@ export function useGDAPools({
     }, [publicClient])
 
     return useQuery<GDAPool[]>({
-        queryKey: ["gda-pools", environment, publicClient?.chain?.id],
+        queryKey: ["gda-pools", publicClient?.chain?.id],
         queryFn: async () => {
             if (!sdk) throw new Error("Public client not available")
             return sdk.getDistributionPools()
@@ -294,12 +292,11 @@ export function useDisconnectFromPool() {
 }
 
 export function useSupReserves({
-    environment = "production",
     apiKey,
     enabled = true
 }: UseSupReservesParams = {}) {
     return useQuery<SUPReserveLocker[]>({
-        queryKey: ["sup-reserves", SupportedChains.BASE, environment, apiKey],
+        queryKey: ["sup-reserves", SupportedChains.BASE, apiKey],
         queryFn: async () => {
             const client = new SubgraphClient(SupportedChains.BASE, { apiKey })
             return client.querySUPReserves()

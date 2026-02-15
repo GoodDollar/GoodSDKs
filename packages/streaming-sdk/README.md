@@ -370,6 +370,114 @@ await gdaSDK.disconnectFromPool({
 })
 ```
 
+## Security & Best Practices
+
+### API Key Management
+
+If using authenticated subgraph endpoints (for SUP Reserve queries), provide your API key securely:
+
+```typescript
+const sdk = new StreamingSDK(publicClient, walletClient, {
+  environment: 'production',
+  apiKey: process.env.SUBGRAPH_API_KEY // Never hardcode keys
+})
+```
+
+**Guidelines:**
+- Always use environment variables for API keys
+- Never commit keys to version control
+- Rotate API keys regularly
+- Use different keys for dev/staging/production
+
+### Rate Limiting
+
+Superfluid subgraph enforces rate limits:
+- **Standard**: 100 queries per minute
+- **Authenticated**: Higher limits with API key
+
+To avoid rate limits:
+```typescript
+// ✅ Good: Batch queries
+const [streams, pools, balances] = await Promise.all([
+  sdk.getActiveStreams(account),
+  gdaSDK.getDistributionPools(),
+  sdk.getSuperTokenBalance(account)
+])
+
+// ❌ Avoid: Sequential queries
+await sdk.getActiveStreams(account)
+await gdaSDK.getDistributionPools()
+await sdk.getSuperTokenBalance(account)
+```
+
+### Transaction Safety
+
+Always validate before creating/updating streams:
+
+```typescript
+// ✅ Validate flow rate
+if (newFlowRate <= 0n) {
+  throw new Error("Flow rate must be positive")
+}
+
+// ✅ Check user has wallet connected
+if (!walletClient) {
+  throw new Error("Connect wallet first")
+}
+
+// ✅ Use onHash for user feedback
+await sdk.createStream({
+  receiver: recp,
+  token: token,
+  flowRate,
+  onHash: (hash) => {
+    console.log(`Transaction submitted: ${hash}`)
+    // Show user transaction hash for tracking
+  }
+})
+```
+
+### Subgraph Data Freshness
+
+Subgraph data may lag behind chain state by 1-2 blocks:
+
+```typescript
+// For critical operations, query both contract + subgraph
+const subgraphStreams = await sdk.getActiveStreams(account)
+// Optionally: read directly from contract for latest state
+const contractState = await publicClient.readContract({
+  address: cfaForwarder,
+  abi: cfaForwarderAbi,
+  functionName: 'getFlow',
+  args: [token, sender, receiver]
+})
+```
+
+### Error Handling
+
+Implement proper error handling for network failures:
+
+```typescript
+import { StreamingSDK } from '@goodsdks/streaming-sdk'
+
+try {
+  const streams = await sdk.getActiveStreams(account)
+} catch (error) {
+  if (error instanceof Error) {
+    if (error.message.includes('network')) {
+      // Handle network failure - retry with backoff
+      console.error('Network error querying streams')
+    } else if (error.message.includes('timeout')) {
+      // Handle timeout
+      console.error('Subgraph query timeout')
+    } else {
+      // Handle other errors
+      console.error('Failed to fetch streams:', error.message)
+    }
+  }
+}
+```
+
 ## TypeScript Types
 
 All types are exported for use in your application:

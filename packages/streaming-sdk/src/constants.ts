@@ -1,7 +1,6 @@
 import { Address } from "viem"
 import { Environment } from "./types"
 import { cfaForwarderAddress, gdaForwarderAddress } from "@sfpro/sdk/abi"
-import { hostAddress } from "@sfpro/sdk/abi/core"
 
 // Network definitions
 export enum SupportedChains {
@@ -52,7 +51,6 @@ export const SUBGRAPH_URLS: Record<number | string, string> = {
 // Standard protocol interfaces
 export const CFA_FORWARDER_ADDRESSES = cfaForwarderAddress
 export const GDA_FORWARDER_ADDRESSES = gdaForwarderAddress
-export const HOST_ADDRESSES = hostAddress
 
 // Metadata for frontend integration
 export interface ChainConfig {
