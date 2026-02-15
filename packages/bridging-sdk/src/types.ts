@@ -20,13 +20,13 @@ export interface BridgeRequestEvent {
   blockNumber: bigint
   address: Address
   args: {
-    sender: Address
-    receiver: Address
+    from: Address
+    to: Address
     amount: bigint
-    srcChainId: ChainId
-    dstChainId: ChainId
-    nonce: bigint
+    targetChainId: ChainId
+    timestamp: bigint
     bridge: BridgeProtocol
+    id: bigint
   }
 }
 
@@ -35,13 +35,13 @@ export interface ExecutedTransferEvent {
   blockNumber: bigint
   address: Address
   args: {
-    sender: Address
-    receiver: Address
+    from: Address
+    to: Address
     amount: bigint
-    srcChainId: ChainId
-    dstChainId: ChainId
-    nonce: bigint
+    fee: bigint
+    sourceChainId: ChainId
     bridge: BridgeProtocol
+    id: bigint
   }
 }
 

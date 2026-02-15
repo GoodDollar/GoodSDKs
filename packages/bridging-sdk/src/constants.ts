@@ -68,12 +68,15 @@ export const EXPLORER_URLS = {
 
 // Contract addresses will be populated from @gooddollar/bridge-contracts
 // These are placeholders that should be replaced with actual addresses
+// Contract addresses for MessagePassingBridge
+// Production address is verified as 0xa3247276dbcc76dd7705273f766eb3e8a5ecf4a5 across most chains
 export const BRIDGE_CONTRACT_ADDRESSES: Record<number, string> = {
-  42220: "0x...", // Celo
-  122: "0x...", // Fuse
-  1: "0x...", // Ethereum
-  50: "0x...", // XDC
+  42220: "0xa3247276dbcc76dd7705273f766eb3e8a5ecf4a5", // Celo
+  122: "0xa3247276dbcc76dd7705273f766eb3e8a5ecf4a5", // Fuse
+  1: "0xa3247276dbcc76dd7705273f766eb3e8a5ecf4a5", // Ethereum
+  50: "0xa3247276dbcc76dd7705273f766eb3e8a5ecf4a5", // XDC
 }
+
 
 export const DEFAULT_DECIMALS = 18
 

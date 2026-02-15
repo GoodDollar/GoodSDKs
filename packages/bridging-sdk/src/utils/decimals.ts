@@ -110,3 +110,23 @@ export function roundAmount(amount: bigint, decimals: number): bigint {
   const divisor = 10n ** BigInt(decimals)
   return (amount + divisor / 2n - 1n) / divisor * divisor
 }
+
+/**
+ * Validates if user has sufficient balance for the operation
+ */
+export function validateSufficientBalance(
+  balance: bigint, 
+  amount: bigint, 
+  fee: bigint = 0n
+): { isValid: boolean; reason?: string } {
+  const totalRequired = amount + fee
+  
+  if (balance < totalRequired) {
+    return {
+      isValid: false,
+      reason: `Insufficient balance. Required: ${formatAmount(totalRequired, 18)}, Available: ${formatAmount(balance, 18)}`
+    }
+  }
+  
+  return { isValid: true }
+}

@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #0085FF;
+  --primary-glow: rgba(0, 133, 255, 0.4);
+  --secondary: #00D1FF;
+  --background: #F8FAFC;
+  --card-bg: #FFFFFF;
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --accent-green: #10B981;
+  --accent-blue: #3B82F6;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+}
+
+body {
+  margin: 0;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--background);
+  color: var(--text-main);
+}
+
+.premium-card {
+  @apply bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 transition-all duration-300;
+}
+
+.premium-card:hover {
+  @apply shadow-[0_20px_40px_rgba(0,0,0,0.06)] -translate-y-1;
+}
+
+.glass-effect {
+  @apply backdrop-blur-md bg-white/70 border border-white/30;
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 font-bold;
+}
+
+.input-glow:focus {
+  @apply outline-none ring-4 ring-blue-500/10 border-blue-500;
+}
+
+.premium-button {
+  @apply relative overflow-hidden bg-blue-600 text-white font-semibold py-4 px-8 rounded-2xl transition-all duration-300 shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.premium-button:hover:not(:disabled) {
+  @apply bg-blue-700 shadow-xl shadow-blue-500/30 -translate-y-0.5;
+}
+
+.premium-button-secondary {
+  @apply bg-slate-50 text-slate-700 font-semibold py-4 px-8 rounded-2xl transition-all duration-300 border border-slate-200 active:scale-95 hover:bg-slate-100;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full hover:bg-slate-300;
+}

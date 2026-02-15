@@ -2,39 +2,48 @@
   "name": "@goodsdks/bridging-sdk",
   "version": "1.0.0",
   "description": "GoodDollar bridging SDK for cross-chain G$ token transfers using Axelar and LayerZero",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+    "import": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "require": {
+      "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup --clean",
     "dev": "tsup --watch",
     "lint": "eslint src --ext .ts,.tsx",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@gooddollar/bridge-contracts": "^1.0.0",
-    "viem": "^2.28.0"
+    "tsup": "^8.3.5"
   },
   "peerDependencies": {
-    "wagmi": "^2.14.8"
+    "react": "*",
+    "viem": "*",
+    "wagmi": "*"
   },
   "devDependencies": {
-    "@goodsdks/eslint-config": "workspace:*",
-    "@goodsdks/typescript-config": "workspace:*",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
     "@types/node": "^20.14.9",
+    "@types/react": "^18",
     "eslint": "^8.57.0",
-    "tsup": "^8.2.4",
-    "typescript": "5.5.4"
+    "react": "^18",
+    "typescript": "latest",
+    "viem": "latest",
+    "wagmi": "latest"
   },
   "repository": {
     "type": "git",
