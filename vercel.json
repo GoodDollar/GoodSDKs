@@ -1,5 +1,15 @@
 {
+  "buildCommand": "yarn install --immutable && turbo build",
+  "installCommand": "yarn install --immutable",
+  "env": {
+    "TURBO_TOKEN": "@turbo_token@",
+    "TURBO_TEAM": "@team_id@"
+  },
   "git": {
     "deploymentEnabled": false
+  },
+  "remoteCache": {
+    "teamId": "@team_id@",
+    "token": "@turbo_token@"
   }
 }

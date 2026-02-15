@@ -1,0 +1,10 @@
+node_modules
+.git
+.env.*.local
+.DS_Store
+*.md
+coverage
+.eslintcache
+.turbo
+src/**/*.test.ts
+src/**/*.test.tsx
