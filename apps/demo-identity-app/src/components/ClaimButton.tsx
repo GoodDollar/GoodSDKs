@@ -18,7 +18,7 @@ export const ClaimButton: React.FC = () => {
   const [txHash, setTxHash] = useState<string | null>(null)
   const { sdk: claimSDK, loading, error: sdkError } = useClaimSDK("development")
   const [sdk, setSdk] = useState<typeof claimSDK | null>(null)
-  const [claimAmount, setClaimAmount] = useState<number | null>(null)
+  const [claimAmount, setClaimAmount] = useState<Number | null>(null)
   const [altClaimAvailable, setAltClaimAvailable] = useState(false)
   const [altChainId, setAltChainId] = useState<SupportedChains | null>(null)
 
@@ -53,9 +53,8 @@ export const ClaimButton: React.FC = () => {
         setAltClaimAvailable(altClaimAvailable)
         setAltChainId(altClaimAvailable ? (altChainId ?? null) : null)
         setSdk(sdk)
-      } catch (err) {
-        const error = err as Error
-        setError(error.message || "Failed to fetch entitlement.")
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch entitlement.")
       } finally {
         setIsLoading(false)
       }
@@ -66,7 +65,7 @@ export const ClaimButton: React.FC = () => {
     } else if (!sdk && !loading) {
       initializeSDK()
     }
-  }, [address, claimAmount, claimSDK, loading, chainId, sdk, sdkError])
+  }, [address, claimAmount, claimSDK, loading, chainId])
 
   const handleClaim = useCallback(async () => {
     if (!sdk) {
@@ -90,15 +89,14 @@ export const ClaimButton: React.FC = () => {
       if (!tx) return
 
       setTxHash(tx.transactionHash)
-    } catch (err) {
-      const error = err as Error
-      console.error("Claim failed:", error)
-      setError(error.message || "An unexpected error occurred.")
+    } catch (err: any) {
+      console.error("Claim failed:", err)
+      setError(err.message || "An unexpected error occurred.")
     } finally {
       setIsClaiming(false)
       setClaimAmount(null)
     }
-  }, [sdk])
+  }, [sdk, claimAmount, chainId])
 
   return (
     <YStack alignItems="center" gap="$4" padding="$4">

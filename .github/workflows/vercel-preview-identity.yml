@@ -4,8 +4,6 @@ on:
     paths:
       - "apps/demo-identity-app/**"
       - "packages/citizen-sdk/**"
-      - "packages/streaming-sdk/**"
-      - "packages/react-hooks/**"
       - ".github/workflows/*identity*.yml"
   pull_request:
     types: [opened, synchronize, edited, ready_for_review]
@@ -14,8 +12,6 @@ on:
     paths:
       - "apps/demo-identity-app/**"
       - "packages/citizen-sdk/**"
-      - "packages/streaming-sdk/**"
-      - "packages/react-hooks/**"
       - ".github/workflows/*identity*.yml"
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -37,9 +33,6 @@ jobs:
       - run: npm install --global turbo@latest
       - run: npm install --global vite@latest
       - run: yarn install --immutable
-      # Build dependencies first using turbo
-      - name: Build dependencies
-        run: turbo build --filter=demo-identity-app...
       # Get env vars
       - run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
         working-directory: apps/demo-identity-app

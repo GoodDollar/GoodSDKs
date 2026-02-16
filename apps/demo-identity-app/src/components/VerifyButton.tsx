@@ -24,7 +24,6 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
       )
 
       window.location.href = fvLink
-      onVerificationSuccess()
     } catch (error) {
       console.error("Verification failed:", error)
       // Handle error (e.g., show toast)

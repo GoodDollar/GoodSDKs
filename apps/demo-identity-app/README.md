@@ -68,12 +68,4 @@ To utilize the `citizen-sdk` within your application:
    }
    ```
 
-For more examples and detailed usage, refer to the [citizen-sdk README](../../packages/citizen-sdk/README.md).
-
-### Developing with `streaming-sdk`
-
-The demo app includes an interactive test page for Superfluid streams:
-
-1. **Test UI**: Access it at [http://localhost:3000/streaming](http://localhost:3000/streaming).
-2. **Guide**: For detailed instructions on testing streams and GDA pools, see the [Streaming Guide](./STREAMING.md).
-3. **Environment**: Ensure you have a `VITE_GRAPH_API_KEY` configured in your `.env` for data fetching.
+For more examples and detailed usage, refer to the [citizen-sdk README](packages/citizen-sdk/README.md).

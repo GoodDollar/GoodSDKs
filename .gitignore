@@ -11,9 +11,6 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
-**/.env
-**/.env.local
-**/.env.*.local
 
 # Testing
 coverage
@@ -42,5 +39,4 @@ yarn-error.log*
 .yarn/install-state.gz
 apps/engagement-app/tsconfig.tsbuildinfo
 .vscode/settings.json
-
-docs
+e2e.log 
