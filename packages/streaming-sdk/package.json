@@ -7,8 +7,7 @@
     "dev": "tsc --watch",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "test:coverage": "vitest --coverage",
-    "lint": "tsc --noEmit"
+    "test:coverage": "vitest --coverage"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
