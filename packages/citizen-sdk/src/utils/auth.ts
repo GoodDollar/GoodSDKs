@@ -1,5 +1,5 @@
-import { Account, createWalletClient, http, PublicClient, Address } from "viem";
-import { Envs, FV_IDENTIFIER_MSG2, identityV2ABI, contractEnv, chainConfigs, SupportedChains, isSupportedChain } from "../constants";
+import { Account, createWalletClient, http } from "viem";
+import { Envs, FV_IDENTIFIER_MSG2 } from "../constants";
 import { sdk } from "@farcaster/miniapp-sdk";
 
 async function detectFarcasterContext(): Promise<boolean> {
@@ -63,38 +63,7 @@ export async function navigateToUrl(url: string, fallbackToNewTab = true): Promi
   }
 }
 
-export async function isAddressWhitelisted(
-  address: Address,
-  publicClient: PublicClient,
-  chainId?: number,
-  env: contractEnv = "production"
-): Promise<boolean> {
-  try {
-    const targetChainId = chainId || await publicClient.getChainId();
 
-    if (!isSupportedChain(targetChainId)) {
-      return false;
-    }
-
-    const chainConfig = chainConfigs[targetChainId as SupportedChains];
-    const identityContract = chainConfig?.contracts?.[env]?.identityContract;
-
-    if (!identityContract) {
-      return false;
-    }
-
-    const result = await publicClient.readContract({
-      address: identityContract as Address,
-      abi: identityV2ABI,
-      functionName: "lastAuthenticated",
-      args: [address],
-    });
-
-    return result ? BigInt(result) > 0n : false;
-  } catch {
-    return false;
-  }
-}
 
 export interface FarcasterAppConfig {
   appId: string;

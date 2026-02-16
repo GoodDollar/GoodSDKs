@@ -21,16 +21,9 @@ import {
   faucetABI,
   isSupportedChain,
   ubiSchemeV2ABI,
-  FarcasterAppConfigs,
 } from "../constants"
 import type { ContractAddresses } from "../constants"
 import { resolveChainAndContract } from "../utils/chains"
-import {
-  createVerificationCallbackUrl,
-  createFarcasterCallbackUniversalLink,
-  isInFarcasterMiniApp,
-  navigateToUrl
-} from "../utils/auth"
 import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
 import {
   createRpcIteratorRegistry,
@@ -109,9 +102,10 @@ export class ClaimSDK {
     this.account = account ?? walletClient.account.address
     this.env = env
 
-    // Initialize callback URL - will be set properly in initializeCallbackUrl
     this.rdu = rdu
-    this.initializeCallbackUrl(rdu);
+    this.identitySDK.resolveCallbackUrl(rdu, 'claim').then(
+      (resolvedUrl) => { this.rdu = resolvedUrl },
+    ).catch(() => {})
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
       walletClient,
@@ -152,36 +146,6 @@ export class ClaimSDK {
     this.faucetAddress = contractEnvAddresses.faucetContract as Address
   }
 
-  /**
-   * Initialize the callback URL with proper Farcaster Universal Link support
-   * @param rdu - The redirect URL after claim
-   */
-  private async initializeCallbackUrl(rdu?: string): Promise<void> {
-    if (!rdu) return;
-
-    try {
-      // Check if we're in a Farcaster context and should use Universal Links
-      const isFarcaster = await isInFarcasterMiniApp();
-
-      if (isFarcaster && FarcasterAppConfigs[this.env]) {
-        // Create proper Farcaster Universal Link
-        const farcasterConfig = FarcasterAppConfigs[this.env];
-        this.rdu = createFarcasterCallbackUniversalLink(
-          farcasterConfig,
-          'claim',
-          { source: "gooddollar_claim_verification" }
-        );
-      } else {
-        // Fallback to direct callback URL for non-Farcaster environments
-        this.rdu = await createVerificationCallbackUrl(rdu, {
-          source: "gooddollar_claim_verification"
-        });
-      }
-    } catch (error) {
-      // Fallback to original URL on error
-      this.rdu = rdu;
-    }
-  }
 
   private getContractsForChain(chainId: SupportedChains): ContractAddresses {
     const contracts = this.chainContracts.get(chainId)
@@ -492,24 +456,22 @@ export class ClaimSDK {
 
   /**
    * Redirects the user through the face-verification flow.
-   * @throws If face verification redirect fails.
+   * @throws If face verification redirect is only supported in browser environments.
    */
   private async fvRedirect(): Promise<void> {
-    // Generate link with current chain ID as default, respecting identity-contract logic
     const fvLink = await this.identitySDK.generateFVLink(
       false,
       this.rdu,
       this.chainId
     )
 
-    // Handle Farcaster Context
-    if (await isInFarcasterMiniApp()) {
-      await navigateToUrl(fvLink, false)
-      return
+    if (typeof window !== "undefined") {
+      window.location.href = fvLink
+    } else {
+      throw new Error(
+        "Face verification redirect is only supported in browser environments.",
+      )
     }
-
-    // Default legacy behavior
-    window.location.href = fvLink
   }
 
   /**

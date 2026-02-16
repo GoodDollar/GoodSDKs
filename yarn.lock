@@ -1919,6 +1919,7 @@ __metadata:
     viem: "npm:latest"
     wagmi: "npm:latest"
   peerDependencies:
+    "@farcaster/miniapp-sdk": ^0.1.8
     viem: "*"
     wagmi: "*"
   languageName: unknown
@@ -10060,6 +10061,8 @@ __metadata:
     vite: "npm:6.3.5"
     wagmi: "npm:^1.4.13"
     zod: "npm:^3.24.2"
+  peerDependencies:
+    "@farcaster/miniapp-sdk": ^0.1.8
   languageName: unknown
   linkType: soft
 

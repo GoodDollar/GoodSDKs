@@ -3,7 +3,13 @@ import { Button } from "tamagui"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
 
-export const VerifyButton: React.FC = () => {
+interface VerifyButtonProps {
+  onVerificationSuccess: () => void
+}
+
+export const VerifyButton: React.FC<VerifyButtonProps> = ({
+  onVerificationSuccess,
+}) => {
   const { address } = useAccount()
   const { sdk: identitySDK } = useIdentitySDK("development")
 
@@ -14,12 +20,12 @@ export const VerifyButton: React.FC = () => {
       const fvLink = await identitySDK.generateFVLink(
         false,
         window.location.href,
-        undefined,
+        42220,
       )
 
       window.location.href = fvLink
-    } catch (e) {
-      console.error("Verification failed:", e)
+    } catch (error) {
+      console.error("Verification failed:", error)
     }
   }
 

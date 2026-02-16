@@ -27,28 +27,6 @@ export const Envs: Record<string, Record<string, string>> = {
   },
 }
 
-/**
- * Farcaster Mini App configurations for different environments
- * @notice THESE ARE EXAMPLE / PLACEHOLDER VALUES ONLY.
-* Developers integrating the SDK SHOULD:
-* 1. Pass a custom `farcasterConfig` when initializing IdentitySDK / ClaimSDK
- *
-* The SDK will default to these values if no config is provided, which will likely fail in production.
-*/
-export const FarcasterAppConfigs: Record<string, { appId: string; appSlug: string }> = {
-  production: {
-    appId: "", // REQUIRED: Replace with actual app ID from Farcaster Developer Portal
-    appSlug: "", // REQUIRED: Replace with actual app slug
-  },
-  staging: {
-    appId: "", // REQUIRED: Replace with actual app ID from Farcaster Developer Portal
-    appSlug: "", // REQUIRED: Replace with actual app slug
-  },
-  development: {
-    appId: "", // REQUIRED: Replace with actual app ID from Farcaster Developer Portal
-    appSlug: "", // REQUIRED: Replace with actual app slug
-  },
-}
 
 export interface ContractAddresses {
   identityContract: `0x${string}`
