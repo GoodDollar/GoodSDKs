@@ -8,6 +8,7 @@ export interface BridgeChain {
   id: ChainId
   name: string
   decimals: number
+  tokenAddress: `0x${string}`
   nativeCurrency: {
     name: string
     symbol: string

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { useAccount, useBalance } from "wagmi"
+import { useAccount, useReadContract } from "wagmi"
+import { formatUnits } from "viem"
 import { useBridgingSDK, useBridgeFee, parseAmount } from "@goodsdks/bridging-sdk"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
 import type { BridgeProtocol, ChainId } from "@goodsdks/bridging-sdk"
@@ -19,11 +20,26 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   const [isBridging, setIsBridging] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Get user balance
-  const { data: balance } = useBalance({
-    address,
+  // Get user G$ token balance (not native chain balance)
+  const { data: rawBalance } = useReadContract({
+    address: SUPPORTED_CHAINS[fromChain].tokenAddress,
+    abi: [{
+      name: "balanceOf",
+      type: "function",
+      stateMutability: "view",
+      inputs: [{ name: "account", type: "address" }],
+      outputs: [{ name: "", type: "uint256" }],
+    }] as const,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
     chainId: fromChain,
+    query: { enabled: !!address },
   })
+
+  const decimals = SUPPORTED_CHAINS[fromChain].decimals
+  const balance = rawBalance != null
+    ? { formatted: formatUnits(rawBalance as bigint, decimals), value: rawBalance as bigint }
+    : undefined
 
   // Get fee estimate
   const { fee } = useBridgeFee(

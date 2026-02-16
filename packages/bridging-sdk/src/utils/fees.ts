@@ -67,7 +67,8 @@ export async function getFeeEstimate(
   const fromChainName = getChainName(fromChainId)
   const toChainName = getChainName(toChainId)
 
-  const routeKey = `${protocol}_${fromChainName}_TO_${toChainName}`
+  const protocolPrefix = protocol === "AXELAR" ? "AXL" : "LZ"
+  const routeKey = `${protocolPrefix}_${fromChainName}_TO_${toChainName}`
   const feeString = protocolData[routeKey]
 
   if (!feeString) {
