@@ -1,8 +1,12 @@
 {
   "name": "@goodsdks/bridging-sdk",
-  "version": "1.0.0",
-  "description": "GoodDollar bridging SDK for cross-chain G$ token transfers using Axelar and LayerZero",
+  "version": "1.0.5",
   "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch",
+    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,48 +24,20 @@
     "dist",
     "src"
   ],
-  "scripts": {
-    "build": "tsup --clean",
-    "dev": "tsup --watch",
-    "lint": "eslint src --ext .ts,.tsx",
-    "type-check": "tsc --noEmit"
-  },
-  "dependencies": {
-    "tsup": "^8.3.5"
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "^18",
+    "react": "^18",
+    "typescript": "latest",
+    "viem": "latest",
+    "wagmi": "latest"
   },
   "peerDependencies": {
     "react": "*",
     "viem": "*",
     "wagmi": "*"
   },
-  "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
-    "@types/node": "^20.14.9",
-    "@types/react": "^18",
-    "eslint": "^8.57.0",
-    "react": "^18",
-    "typescript": "latest",
-    "viem": "latest",
-    "wagmi": "latest"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/GoodDollar/GoodSDKs.git",
-    "directory": "packages/bridging-sdk"
-  },
-  "keywords": [
-    "gooddollar",
-    "bridging",
-    "cross-chain",
-    "axelar",
-    "layerzero",
-    "blockchain",
-    "sdk"
-  ],
-  "author": "GoodDollar",
-  "license": "MIT",
-  "publishConfig": {
-    "access": "public"
+  "dependencies": {
+    "tsup": "^8.3.5"
   }
 }
