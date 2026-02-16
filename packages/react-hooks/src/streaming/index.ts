@@ -72,26 +72,46 @@ export interface UseSupReservesParams {
 }
 
 /**
- * React Hooks for Superfluid operations
+ * Internal helper to manage SDK instances by environment
  */
-export function useCreateStream() {
+const STREAMING_ENVIRONMENTS = ["production", "staging", "development"] as const
+
+function useStreamingSdks() {
     const publicClient = usePublicClient()
     const { data: walletClient } = useWalletClient()
-    const queryClient = useQueryClient()
 
-    const sdks = useMemo(() => {
-        if (!publicClient) return new Map<string, StreamingSDK>()
-        const envs = ["production", "staging", "development"] as const
-        const m = new Map<string, StreamingSDK>()
-        for (const e of envs) {
+    return useMemo(() => {
+        const m = new Map<Environment, StreamingSDK>()
+        if (!publicClient) return m
+
+        for (const env of STREAMING_ENVIRONMENTS) {
             try {
-                m.set(e, new StreamingSDK(publicClient, walletClient ? walletClient : undefined, { environment: e }))
+                m.set(
+                    env,
+                    new StreamingSDK(
+                        publicClient,
+                        walletClient ? (walletClient as any) : undefined,
+                        { environment: env }
+                    )
+                )
             } catch (err) {
-                // ignore
+                // Silently skip unsupported environments (e.g. Base in some configs)
             }
         }
         return m
     }, [publicClient, walletClient])
+}
+
+/**
+ * React Hooks for Superfluid operations
+ */
+
+/**
+ * React Hooks for Superfluid operations
+ */
+export function useCreateStream() {
+    const sdks = useStreamingSdks()
+    const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: async ({
@@ -101,10 +121,8 @@ export function useCreateStream() {
             userData = "0x",
             environment = "production",
         }: UseCreateStreamParams): Promise<Hash> => {
-            if (!publicClient) throw new Error("Public client not available")
-            if (!walletClient) throw new Error("Wallet client not available")
             const sdk = sdks.get(environment)
-            if (!sdk) throw new Error("SDK not available for selected environment")
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
             return sdk.createStream({ receiver, token, flowRate, userData })
         },
         onSuccess: () => {
@@ -114,23 +132,8 @@ export function useCreateStream() {
 }
 
 export function useUpdateStream() {
-    const publicClient = usePublicClient()
-    const { data: walletClient } = useWalletClient()
+    const sdks = useStreamingSdks()
     const queryClient = useQueryClient()
-
-    const sdks = useMemo(() => {
-        if (!publicClient) return new Map<string, StreamingSDK>()
-        const envs = ["production", "staging", "development"] as const
-        const m = new Map<string, StreamingSDK>()
-        for (const e of envs) {
-            try {
-                m.set(e, new StreamingSDK(publicClient, walletClient as any, { environment: e }))
-            } catch (err) {
-                // ignore
-            }
-        }
-        return m
-    }, [publicClient, walletClient])
 
     return useMutation({
         mutationFn: async ({
@@ -140,10 +143,8 @@ export function useUpdateStream() {
             userData = "0x",
             environment = "production",
         }: UseUpdateStreamParams): Promise<Hash> => {
-            if (!publicClient) throw new Error("Public client not available")
-            if (!walletClient) throw new Error("Wallet client not available")
             const sdk = sdks.get(environment)
-            if (!sdk) throw new Error("SDK not available for selected environment")
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
             return sdk.updateStream({ receiver, token, newFlowRate, userData })
         },
         onSuccess: () => {
@@ -153,23 +154,8 @@ export function useUpdateStream() {
 }
 
 export function useDeleteStream() {
-    const publicClient = usePublicClient()
-    const { data: walletClient } = useWalletClient()
+    const sdks = useStreamingSdks()
     const queryClient = useQueryClient()
-
-    const sdks = useMemo(() => {
-        if (!publicClient) return new Map<string, StreamingSDK>()
-        const envs = ["production", "staging", "development"] as const
-        const m = new Map<string, StreamingSDK>()
-        for (const e of envs) {
-            try {
-                m.set(e, new StreamingSDK(publicClient, walletClient as any, { environment: e }))
-            } catch (err) {
-                // ignore
-            }
-        }
-        return m
-    }, [publicClient, walletClient])
 
     return useMutation({
         mutationFn: async ({
@@ -177,10 +163,8 @@ export function useDeleteStream() {
             token,
             environment = "production",
         }: UseDeleteStreamParams): Promise<Hash> => {
-            if (!publicClient) throw new Error("Public client not available")
-            if (!walletClient) throw new Error("Wallet client not available")
             const sdk = sdks.get(environment)
-            if (!sdk) throw new Error("SDK not available for selected environment")
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
             return sdk.deleteStream({ receiver, token })
         },
         onSuccess: () => {
@@ -195,13 +179,13 @@ export function useStreamList({
     environment = "production",
     enabled = true,
 }: UseStreamListParams) {
-    const publicClient = usePublicClient()
+    const sdks = useStreamingSdks()
 
     return useQuery<StreamInfo[]>({
         queryKey: ["streams", account, direction, environment, publicClient?.chain?.id],
         queryFn: async () => {
-            if (!publicClient) throw new Error("Public client not available")
-            const sdk = new StreamingSDK(publicClient, undefined, { environment })
+            const sdk = sdks.get(environment)
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
             return sdk.getActiveStreams(account, direction)
         },
         enabled: enabled && !!account && !!publicClient,

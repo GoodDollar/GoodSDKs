@@ -42,6 +42,10 @@ export class GdaSDK {
         // Retrieve protocol address directly from official map
         this.gdaForwarder = (GDA_FORWARDER_ADDRESSES as Record<number, Address>)[this.chainId]
 
+        if (!this.gdaForwarder) {
+            throw new Error(`GDA Forwarder address not found for chain ID: ${this.chainId}`)
+        }
+
         if (walletClient) {
             this.setWalletClient(walletClient)
         }

@@ -45,6 +45,10 @@ export class StreamingSDK {
         // Retrieve protocol addresses directly from official maps
         this.cfaForwarder = (CFA_FORWARDER_ADDRESSES as Record<number, Address>)[this.chainId]
 
+        if (!this.cfaForwarder) {
+            throw new Error(`CFA Forwarder address not found for chain ID: ${this.chainId}`)
+        }
+
         if (walletClient) {
             this.setWalletClient(walletClient)
         }
@@ -76,7 +80,7 @@ export class StreamingSDK {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
                 functionName: "setFlowrate",
-                args: [token, receiver, flowRate],
+                args: [token, receiver, flowRate, userData],
             },
             onHash,
         )
