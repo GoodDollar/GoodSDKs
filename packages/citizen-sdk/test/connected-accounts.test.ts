@@ -1,12 +1,3 @@
-/**
- * Connected Accounts Flow Test
- * 
- * Purpose: Verifies that connected accounts can claim UBI via their whitelisted root.
- * Run with: yarn test:connected (from packages/citizen-sdk)
- * Required Env: MAIN_ACCOUNT, CONNECTED_ACCOUNT, NON_WHITELISTED_ACCOUNT
- * Pass: All checks for root resolution and status retrieval succeed.
- */
-
 import { describe, it, expect, beforeAll } from "vitest"
 import {
   createPublicClient,
@@ -18,8 +9,8 @@ import {
 } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { mainnet, celo } from "viem/chains"
-import { ClaimSDK } from "../viem-claim-sdk"
-import { IdentitySDK } from "../viem-identity-sdk"
+import { ClaimSDK } from "../src/sdks/viem-claim-sdk"
+import { IdentitySDK } from "../src/sdks/viem-identity-sdk"
 
 // Load and validate env vars
 const { MAIN_ACCOUNT, CONNECTED_ACCOUNT, NON_WHITELISTED_ACCOUNT } = process.env
