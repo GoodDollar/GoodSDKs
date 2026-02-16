@@ -1,4 +1,5 @@
 import { API_ENDPOINTS, FEE_MULTIPLIER, SUPPORTED_CHAINS } from "../constants"
+import { parseAmount, formatAmount } from "./decimals"
 import type {
   BridgeProtocol,
   ChainId,
@@ -35,18 +36,7 @@ export function parseNativeFee(feeString: string, chainId: ChainId): bigint {
   }
 
   const decimals = SUPPORTED_CHAINS[chainId]?.decimals || 18
-
-  // Parse the amount and convert to wei
-  const amount = parseFloat(amountStr)
-  if (isNaN(amount)) {
-    throw new Error("Invalid fee amount")
-  }
-
-  // Convert to bigint with proper decimal handling
-  const multiplier = 10 ** decimals
-  const weiAmount = BigInt(Math.floor(amount * multiplier))
-
-  return weiAmount
+  return parseAmount(amountStr, decimals)
 }
 
 /**
@@ -140,19 +130,7 @@ export function validateFeeCoverage(
  */
 export function formatFee(fee: bigint, chainId: ChainId): string {
   const decimals = SUPPORTED_CHAINS[chainId]?.decimals || 18
-  const divisor = 10n ** BigInt(decimals)
-
-  const whole = fee / divisor
-  const fractional = fee % divisor
-
-  if (fractional === 0n) {
-    return whole.toString()
-  }
-
-  const fractionalStr = fractional.toString().padStart(decimals, "0")
-  const trimmedFractional = fractionalStr.replace(/0+$/, "")
-
-  return `${whole}.${trimmedFractional}`
+  return formatAmount(fee, decimals)
 }
 
 /**

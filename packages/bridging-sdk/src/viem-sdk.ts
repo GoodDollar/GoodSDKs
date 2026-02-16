@@ -7,10 +7,7 @@ import {
   type TransactionReceipt,
   type SimulateContractParameters,
 } from "viem"
-import {
-  normalizeAmount,
-  denormalizeAmount,
-} from "./utils/decimals"
+import { normalizeAmount, denormalizeAmount } from "./utils/decimals"
 import {
   getFeeEstimate,
   validateFeeCoverage,
@@ -94,12 +91,13 @@ export class BridgingSDK {
       // Normalize amount to 18 decimals for the contract check
       const normalizedAmount = normalizeAmount(amount, this.currentChainId)
 
-      const [isWithinLimit, canBridgeError] = await this.publicClient.readContract({
-        address: contractAddress as Address,
-        abi: MESSAGE_PASSING_BRIDGE_ABI,
-        functionName: "canBridge",
-        args: [from, normalizedAmount],
-      }) as [boolean, string]
+      const [isWithinLimit, canBridgeError] =
+        (await this.publicClient.readContract({
+          address: contractAddress as Address,
+          abi: MESSAGE_PASSING_BRIDGE_ABI,
+          functionName: "canBridge",
+          args: [from, normalizedAmount],
+        })) as [boolean, string]
 
       return {
         isWithinLimit,
@@ -133,39 +131,13 @@ export class BridgingSDK {
     protocol: BridgeProtocol,
     msgValue?: bigint,
   ): Promise<TransactionReceipt> {
-    if (!this.walletClient) {
-      throw new Error("Wallet client not initialized")
-    }
-
-    // Estimate fee
-    const feeEstimate = await this.estimateFee(targetChainId, protocol)
-
-    // Validate msg.value covers the fee
-    const providedValue = msgValue || 0n
-    const feeValidation = validateFeeCoverage(providedValue, feeEstimate.fee)
-    if (!feeValidation.isValid) {
-      throw new Error(feeValidation.error)
-    }
-
-    // Get contract address
-    const contractAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
-    if (!contractAddress) {
-      throw new Error(
-        `Bridge contract not deployed on chain ${this.currentChainId}`,
-      )
-    }
-
-    // Submit bridge transaction
-    return await this.submitAndWait(
-      {
-        address: contractAddress as Address,
-        abi: MESSAGE_PASSING_BRIDGE_ABI,
-        functionName: "bridgeTo",
-        args: [target, targetChainId, amount, protocol === "LAYERZERO" ? 0 : 1],
-        value: feeEstimate.fee,
-      },
-      feeEstimate.fee,
-    )
+    return this.bridgeInternal({
+      targetChainId,
+      protocol,
+      msgValue,
+      fn: "bridgeTo",
+      args: [target, targetChainId, amount, protocol === "LAYERZERO" ? 0 : 1],
+    })
   }
 
   /**
@@ -178,39 +150,13 @@ export class BridgingSDK {
     adapterParams?: `0x${string}`,
     msgValue?: bigint,
   ): Promise<TransactionReceipt> {
-    if (!this.walletClient) {
-      throw new Error("Wallet client not initialized")
-    }
-
-    // Estimate fee for LayerZero
-    const feeEstimate = await this.estimateFee(targetChainId, "LAYERZERO")
-
-    // Validate msg.value covers the fee
-    const providedValue = msgValue || 0n
-    const feeValidation = validateFeeCoverage(providedValue, feeEstimate.fee)
-    if (!feeValidation.isValid) {
-      throw new Error(feeValidation.error)
-    }
-
-    // Get contract address
-    const contractAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
-    if (!contractAddress) {
-      throw new Error(
-        `Bridge contract not deployed on chain ${this.currentChainId}`,
-      )
-    }
-
-    // Submit bridge transaction
-    return await this.submitAndWait(
-      {
-        address: contractAddress as Address,
-        abi: MESSAGE_PASSING_BRIDGE_ABI,
-        functionName: "bridgeToWithLz",
-        args: [target, targetChainId, amount, adapterParams || "0x"],
-        value: feeEstimate.fee,
-      },
-      feeEstimate.fee,
-    )
+    return this.bridgeInternal({
+      targetChainId,
+      protocol: "LAYERZERO",
+      msgValue,
+      fn: "bridgeToWithLzAdapterParams",
+      args: [target, targetChainId, amount, adapterParams || "0x"],
+    })
   }
 
   /**
@@ -223,21 +169,40 @@ export class BridgingSDK {
     gasRefundAddress?: Address,
     msgValue?: bigint,
   ): Promise<TransactionReceipt> {
+    return this.bridgeInternal({
+      targetChainId,
+      protocol: "AXELAR",
+      msgValue,
+      fn: "bridgeToWithAxelar",
+      args: [target, targetChainId, amount],
+    })
+  }
+
+  /**
+   * Internal bridge method that handles common logic for all bridge operations
+   */
+  private async bridgeInternal<TArgs extends any[]>(opts: {
+    targetChainId: ChainId
+    protocol: BridgeProtocol
+    msgValue?: bigint
+    fn: "bridgeTo" | "bridgeToWithLzAdapterParams" | "bridgeToWithAxelar"
+    args: TArgs
+  }): Promise<TransactionReceipt> {
     if (!this.walletClient) {
       throw new Error("Wallet client not initialized")
     }
 
-    // Estimate fee for Axelar
-    const feeEstimate = await this.estimateFee(targetChainId, "AXELAR")
+    const feeEstimate = await this.estimateFee(
+      opts.targetChainId,
+      opts.protocol,
+    )
 
-    // Validate msg.value covers the fee
-    const providedValue = msgValue || 0n
+    const providedValue = opts.msgValue ?? 0n
     const feeValidation = validateFeeCoverage(providedValue, feeEstimate.fee)
     if (!feeValidation.isValid) {
       throw new Error(feeValidation.error)
     }
 
-    // Get contract address
     const contractAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
     if (!contractAddress) {
       throw new Error(
@@ -245,13 +210,12 @@ export class BridgingSDK {
       )
     }
 
-    // Submit bridge transaction
     return await this.submitAndWait(
       {
         address: contractAddress as Address,
         abi: MESSAGE_PASSING_BRIDGE_ABI,
-        functionName: "bridgeToWithAxelar",
-        args: [target, targetChainId, amount, gasRefundAddress || target],
+        functionName: opts.fn,
+        args: opts.args,
         value: feeEstimate.fee,
       },
       feeEstimate.fee,

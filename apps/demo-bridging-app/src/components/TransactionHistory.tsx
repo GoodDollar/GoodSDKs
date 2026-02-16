@@ -48,7 +48,13 @@ export function TransactionHistory() {
             data: exec,
             protocol: exec.args.bridge,
           })),
-        ].sort((a, b) => Number(b.data.blockNumber - a.data.blockNumber))
+        ].sort((a, b) =>
+          a.data.blockNumber === b.data.blockNumber
+            ? 0
+            : a.data.blockNumber < b.data.blockNumber
+              ? 1
+              : -1,
+        )
 
         setTransactions(allTransactions)
       } catch (err) {
@@ -179,7 +185,7 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-slate-400 text-sm font-medium">
-              {formatTimestamp(Number(transaction.data.blockNumber) * 1000)}
+              {formatTimestamp(Number(transaction.data.args.timestamp) * 1000)}
             </span>
           </div>
           <div className="flex items-center gap-3">
