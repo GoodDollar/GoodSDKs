@@ -456,22 +456,13 @@ export class ClaimSDK {
 
   /**
    * Redirects the user through the face-verification flow.
-   * @throws If face verification redirect is only supported in browser environments.
+   * Delegates to IdentitySDK for Farcaster-aware navigation.
    */
   private async fvRedirect(): Promise<void> {
-    const fvLink = await this.identitySDK.generateFVLink(
-      false,
+    await this.identitySDK.navigateToFaceVerification(
       this.rdu,
-      this.chainId
+      this.chainId,
     )
-
-    if (typeof window !== "undefined") {
-      window.location.href = fvLink
-    } else {
-      throw new Error(
-        "Face verification redirect is only supported in browser environments.",
-      )
-    }
   }
 
   /**

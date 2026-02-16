@@ -29,7 +29,8 @@ import {
   navigateToUrl,
   createVerificationCallbackUrl,
   createFarcasterUniversalLink,
-  isInFarcasterMiniApp
+  isInFarcasterMiniApp,
+  type FarcasterAppConfig,
 } from "../utils/auth"
 
 import type {
@@ -57,7 +58,7 @@ export interface IdentitySDKOptions {
   publicClient: PublicClient
   walletClient: WalletClient<any, Chain | undefined, Account | undefined>
   env: contractEnv
-  farcasterConfig?: { appId: string; appSlug: string }
+  farcasterConfig?: FarcasterAppConfig
 }
 
 /**
@@ -71,7 +72,7 @@ export class IdentitySDK {
   public env: contractEnv = "production"
   private readonly chainId: SupportedChains
   private readonly fvDefaultChain: SupportedChains
-  private readonly farcasterConfig?: { appId: string; appSlug: string }
+  private readonly farcasterConfig?: FarcasterAppConfig
 
   /**
    * Initializes the IdentitySDK.
@@ -294,6 +295,23 @@ export class IdentitySDK {
         `Failed to generate Face Verification link: ${error.message}`,
       )
     }
+  }
+
+  /**
+   * Navigates the user to Face Verification.
+   * In Farcaster Mini App context, uses `sdk.actions.openUrl` to open a new browser tab.
+   * In regular browsers, falls back to `window.location.href`.
+   * @param callbackUrl - The URL to return to after verification.
+   * @param chainId - The blockchain network ID.
+   * @param popupMode - Whether to use popup mode.
+   */
+  async navigateToFaceVerification(
+    callbackUrl: string,
+    chainId?: number,
+    popupMode = false,
+  ): Promise<void> {
+    const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
+    await navigateToUrl(fvLink, false)
   }
 
   /**

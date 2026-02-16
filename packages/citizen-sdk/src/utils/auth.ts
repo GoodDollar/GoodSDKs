@@ -66,8 +66,9 @@ export async function navigateToUrl(url: string, fallbackToNewTab = true): Promi
 
 
 export interface FarcasterAppConfig {
-  appId: string;
-  appSlug: string;
+  domain: string;
+  appId?: string;
+  appSlug?: string;
 }
 
 export function createFarcasterUniversalLink(
@@ -75,22 +76,30 @@ export function createFarcasterUniversalLink(
   subPath?: string,
   queryParams?: Record<string, string>
 ): string {
-  let universalLink = `https://farcaster.xyz/miniapps/${config.appId}/${config.appSlug}`;
+  const hasUniversalLinkConfig = config.appId && config.appSlug;
 
-  if (subPath) {
-    const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
-    universalLink += `/${cleanSubPath}`;
+  let baseUrl: string;
+
+  if (hasUniversalLinkConfig) {
+    baseUrl = `https://farcaster.xyz/miniapps/${config.appId}/${config.appSlug}`;
+    if (subPath) {
+      const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
+      baseUrl += `/${cleanSubPath}`;
+    }
+  } else {
+    baseUrl = `https://farcaster.xyz/~/mini-apps/launch`;
+    queryParams = { domain: config.domain, ...queryParams };
   }
 
   if (queryParams && Object.keys(queryParams).length > 0) {
-    const urlObj = new URL(universalLink);
+    const urlObj = new URL(baseUrl);
     Object.entries(queryParams).forEach(([key, value]) => {
       urlObj.searchParams.set(key, value);
     });
-    universalLink = urlObj.toString();
+    return urlObj.toString();
   }
 
-  return universalLink;
+  return baseUrl;
 }
 
 /**

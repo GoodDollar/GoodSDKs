@@ -17,13 +17,10 @@ export const VerifyButton: React.FC<VerifyButtonProps> = ({
     if (!identitySDK || !address) return
 
     try {
-      const fvLink = await identitySDK.generateFVLink(
-        false,
+      await identitySDK.navigateToFaceVerification(
         window.location.href,
         42220,
       )
-
-      window.location.href = fvLink
     } catch (error) {
       console.error("Verification failed:", error)
     }
