@@ -6,13 +6,16 @@ import "@openzeppelin/hardhat-upgrades"
 import "@typechain/hardhat"
 import dotenv from "dotenv"
 import { ethers } from "ethers"
+import * as envEnc from "@chainlink/env-enc"
+
+envEnc.config({ path: "~/.env.enc" })
 dotenv.config()
 
 const mnemonic =
   process.env.MNEMONIC ||
   "test test test test test test test test test test test junk"
 const deployerPrivateKey =
-  process.env.PRIVATE_KEY || ethers.zeroPadBytes("0x11", 32)
+  process.env.DEPLOYER_KEY || ethers.zeroPadBytes("0x11", 32)
 const etherscan_key = process.env.ETHERSCAN_KEY
 const celoscan_key = process.env.CELOSCAN_KEY || ""
 
@@ -31,9 +34,7 @@ const config: HardhatUserConfig = {
     enabled: true,
   },
   etherscan: {
-    apiKey: {
-      celo: celoscan_key,
-    },
+    apiKey: etherscan_key,
     customChains: [
       {
         network: "celo",
@@ -59,7 +60,7 @@ const config: HardhatUserConfig = {
       accounts: [deployerPrivateKey],
       url: "https://forno.celo.org",
       gas: 8000000,
-      gasPrice: 5000000000,
+      gasPrice: 25.1e9,
       chainId: 42220,
     },
     "development-celo": {

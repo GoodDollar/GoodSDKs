@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useMemo } from "react"
 import { useParams } from "react-router-dom"
 import { useAccount } from "wagmi"
 import {
+  RewardEventExtended,
   useEngagementRewards,
-  type RewardEvent,
 } from "@goodsdks/engagement-sdk"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import {
@@ -18,12 +18,36 @@ import { formatEther } from "viem"
 import { Loader2 } from "lucide-react"
 import env from "@/env"
 import { TruncatedAddress } from "./ui/TruncatedAddress"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts"
+
+const BLOCKS_PER_DAY = 60 * 60 * 24 // 1 second per block
+const NEW_USER_THRESHOLD = BLOCKS_PER_DAY // 1 day in blocks
+
+interface DailyStats {
+  day: string
+  dayIndex: number
+  totalClaims: number
+  newUsers: number
+  existingUsers: number
+}
 
 const AppDetailsPage: React.FC = () => {
   const { appAddress } = useParams<{ appAddress: string }>()
   const { isConnected } = useAccount()
-  const engagementRewards = useEngagementRewards(env.rewardsContract)
+  const engagementRewards = useEngagementRewards(env.rewardsContract, {
+    debug: false,
+  })
   const [loading, setLoading] = useState(true)
+  const [latestBlock, setLatestBlock] = useState<bigint>(0n)
   const [rewards, setRewards] = useState<{
     totalRewards: bigint
     appRewards: bigint
@@ -31,14 +55,24 @@ const AppDetailsPage: React.FC = () => {
     inviterRewards: bigint
     rewardEventCount: number
   }>()
-  const [events, setEvents] = useState<RewardEvent[]>([])
+  const [events, setEvents] = useState<RewardEventExtended[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
       if (!engagementRewards || !appAddress) return
+      const currentBlock = await engagementRewards.getCurrentBlockNumber()
+      setLatestBlock(currentBlock)
+
       const [rewardsData, eventsData] = await Promise.all([
         engagementRewards.getAppRewards(appAddress as `0x${string}`),
-        engagementRewards.getAppRewardEvents(appAddress as `0x${string}`),
+        engagementRewards.getAppRewardEventsExtended(
+          appAddress as `0x${string}`,
+          {
+            identityContractAddress:
+              "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42",
+            blocksAgo: 1_200_000n,
+          },
+        ),
       ])
       setRewards(rewardsData)
       setEvents(eventsData)
@@ -49,6 +83,65 @@ const AppDetailsPage: React.FC = () => {
       fetchData()
     }
   }, [isConnected, appAddress, !!engagementRewards])
+
+  const currentTimestamp = Number((Date.now() / 1000).toFixed(0))
+  const isNewUser = (event: RewardEventExtended): boolean => {
+    if (!latestBlock || !event.userDateAdded) return false
+    const eventTimestamp =
+      BigInt(currentTimestamp) - (latestBlock - event.block)
+    const blocksSinceDateAdded = Number(eventTimestamp - event.userDateAdded)
+    return blocksSinceDateAdded < NEW_USER_THRESHOLD
+  }
+  // Calculate daily stats
+  const dailyStats = useMemo<DailyStats[]>(() => {
+    if (!latestBlock || events.length === 0) return []
+    // Group events by day
+    const dayMap = new Map<number, RewardEventExtended[]>()
+
+    events.forEach((event) => {
+      const blocksDiff = Number(latestBlock - event.block)
+      const dayIndex = Math.floor(blocksDiff / BLOCKS_PER_DAY)
+      if (!dayMap.has(dayIndex)) {
+        dayMap.set(dayIndex, [])
+      }
+      dayMap.get(dayIndex)!.push(event)
+    })
+
+    // Calculate stats for each day
+    const stats: DailyStats[] = []
+    Array.from(dayMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .forEach(([dayIndex, dayEvents]) => {
+        let newUsers = 0
+        let existingUsers = 0
+
+        dayEvents.forEach((event) => {
+          if (isNewUser(event)) {
+            newUsers++
+          } else {
+            existingUsers++
+          }
+        })
+
+        const daysAgo = dayIndex
+        const date = new Date()
+        date.setDate(date.getDate() - daysAgo)
+        const dayLabel = date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        })
+
+        stats.push({
+          day: dayLabel,
+          dayIndex,
+          totalClaims: dayEvents.length,
+          newUsers,
+          existingUsers,
+        })
+      })
+
+    return stats
+  }, [latestBlock, events.length])
 
   if (!isConnected) {
     return (
@@ -124,6 +217,47 @@ const AppDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
+      {dailyStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Daily Claims Analysis</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={dailyStats}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar
+                  dataKey="newUsers"
+                  stackId="a"
+                  fill="#3b82f6"
+                  name="New Users"
+                />
+                <Bar
+                  dataKey="existingUsers"
+                  stackId="a"
+                  fill="#10b981"
+                  name="Existing Users"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="mt-4 text-sm text-muted-foreground">
+              <p>
+                • <span className="text-blue-500">New Users</span>: Verified
+                within 1 day of claiming
+              </p>
+              <p>
+                • <span className="text-green-500">Existing Users</span>:
+                Verified more than 1 day before claiming
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Recent Reward Events</CardTitle>
@@ -138,23 +272,38 @@ const AppDetailsPage: React.FC = () => {
                 <TableHead>App Reward</TableHead>
                 <TableHead>User Amount</TableHead>
                 <TableHead>Inviter Amount</TableHead>
+                <TableHead>User Type</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {events.map((event, index) => (
-                <TableRow key={index}>
-                  <TableCell>{event.block.toString()}</TableCell>
-                  <TableCell>
-                    <TruncatedAddress address={event.user} />
-                  </TableCell>
-                  <TableCell>
-                    <TruncatedAddress address={event.inviter} />
-                  </TableCell>
-                  <TableCell>{formatEther(event.appReward)} G$</TableCell>
-                  <TableCell>{formatEther(event.userAmount)} G$</TableCell>
-                  <TableCell>{formatEther(event.inviterAmount)} G$</TableCell>
-                </TableRow>
-              ))}
+              {events.slice(-500).map((event, index) => {
+                const userType = isNewUser(event) ? "New" : "Existing"
+                return (
+                  <TableRow key={index}>
+                    <TableCell>{event.block.toString()}</TableCell>
+                    <TableCell>
+                      <TruncatedAddress address={event.user} />
+                    </TableCell>
+                    <TableCell>
+                      <TruncatedAddress address={event.inviter} />
+                    </TableCell>
+                    <TableCell>{formatEther(event.appReward)} G$</TableCell>
+                    <TableCell>{formatEther(event.userAmount)} G$</TableCell>
+                    <TableCell>{formatEther(event.inviterAmount)} G$</TableCell>
+                    <TableCell>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${
+                          userType === "New"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-green-100 text-green-800"
+                        }`}
+                      >
+                        {userType}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </CardContent>

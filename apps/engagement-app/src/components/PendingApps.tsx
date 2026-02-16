@@ -18,6 +18,7 @@ import env from "@/env"
 import { useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { TruncatedAddress } from "./ui/TruncatedAddress"
+import { Address } from "viem"
 
 // Derive AppInfo type from EngagementRewardsSDK type
 export type AppInfo = Awaited<
@@ -31,22 +32,44 @@ const PendingAppsPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
 
   const [pendingApps, setPendingApps] = useState<Array<AppInfo>>([])
+  const [processingDelete, setProcessingDelete] = useState<string | null>(null)
+
+  const fetchPendingApps = async () => {
+    if (!engagementRewards) return
+    setLoading(true)
+    const apps = await engagementRewards.getPendingApps()
+    setPendingApps(apps)
+    setLoading(false)
+  }
 
   useEffect(() => {
-    const fetchPendingApps = async () => {
-      if (!engagementRewards) return
-      const apps = await engagementRewards.getPendingApps()
-      setPendingApps(apps)
-      setLoading(false)
-    }
-
     if (isConnected) {
       fetchPendingApps()
+    } else {
+      setPendingApps([])
+      setLoading(false)
     }
   }, [isConnected, !!engagementRewards])
 
   const handleApprove = async (app: string) => {
     navigate(`/approve/${app}`)
+  }
+
+  const handleDelete = async (app: string) => {
+    if (!engagementRewards) return
+    const ok = window.confirm(
+      "Delete this pending app? This action cannot be undone.",
+    )
+    if (!ok) return
+    try {
+      setProcessingDelete(app)
+      await engagementRewards.deletePendingApp(app as Address)
+      await fetchPendingApps()
+    } catch (err) {
+      console.error("failed to delete pending app", err)
+    } finally {
+      setProcessingDelete(null)
+    }
   }
 
   if (!isConnected) {
@@ -128,9 +151,18 @@ const PendingAppsPage: React.FC = () => {
                   </a>
                 </TableCell>
                 <TableCell>
-                  <Button onClick={() => handleApprove(app.app)}>
-                    Approve
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={() => handleApprove(app.app)}>
+                      Approve
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDelete(app.app)}
+                      disabled={processingDelete !== null}
+                    >
+                      {processingDelete === app.app ? "Deleting…" : "Delete"}
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

@@ -1,7 +1,7 @@
 export const DEFAULT_EVENT_BATCH_SIZE = 10_000n
-export const DEFAULT_EVENT_LOOKBACK = 500_000n
+export const DEFAULT_EVENT_LOOKBACK = 60n * 60n * 24n * 30n
 export const WAIT_DELAY = 5000 // 1 second delay
-export const LOG_BATCH_CONCURRENCY_LIMIT = 5
+export const LOG_BATCH_CONCURRENCY_LIMIT = 3
 
 export interface BlockRange {
   from: bigint
@@ -28,6 +28,7 @@ export async function promisePool<T>(
       const currentIndex = nextIndex++
       if (currentIndex >= tasks.length) break
       results[currentIndex] = await tasks[currentIndex]()
+      await new Promise((resolve) => setTimeout(resolve, 200))
     }
   }
 
@@ -87,15 +88,30 @@ export async function fetchInBlockBatches<T>({
   const ranges = createBlockRanges({ batchSize, fromBlock, toBlock })
   if (ranges.length === 0) return []
 
+  const MAX_RETRIES = 3
+  const INITIAL_BACKOFF_MS = 1000
+
   const tasks = ranges.map((range) => async () => {
-    try {
-      return await promiseCreator(range.from, range.to)
-    } catch (error) {
-      if (onBatchFailure) {
-        onBatchFailure(error, range)
+    let lastError: unknown
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await promiseCreator(range.from, range.to)
+      } catch (error) {
+        lastError = error
+        if (attempt < MAX_RETRIES) {
+          // Calculate exponential backoff: 1s, 2s, 4s
+          const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt)
+          await new Promise((resolve) => setTimeout(resolve, backoffMs))
+        }
       }
-      return [] as T[]
     }
+
+    // Call onBatchFailure only after all retries are exhausted
+    if (onBatchFailure) {
+      onBatchFailure(lastError, range)
+    }
+    return [] as T[]
   })
 
   const results = await promisePool(tasks, concurrency)
