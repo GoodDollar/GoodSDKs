@@ -165,15 +165,6 @@ export class ClaimSDK {
     return this.chainId
   }
 
-  /**
-   * Resolves the main whitelisted address for this account.
-   * Useful for connected accounts to claim on behalf of their root address.
-   * Returns the root address even if it is zeroAddress (for non-whitelisted accounts).
-   */
-  private async getWhitelistedRootAddress(): Promise<Address> {
-    const { root } = await this.identitySDK.getWhitelistedRoot(this.account)
-    return root
-  }
 
   private async readChainEntitlement(
     chainId: SupportedChains,
@@ -195,9 +186,8 @@ export class ClaimSDK {
       altClient = resolvedClient
     }
 
-    // Use whitelisted root address for entitlement check
-    // This enables connected accounts to claim on behalf of their main account
-    const rootAddress = await this.getWhitelistedRootAddress()
+    const { root: rootAddress } =
+      await this.identitySDK.getWhitelistedRoot(this.account)
 
     return this.readContract<bigint>(
       {
