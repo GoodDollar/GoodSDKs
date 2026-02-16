@@ -2,10 +2,11 @@ import { useState, useEffect } from "react"
 import { usePublicClient, useWalletClient } from "wagmi"
 import { PublicClient } from "viem"
 
-import { contractEnv, IdentitySDK } from "@goodsdks/citizen-sdk"
+import { contractEnv, IdentitySDK, FarcasterAppConfig } from "@goodsdks/citizen-sdk"
 
 export const useIdentitySDK = (
   env: contractEnv = "production",
+  farcasterConfig?: FarcasterAppConfig,
 ): {
   sdk: IdentitySDK | null
   loading: boolean
@@ -26,7 +27,7 @@ export const useIdentitySDK = (
     }
 
     setLoading(true)
-    IdentitySDK.init({ publicClient, walletClient, env })
+    IdentitySDK.init({ publicClient, walletClient, env, farcasterConfig })
       .then((instance) => {
         setSdk(instance)
         setError(null)
@@ -36,7 +37,7 @@ export const useIdentitySDK = (
         setError(err instanceof Error ? err.message : String(err))
       })
       .finally(() => setLoading(false))
-  }, [publicClient, walletClient, env])
+  }, [publicClient, walletClient, env, farcasterConfig])
 
   return { sdk, loading, error }
 }

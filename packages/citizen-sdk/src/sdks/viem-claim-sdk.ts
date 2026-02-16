@@ -7,6 +7,7 @@ import {
   type WalletClient,
   ContractFunctionExecutionError,
   TransactionReceipt,
+  zeroAddress,
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
@@ -82,7 +83,7 @@ export class ClaimSDK {
   private readonly faucetAddress: Address
   private readonly account: Address
   private readonly env: contractEnv
-  public readonly rdu: string
+  public rdu: string
 
   constructor({
     account,
@@ -99,9 +100,12 @@ export class ClaimSDK {
     this.walletClient = walletClient
     this.identitySDK = identitySDK
     this.account = account ?? walletClient.account.address
+    this.env = env
 
     this.rdu = rdu
-    this.env = env
+    this.identitySDK.resolveCallbackUrl(rdu, 'claim').then(
+      (resolvedUrl) => { this.rdu = resolvedUrl },
+    ).catch(() => {})
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
       walletClient,
@@ -141,6 +145,7 @@ export class ClaimSDK {
     this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
     this.faucetAddress = contractEnvAddresses.faucetContract as Address
   }
+
 
   private getContractsForChain(chainId: SupportedChains): ContractAddresses {
     const contracts = this.chainContracts.get(chainId)
@@ -451,22 +456,13 @@ export class ClaimSDK {
 
   /**
    * Redirects the user through the face-verification flow.
-   * @throws If face verification redirect fails.
+   * Delegates to IdentitySDK for Farcaster-aware navigation.
    */
   private async fvRedirect(): Promise<void> {
-    const fvChainId = this.fvDefaultChain ?? this.chainId
-    const fvLink = await this.identitySDK.generateFVLink(
-      false,
+    await this.identitySDK.navigateToFaceVerification(
       this.rdu,
-      fvChainId,
+      this.chainId,
     )
-    if (typeof window !== "undefined") {
-      window.location.href = fvLink
-    } else {
-      throw new Error(
-        "Face verification redirect is only supported in browser environments.",
-      )
-    }
   }
 
   /**

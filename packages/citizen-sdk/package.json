@@ -25,12 +25,14 @@
     "src"
   ],
   "devDependencies": {
+    "@farcaster/miniapp-sdk": "^0.1.8",
     "@repo/typescript-config": "workspace:*",
     "typescript": "latest",
     "viem": "latest",
     "wagmi": "latest"
   },
   "peerDependencies": {
+    "@farcaster/miniapp-sdk": "^0.1.8",
     "viem": "*",
     "wagmi": "*"
   },
