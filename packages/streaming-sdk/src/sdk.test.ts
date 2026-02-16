@@ -20,13 +20,13 @@ const createMockPublicClient = (chainId: number = SupportedChains.CELO) => ({
     chain: { id: chainId, name: "Celo" },
     simulateContract: vi.fn().mockResolvedValue({ request: {} }),
     waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: "success" }),
-})
+} as any)
 
 const createMockWalletClient = (chainId: number = SupportedChains.CELO) => ({
     chain: { id: chainId },
     getAddresses: vi.fn().mockResolvedValue(["0x0000000000000000000000000000000000000001"]),
     writeContract: vi.fn().mockResolvedValue("0xhash"),
-})
+} as any)
 
 const TEST_SUPERTOKEN = getG$Token(SupportedChains.CELO) as Address
 

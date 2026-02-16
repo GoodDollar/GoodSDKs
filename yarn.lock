@@ -2106,7 +2106,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
+"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/citizen-sdk@workspace:packages/citizen-sdk"
   dependencies:
@@ -2225,7 +2225,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
+"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
   dependencies:
@@ -2274,7 +2274,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/streaming-sdk@npm:*, @goodsdks/streaming-sdk@workspace:*, @goodsdks/streaming-sdk@workspace:packages/streaming-sdk":
+"@goodsdks/streaming-sdk@workspace:*, @goodsdks/streaming-sdk@workspace:packages/streaming-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/streaming-sdk@workspace:packages/streaming-sdk"
   dependencies:
@@ -10772,9 +10772,9 @@ __metadata:
   resolution: "demo-identity-app@workspace:apps/demo-identity-app"
   dependencies:
     "@eslint/js": "npm:8.57.0"
-    "@goodsdks/citizen-sdk": "npm:*"
-    "@goodsdks/react-hooks": "npm:*"
-    "@goodsdks/streaming-sdk": "npm:*"
+    "@goodsdks/citizen-sdk": "workspace:*"
+    "@goodsdks/react-hooks": "workspace:*"
+    "@goodsdks/streaming-sdk": "workspace:*"
     "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
     "@reown/appkit-wallet": "npm:^1.7.2"

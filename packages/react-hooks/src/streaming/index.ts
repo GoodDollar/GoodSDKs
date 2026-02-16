@@ -180,6 +180,7 @@ export function useStreamList({
     enabled = true,
 }: UseStreamListParams) {
     const sdks = useStreamingSdks()
+    const publicClient = usePublicClient()
 
     return useQuery<StreamInfo[]>({
         queryKey: ["streams", account, direction, environment, publicClient?.chain?.id],
