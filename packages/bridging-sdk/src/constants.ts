@@ -6,44 +6,40 @@ export const SUPPORTED_CHAINS: Record<number, BridgeChain> = {
     id: 42220,
     name: "Celo",
     decimals: 18,
-    tokenAddress: //"0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A"//, // gitleaks:allow
+    tokenAddress: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A", // gitleaks:allow
     nativeCurrency: {
       name: "Celo",
       symbol: "CELO",
-      decimals: 18,
     },
   },
   122: {
     id: 122,
     name: "Fuse",
     decimals: 2,
-    tokenAddress: //"0x495d133B938596C9984d462F007B676bDc57eCEC", // gitleaks:allow
+    tokenAddress: "0x495d133B938596C9984d462F007B676bDc57eCEC", // gitleaks:allow
     nativeCurrency: {
       name: "Fuse",
       symbol: "FUSE",
-      decimals: 18,
     },
   },
   1: {
     id: 1,
     name: "Ethereum",
     decimals: 2,
-    tokenAddress: //"0x67C5870b4A41D4Ebef24d2456547A03F1f3e094B", // gitleaks:allow
+    tokenAddress: "0x67C5870b4A41D4Ebef24d2456547A03F1f3e094B", // gitleaks:allow
     nativeCurrency: {
       name: "Ethereum",
       symbol: "ETH",
-      decimals: 18,
     },
   },
   50: {
     id: 50,
     name: "XDC",
     decimals: 18,
-    tokenAddress: //"0xA13625A72Aef90645CfCe34e25c114629d7855e7", // gitleaks:allow
+    tokenAddress: "0xA13625A72Aef90645CfCe34e25c114629d7855e7", // gitleaks:allow
     nativeCurrency: {
       name: "XDC Network",
       symbol: "XDC",
-      decimals: 18,
     },
   },
 }
