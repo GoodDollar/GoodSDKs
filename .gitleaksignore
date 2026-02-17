@@ -1,0 +1,6 @@
+# Ignore blockchain addresses in documentation
+# These are public contract addresses, not secrets
+apps/demo-streaming-app/README.md:0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A
+packages/streaming-sdk/README.md:0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A
+packages/streaming-sdk/README.md:0x61FA0fB802fd8345C06da558240E0651886fec69
+packages/streaming-sdk/README.md:0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475
