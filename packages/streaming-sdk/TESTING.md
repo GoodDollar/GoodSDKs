@@ -207,20 +207,6 @@ console.log('All exports loaded successfully')
 
 ---
 
-### 6. **Test on Testnet (Safe Testing)**
-
-Before mainnet, test on Celo Alfajores testnet:
-
-1. Get testnet CELO from faucet
-2. Wrap to SuperToken
-3. Test stream creation with small amounts
-
-```typescript
-const sdk = new StreamingSDK(publicClient, walletClient, {
-  chainId: 44787, // Alfajores testnet
-  environment: 'development'
-})
-```
 
 ---
 
@@ -273,7 +259,7 @@ function StreamingComponent() {
 ### Phase 3: Integration Testing (30 minutes)
 1. Add to existing app
 2. Test read operations (no wallet needed)
-3. Test with wallet on testnet
+3. Test with wallet on a supported network
 4. Create a test stream with small amount
 
 ### Phase 4: Production Testing (Careful!)

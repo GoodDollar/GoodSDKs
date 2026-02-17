@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { type Address, type Hash } from "viem"
+import { type Address, type Hash, type WalletClient } from "viem"
 import { usePublicClient, useWalletClient } from "wagmi"
 import {
     StreamingSDK,
@@ -12,6 +12,9 @@ import {
     type PoolMembership,
     type SUPReserveLocker,
     type Environment,
+    type CreateStreamParams,
+    type UpdateStreamParams,
+    type DeleteStreamParams,
 } from "@goodsdks/streaming-sdk"
 
 /**
@@ -19,15 +22,14 @@ import {
  */
 export interface UseCreateStreamParams {
     receiver: Address
-    token: Address
+    token?: Address
     flowRate: bigint
-    userData?: `0x${string}`
     environment?: Environment
 }
 
 export interface UseUpdateStreamParams {
     receiver: Address
-    token: Address
+    token?: Address
     newFlowRate: bigint
     userData?: `0x${string}`
     environment?: Environment
@@ -35,7 +37,7 @@ export interface UseUpdateStreamParams {
 
 export interface UseDeleteStreamParams {
     receiver: Address
-    token: Address
+    token?: Address
     environment?: Environment
 }
 
@@ -90,7 +92,7 @@ function useStreamingSdks() {
                     env,
                     new StreamingSDK(
                         publicClient,
-                        walletClient ? (walletClient as any) : undefined,
+                        walletClient ? (walletClient as WalletClient) : undefined,
                         { environment: env }
                     )
                 )
@@ -118,12 +120,11 @@ export function useCreateStream() {
             receiver,
             token,
             flowRate,
-            userData = "0x",
             environment = "production",
         }: UseCreateStreamParams): Promise<Hash> => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.createStream({ receiver, token, flowRate, userData })
+            return sdk.createStream({ receiver, token, flowRate })
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["streams"] })
@@ -244,7 +245,7 @@ export function useConnectToPool() {
         }: UseConnectToPoolParams): Promise<Hash> => {
             if (!publicClient) throw new Error("Public client not available")
             if (!walletClient) throw new Error("Wallet client not available")
-            const sdk = new GdaSDK(publicClient, walletClient as any)
+            const sdk = new GdaSDK(publicClient, walletClient as WalletClient)
             return sdk.connectToPool({ poolAddress, userData })
         },
         onSuccess: () => {
@@ -266,7 +267,7 @@ export function useDisconnectFromPool() {
         }: UseDisconnectFromPoolParams): Promise<Hash> => {
             if (!publicClient) throw new Error("Public client not available")
             if (!walletClient) throw new Error("Wallet client not available")
-            const sdk = new GdaSDK(publicClient, walletClient as any)
+            const sdk = new GdaSDK(publicClient, walletClient as WalletClient)
             return sdk.disconnectFromPool({ poolAddress, userData })
         },
         onSuccess: () => {

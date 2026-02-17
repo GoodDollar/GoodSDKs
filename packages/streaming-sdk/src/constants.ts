@@ -5,7 +5,6 @@ import { cfaForwarderAddress, gdaForwarderAddress } from "@sfpro/sdk/abi"
 // Network definitions
 export enum SupportedChains {
     CELO = 42220,
-    CELO_ALFAJORES = 44787,
     BASE = 8453,
     BASE_SEPOLIA = 84532,
 }
@@ -31,7 +30,6 @@ export function getG$Token(
             [SupportedChains.CELO]: "0x61FA0fB802fd8345C06da558240E0651886fec69",
         },
         development: {
-            [SupportedChains.CELO_ALFAJORES]: "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475",
             [SupportedChains.CELO]: "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475", // Fallback for local testing
         },
     }
@@ -42,8 +40,6 @@ export function getG$Token(
 // Protocol indexers
 export const SUBGRAPH_URLS: Record<number | string, string> = {
     [SupportedChains.CELO]: "https://celo-mainnet.subgraph.x.superfluid.dev/",
-    [SupportedChains.CELO_ALFAJORES]:
-        "https://celo-alfajores.subgraph.x.superfluid.dev/",
     [SupportedChains.BASE]: "https://base-mainnet.subgraph.x.superfluid.dev/",
     [SupportedChains.BASE_SEPOLIA]:
         "https://base-sepolia.subgraph.x.superfluid.dev/",
@@ -69,12 +65,6 @@ export const CHAIN_CONFIGS: Record<SupportedChains, ChainConfig> = {
         name: "Celo",
         rpcUrls: ["https://forno.celo.org"],
         explorer: "https://celoscan.io",
-    },
-    [SupportedChains.CELO_ALFAJORES]: {
-        id: SupportedChains.CELO_ALFAJORES,
-        name: "Celo Alfajores",
-        rpcUrls: ["https://alfajores-forno.celo-testnet.org"],
-        explorer: "https://alfajores.celoscan.io",
     },
     [SupportedChains.BASE]: {
         id: SupportedChains.BASE,

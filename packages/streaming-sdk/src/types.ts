@@ -20,15 +20,14 @@ export interface StreamInfo {
 
 export interface CreateStreamParams {
   receiver: Address
-  token: Address
+  token?: Address
   flowRate: bigint
-  userData?: `0x${string}`
   onHash?: (hash: Hash) => void
 }
 
 export interface UpdateStreamParams {
   receiver: Address
-  token: Address
+  token?: Address
   newFlowRate: bigint
   userData?: `0x${string}`
   onHash?: (hash: Hash) => void
@@ -36,7 +35,7 @@ export interface UpdateStreamParams {
 
 export interface DeleteStreamParams {
   receiver: Address
-  token: Address
+  token?: Address
   onHash?: (hash: Hash) => void
 }
 

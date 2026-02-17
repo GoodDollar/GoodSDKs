@@ -31,17 +31,16 @@ const walletClient = createWalletClient({
   transport: http()
 })
 
-// Create SDK instance
+// Create SDK instance with environment - G$ token is auto-resolved!
 const streamingSDK = new StreamingSDK(publicClient, walletClient, {
-  chainId: 42220, // Celo
-  environment: 'production'
+  environment: 'production' // SDK automatically uses the correct G$ token
 })
 
-// Create a stream (100 G$ per month)
+// Create a stream (100 G$ per month) - No token parameter needed!
 const flowRate = calculateFlowRate(parseEther('100'), 'month')
 const hash = await streamingSDK.createStream({
   receiver: '0x...',
-  token: '<G$_TOKEN_ADDRESS>', // replace with your G$ SuperToken address for the chosen network
+  // Token is automatically resolved based on environment
   flowRate,
   onHash: (hash) => console.log('Transaction:', hash)
 })
@@ -76,7 +75,6 @@ Create a new stream.
 ```typescript
 const hash = await streamingSDK.createStream({
   receiver: '0x...',
-  token: '0x...',
   flowRate: BigInt('1000000000000000'), // wei per second
   onHash: (hash) => console.log(hash)
 })
@@ -89,7 +87,6 @@ Update an existing stream's flow rate.
 ```typescript
 const hash = await streamingSDK.updateStream({
   receiver: '0x...',
-  token: '0x...',
   newFlowRate: BigInt('2000000000000000')
 })
 ```
@@ -100,8 +97,7 @@ Delete a stream.
 
 ```typescript
 const hash = await streamingSDK.deleteStream({
-  receiver: '0x...',
-  token: '0x...'
+  receiver: '0x...'
 })
 ```
 
@@ -250,9 +246,36 @@ const sdk = new StreamingSDK(publicClient, walletClient, {
 
 | Environment | Celo G$ Address |
 |-------------|-----------------|
-| production  | `<G$_TOKEN_ADDRESS_PRODUCTION>` |
+| production  | `0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A` |
 | staging     | `0x61FA0fB802fd8345C06da558240E0651886fec69` |
 | development | `0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475` |
+
+## Token Auto-Resolution
+
+**The SDK automatically resolves the G$ token address** based on your selected environment and chain. You don't need to specify the token parameter in stream operations:
+
+```typescript
+// Simplified API - token is auto-resolved
+await sdk.createStream({
+  receiver: '0x...',
+  flowRate: calculateFlowRate(parseEther('100'), 'month')
+})
+```
+
+**Advanced Usage:** If you need to use a custom token (not G$), you can still provide it explicitly:
+
+```typescript
+// Advanced: Using a custom SuperToken
+await sdk.createStream({
+  receiver: '0x...',
+  token: '0xCustomSuperTokenAddress',
+  flowRate: calculateFlowRate(parseEther('100'), 'month')
+})
+```
+
+**Error Handling:** If G$ is not available for your chain/environment combination (e.g., Base network), you'll get a clear error message prompting you to either:
+- Switch to a supported chain (Celo)
+- Provide a custom token address explicitly
 
 ## Supported Chains
 
@@ -322,27 +345,26 @@ try {
 import { StreamingSDK, calculateFlowRate } from '@goodsdks/streaming-sdk'
 import { parseEther } from 'viem'
 
-const sdk = new StreamingSDK(publicClient, walletClient)
+const sdk = new StreamingSDK(publicClient, walletClient, {
+  environment: 'production'
+})
 
-// Create stream
+// Create stream - token auto-resolved
 const flowRate = calculateFlowRate(parseEther('100'), 'month')
 await sdk.createStream({
   receiver: '0xReceiverAddress',
-  token: '0xG$Address',
   flowRate
 })
 
 // Update stream
 await sdk.updateStream({
   receiver: '0xReceiverAddress',
-  token: '0xG$Address',
   newFlowRate: calculateFlowRate(parseEther('200'), 'month')
 })
 
 // Delete stream
 await sdk.deleteStream({
-  receiver: '0xReceiverAddress',
-  token: '0xG$Address'
+  receiver: '0xReceiverAddress'
 })
 ```
 

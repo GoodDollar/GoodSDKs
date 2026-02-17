@@ -6,15 +6,12 @@ import {
 } from "./constants"
 import { Environment } from "./types"
 
-/**
- * Chain utilities
- */
+// Chain utilities
 export function isSupportedChain(
     chainId: number | undefined,
 ): chainId is SupportedChains {
     return (
         chainId === SupportedChains.CELO ||
-        chainId === SupportedChains.CELO_ALFAJORES ||
         chainId === SupportedChains.BASE ||
         chainId === SupportedChains.BASE_SEPOLIA
     )
@@ -23,7 +20,7 @@ export function isSupportedChain(
 export function validateChain(chainId: number | undefined): SupportedChains {
     if (!isSupportedChain(chainId)) {
         throw new Error(
-            `Unsupported chain ID: ${chainId}. Supported chains: Celo (42220), Alfajores (44787), Base (8453), Base Sepolia (84532)`,
+            `Unsupported chain ID: ${chainId}. Supported chains: Celo (42220), Base (8453), Base Sepolia (84532)`,
         )
     }
     return chainId
@@ -54,9 +51,7 @@ export function getChainConfig(chainId: SupportedChains) {
     return CHAIN_CONFIGS[chainId]
 }
 
-/**
- * Flow rate conversion utilities
- */
+// Flow rate conversion utilities
 export type TimeUnit = "second" | "minute" | "hour" | "day" | "week" | "month" | "year"
 
 const TIME_UNITS_IN_SECONDS: Record<TimeUnit, number> = {

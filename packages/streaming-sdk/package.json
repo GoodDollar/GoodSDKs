@@ -7,7 +7,9 @@
     "dev": "tsc --watch",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "lint": "echo 'No linting configured for SDK packages'",
+    "check-types": "tsc --noEmit"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

@@ -26,6 +26,7 @@ export class StreamingSDK {
     private environment: Environment
     private subgraphClient: SubgraphClient
     private cfaForwarder: Address
+    private defaultToken: Address | undefined
 
     constructor(
         publicClient: PublicClient,
@@ -49,6 +50,9 @@ export class StreamingSDK {
             throw new Error(`CFA Forwarder address not found for chain ID: ${this.chainId}`)
         }
 
+        // resolve default token
+        this.defaultToken = getG$Token(this.chainId, this.environment)
+
         if (walletClient) {
             this.setWalletClient(walletClient)
         }
@@ -69,10 +73,19 @@ export class StreamingSDK {
     }
 
     async createStream(params: CreateStreamParams): Promise<Hash> {
-        const { receiver, token, flowRate, userData = "0x", onHash } = params
+        const { receiver, token, flowRate, onHash } = params
 
         if (flowRate <= BigInt(0)) {
             throw new Error("Flow rate must be greater than zero")
+        }
+
+        // resolve token
+        const resolvedToken = token ?? this.defaultToken
+        if (!resolvedToken) {
+            throw new Error(
+                `G$ token not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide a token address explicitly or use a supported chain/environment.`
+            )
         }
 
         return this.submitAndWait(
@@ -80,7 +93,7 @@ export class StreamingSDK {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
                 functionName: "setFlowrate",
-                args: [token, receiver, flowRate, userData],
+                args: [resolvedToken, receiver, flowRate],
             },
             onHash,
         )
@@ -93,6 +106,15 @@ export class StreamingSDK {
             throw new Error("newFlowRate must be a positive non-zero value")
         }
 
+        // resolve token
+        const resolvedToken = token ?? this.defaultToken
+        if (!resolvedToken) {
+            throw new Error(
+                `G$ token not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide a token address explicitly or use a supported chain/environment.`
+            )
+        }
+
         const account = await this.getAccount()
 
         return this.submitAndWait(
@@ -100,7 +122,7 @@ export class StreamingSDK {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
                 functionName: "updateFlow",
-                args: [token, account, receiver, newFlowRate, userData],
+                args: [resolvedToken, account, receiver, newFlowRate, userData],
             },
             onHash,
         )
@@ -109,6 +131,15 @@ export class StreamingSDK {
     async deleteStream(params: DeleteStreamParams): Promise<Hash> {
         const { receiver, token, onHash } = params
 
+        // Use provided token or default to auto-resolved G$ token
+        const resolvedToken = token ?? this.defaultToken
+        if (!resolvedToken) {
+            throw new Error(
+                `G$ token not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide a token address explicitly or use a supported chain/environment.`
+            )
+        }
+
         const account = await this.getAccount()
 
         return this.submitAndWait(
@@ -116,7 +147,7 @@ export class StreamingSDK {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
                 functionName: "deleteFlow",
-                args: [token, account, receiver, "0x"],
+                args: [resolvedToken, account, receiver, "0x"],
             },
             onHash,
         )
