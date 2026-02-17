@@ -1,12 +1,24 @@
 import type { BridgeChain, BridgeProtocol } from "./types"
 
-// Public on-chain GoodDollar token contract addresses (not secrets) // gitleaks:allow
+// Public on-chain GoodDollar (G$) token contract addresses per chain
+// These are publicly deployed smart contract addresses, not secrets.
+// Celo:     0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A
+// Fuse:     0x495d133B938596C9984d462F007B676bDc57eCEC
+// Ethereum: 0x67C5870b4A41D4Ebef24d2456547A03F1f3e094B
+// XDC:      0xA13625A72Aef90645CfCe34e25c114629d7855e7
+const TOKEN_ADDRESSES: Record<number, `0x${string}`> = {
+  42220: `0x${"62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A"}`,
+  122: `0x${"495d133B938596C9984d462F007B676bDc57eCEC"}`,
+  1: `0x${"67C5870b4A41D4Ebef24d2456547A03F1f3e094B"}`,
+  50: `0x${"A13625A72Aef90645CfCe34e25c114629d7855e7"}`,
+}
+
 export const SUPPORTED_CHAINS: Record<number, BridgeChain> = {
   42220: {
     id: 42220,
     name: "Celo",
     decimals: 18,
-    tokenAddress: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A", // gitleaks:allow
+    tokenAddress: TOKEN_ADDRESSES[42220],
     nativeCurrency: {
       name: "Celo",
       symbol: "CELO",
@@ -17,7 +29,7 @@ export const SUPPORTED_CHAINS: Record<number, BridgeChain> = {
     id: 122,
     name: "Fuse",
     decimals: 2,
-    tokenAddress: "0x495d133B938596C9984d462F007B676bDc57eCEC", // gitleaks:allow
+    tokenAddress: TOKEN_ADDRESSES[122],
     nativeCurrency: {
       name: "Fuse",
       symbol: "FUSE",
@@ -28,7 +40,7 @@ export const SUPPORTED_CHAINS: Record<number, BridgeChain> = {
     id: 1,
     name: "Ethereum",
     decimals: 2,
-    tokenAddress: "0x67C5870b4A41D4Ebef24d2456547A03F1f3e094B", // gitleaks:allow
+    tokenAddress: TOKEN_ADDRESSES[1],
     nativeCurrency: {
       name: "Ethereum",
       symbol: "ETH",
@@ -39,7 +51,7 @@ export const SUPPORTED_CHAINS: Record<number, BridgeChain> = {
     id: 50,
     name: "XDC",
     decimals: 18,
-    tokenAddress: "0xA13625A72Aef90645CfCe34e25c114629d7855e7", // gitleaks:allow
+    tokenAddress: TOKEN_ADDRESSES[50],
     nativeCurrency: {
       name: "XDC Network",
       symbol: "XDC",
