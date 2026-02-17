@@ -12,6 +12,7 @@ export interface BridgeChain {
   nativeCurrency: {
     name: string
     symbol: string
+    decimals: number
   }
 }
 
