@@ -244,11 +244,11 @@ const sdk = new StreamingSDK(publicClient, walletClient, {
 })
 ```
 
-| Environment | Celo G$ Address |
-|-------------|-----------------|
-| production  | `0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A` |
-| staging     | `0x61FA0fB802fd8345C06da558240E0651886fec69` |
-| development | `0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475` |
+| Environment | G$ Token Address |
+|-------------|------------------|
+| production  | Auto-resolved via `getG$Token()` |
+| staging     | Auto-resolved via `getG$Token()` |
+| development | Auto-resolved via `getG$Token()` |
 
 ## Token Auto-Resolution
 
