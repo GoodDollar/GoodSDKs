@@ -185,7 +185,15 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-slate-400 text-sm font-medium">
-              {formatTimestamp(Number(transaction.data.args.timestamp) * 1000)}
+              {transaction.type === "request" &&
+              "timestamp" in transaction.data.args
+                ? formatTimestamp(
+                    Number(
+                      (transaction.data.args as BridgeRequestEvent["args"])
+                        .timestamp,
+                    ) * 1000,
+                  )
+                : `Block #${transaction.data.blockNumber}`}
             </span>
           </div>
           <div className="flex items-center gap-3">

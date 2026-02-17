@@ -1,9 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 :root {
   --primary: #0085FF;
   --primary-glow: rgba(0, 133, 255, 0.4);
@@ -28,35 +24,85 @@ body {
 }
 
 .premium-card {
-  @apply bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 transition-all duration-300;
+  background-color: #fff;
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.04);
+  border: 1px solid #f1f5f9;
+  padding: 2rem;
+  transition: all 0.3s;
 }
 
 .premium-card:hover {
-  @apply shadow-[0_20px_40px_rgba(0,0,0,0.06)] -translate-y-1;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
+  transform: translateY(-0.25rem);
 }
 
 .glass-effect {
-  @apply backdrop-blur-md bg-white/70 border border-white/30;
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 font-bold;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #2563eb, #06b6d4);
+  font-weight: 700;
 }
 
 .input-glow:focus {
-  @apply outline-none ring-4 ring-blue-500/10 border-blue-500;
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
 }
 
 .premium-button {
-  @apply relative overflow-hidden bg-blue-600 text-white font-semibold py-4 px-8 rounded-2xl transition-all duration-300 shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  position: relative;
+  overflow: hidden;
+  background-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  padding: 1rem 2rem;
+  border-radius: 1rem;
+  transition: all 0.3s;
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2);
+  border: none;
+  cursor: pointer;
 }
 
 .premium-button:hover:not(:disabled) {
-  @apply bg-blue-700 shadow-xl shadow-blue-500/30 -translate-y-0.5;
+  background-color: #1d4ed8;
+  box-shadow: 0 20px 25px -5px rgba(59, 130, 246, 0.3);
+  transform: translateY(-0.125rem);
+}
+
+.premium-button:active {
+  transform: scale(0.95);
+}
+
+.premium-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .premium-button-secondary {
-  @apply bg-slate-50 text-slate-700 font-semibold py-4 px-8 rounded-2xl transition-all duration-300 border border-slate-200 active:scale-95 hover:bg-slate-100;
+  background-color: #f8fafc;
+  color: #334155;
+  font-weight: 600;
+  padding: 1rem 2rem;
+  border-radius: 1rem;
+  transition: all 0.3s;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+}
+
+.premium-button-secondary:hover {
+  background-color: #f1f5f9;
+}
+
+.premium-button-secondary:active {
+  transform: scale(0.95);
 }
 
 /* Custom scrollbar */
@@ -69,5 +115,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-200 rounded-full hover:bg-slate-300;
+  background-color: #e2e8f0;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #cbd5e1;
 }
