@@ -10,7 +10,7 @@ This app demonstrates the key improvement in the Streaming SDK: you no longer ne
 ```typescript
 await sdk.createStream({
   receiver: '0x...',
-  token: '0x62B8...9c7A', // Had to manually specify G$ token address
+  token: G_DOLLAR_TOKEN_ADDRESS, 
   flowRate
 })
 ```
@@ -59,4 +59,5 @@ cd apps/demo-streaming-app
 yarn dev
 ```
 
-The app will be available at `http://localhost:3001`
+Open the URL shown in your terminal to view the app.
+
