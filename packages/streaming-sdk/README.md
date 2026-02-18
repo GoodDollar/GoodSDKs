@@ -29,7 +29,7 @@ const sdk = new StreamingSDK(publicClient, walletClient, {
 // Create a stream (100 G$ per month) - G$ token is auto-resolved!
 const flowRate = calculateFlowRate(parseEther('100'), 'month')
 await sdk.createStream({
-  receiver: '0x...',
+  receiver: '<RECEIVER_ADDRESS>',
   flowRate
 })
 ```
@@ -42,7 +42,7 @@ await sdk.createStream({
 Create a new stream. G$ token is used by default if `token` is omitted.
 ```typescript
 await sdk.createStream({
-  receiver: '0x...',
+  receiver: '<RECEIVER_ADDRESS>',
   flowRate: 1000n,
   onHash: (hash) => console.log(hash)
 })
@@ -52,7 +52,7 @@ await sdk.createStream({
 Update an existing stream's flow rate.
 ```typescript
 await sdk.updateStream({
-  receiver: '0x...',
+  receiver: '<RECEIVER_ADDRESS>',
   newFlowRate: 2000n
 })
 ```
@@ -61,20 +61,20 @@ await sdk.updateStream({
 Delete a stream.
 ```typescript
 await sdk.deleteStream({
-  receiver: '0x...'
+  receiver: '<RECEIVER_ADDRESS>'
 })
 ```
 
 #### `getActiveStreams(account, direction?)`
 Get active streams for an account.
 ```typescript
-const streams = await sdk.getActiveStreams('0x...')
+const streams = await sdk.getActiveStreams('<ACCOUNT_ADDRESS>')
 ```
 
 #### `getSuperTokenBalance(account)`
 Get G$ SuperToken balance for an account.
 ```typescript
-const balance = await sdk.getSuperTokenBalance('0x...')
+const balance = await sdk.getSuperTokenBalance('<ACCOUNT_ADDRESS>')
 ```
 
 ### GdaSDK
@@ -84,7 +84,7 @@ Connect to a distribution pool.
 ```typescript
 const gda = new GdaSDK(publicClient, walletClient)
 await gda.connectToPool({
-  poolAddress: '0x...'
+  poolAddress: '<POOL_ADDRESS>'
 })
 ```
 

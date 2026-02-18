@@ -9,8 +9,8 @@ This app demonstrates the key improvement in the Streaming SDK: you no longer ne
 ### Before (Old API)
 ```typescript
 await sdk.createStream({
-  receiver: '0x...',
-  token: '0x...', 
+  receiver: '<RECEIVER_ADDRESS>',
+  token: '<TOKEN_ADDRESS>', 
   flowRate
 })
 ```
@@ -22,7 +22,7 @@ const sdk = new StreamingSDK(publicClient, walletClient, {
 })
 
 await sdk.createStream({
-  receiver: '0x...',
+  receiver: '<RECEIVER_ADDRESS>',
   // No token parameter needed!
   flowRate
 })
