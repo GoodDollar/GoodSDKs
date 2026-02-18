@@ -10,7 +10,7 @@ This app demonstrates the key improvement in the Streaming SDK: you no longer ne
 ```typescript
 await sdk.createStream({
   receiver: '0x...',
-  token: G_DOLLAR_TOKEN_ADDRESS, 
+  token: '0x...', 
   flowRate
 })
 ```
