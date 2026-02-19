@@ -25,6 +25,7 @@ export interface UseCreateStreamParams {
     receiver: Address
     token?: TokenSymbol | Address
     flowRate: bigint
+    userData?: `0x${string}`
     environment?: Environment
 }
 
@@ -75,23 +76,23 @@ export interface UseSupReservesParams {
 }
 
 /**
- * Internal helper to manage SDK instances by environment
+ * Internal helper to manage SDK instances by environment efficiently
  */
-const STREAMING_ENVIRONMENTS = ["production", "staging", "development"] as const
-
 function useStreamingSdks(options?: { defaultToken?: TokenSymbol | Address }) {
     const publicClient = usePublicClient()
     const { data: walletClient } = useWalletClient()
 
+    // Use a lazy getter to avoid creating SDKs for all environments at once
     return useMemo(() => {
-        const m = new Map<Environment, StreamingSDK>()
-        if (!publicClient) return m
+        const cache = new Map<Environment, StreamingSDK>()
 
-        for (const env of STREAMING_ENVIRONMENTS) {
-            try {
-                m.set(
-                    env,
-                    new StreamingSDK(
+        return {
+            get: (env: Environment): StreamingSDK | undefined => {
+                if (!publicClient) return undefined
+                if (cache.has(env)) return cache.get(env)
+
+                try {
+                    const sdk = new StreamingSDK(
                         publicClient,
                         walletClient ? (walletClient as WalletClient) : undefined,
                         {
@@ -99,12 +100,13 @@ function useStreamingSdks(options?: { defaultToken?: TokenSymbol | Address }) {
                             defaultToken: options?.defaultToken
                         }
                     )
-                )
-            } catch (err) {
-                // Silently skip unsupported environments
+                    cache.set(env, sdk)
+                    return sdk
+                } catch (err) {
+                    return undefined
+                }
             }
         }
-        return m
     }, [publicClient, walletClient, options?.defaultToken])
 }
 
@@ -113,7 +115,7 @@ function useStreamingSdks(options?: { defaultToken?: TokenSymbol | Address }) {
  */
 
 /**
- * React Hooks for Superfluid operations
+ * React Hooks for Creating Streams
  */
 export function useCreateStream() {
     const sdks = useStreamingSdks()
@@ -124,11 +126,12 @@ export function useCreateStream() {
             receiver,
             token,
             flowRate,
+            userData = "0x",
             environment = "production",
         }: UseCreateStreamParams): Promise<Hash> => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.createStream({ receiver, token, flowRate })
+            return sdk.createStream({ receiver, token, flowRate, userData })
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["streams"] })
@@ -204,7 +207,11 @@ export function useGDAPools({
     const publicClient = usePublicClient()
     const sdk = useMemo(() => {
         if (!publicClient) return null
-        return new GdaSDK(publicClient, undefined, { chainId: publicClient.chain?.id })
+        try {
+            return new GdaSDK(publicClient, undefined, { chainId: publicClient.chain?.id })
+        } catch (e) {
+            return null
+        }
     }, [publicClient])
 
     return useQuery<GDAPool[]>({
@@ -224,7 +231,11 @@ export function usePoolMemberships({
     const publicClient = usePublicClient()
     const sdk = useMemo(() => {
         if (!publicClient) return null
-        return new GdaSDK(publicClient)
+        try {
+            return new GdaSDK(publicClient)
+        } catch (e) {
+            return null
+        }
     }, [publicClient])
 
     return useQuery<PoolMembership[]>({

@@ -100,10 +100,15 @@ describe("StreamingSDK", () => {
             receiver: "0xreceiver" as Address,
             token: TEST_SUPERTOKEN,
             flowRate: BigInt(100),
+            userData: "0x1234"
         })
 
         expect(hash).toBe("0xhash")
-        expect(publicClient.simulateContract).toHaveBeenCalled()
+        expect(publicClient.simulateContract).toHaveBeenCalledWith(
+            expect.objectContaining({
+                args: expect.arrayContaining(["0x1234"])
+            })
+        )
     })
 
     it("should delete a stream", async () => {
@@ -280,6 +285,11 @@ describe("Error Handling", () => {
             expect(() => new StreamingSDK(null as any)).toThrow("Public client is required")
         })
 
+        it("should throw when chain is unsupported", () => {
+            const mockClient = createMockPublicClient(123)
+            expect(() => new StreamingSDK(mockClient)).toThrow("Unsupported chain ID")
+        })
+
         it("should throw when wallet not initialized for write operations", async () => {
             const sdk = new StreamingSDK(publicClient) // No wallet client
             await expect(
@@ -368,7 +378,6 @@ describe("Edge Cases & Utilities", () => {
 
         it("should support all Base chains", () => {
             expect(isSupportedChain(SupportedChains.BASE)).toBe(true)
-            expect(isSupportedChain(SupportedChains.BASE_SEPOLIA)).toBe(true)
         })
 
         it("should reject other chains", () => {

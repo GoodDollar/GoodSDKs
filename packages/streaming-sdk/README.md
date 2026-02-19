@@ -142,7 +142,6 @@ await gda.disconnectFromPool({
 |-------|-------|----------|-------------|
 | G$ | Celo | 42220 | production, staging, development |
 | SUP | Base | 8453 | production |
-| SUP | Base Sepolia | 84532 | staging, development |
 
 ## License
 

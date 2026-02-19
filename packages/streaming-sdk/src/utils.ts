@@ -12,8 +12,7 @@ export function isSupportedChain(
 ): chainId is SupportedChains {
     return (
         chainId === SupportedChains.CELO ||
-        chainId === SupportedChains.BASE ||
-        chainId === SupportedChains.BASE_SEPOLIA
+        chainId === SupportedChains.BASE
     )
 }
 

@@ -40,6 +40,7 @@ export interface CreateStreamParams {
   receiver: Address
   token?: TokenSymbol | Address
   flowRate: bigint
+  userData?: `0x${string}`
   onHash?: (hash: Hash) => void
 }
 

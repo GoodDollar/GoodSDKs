@@ -6,7 +6,6 @@ import { cfaForwarderAddress, gdaForwarderAddress } from "@sfpro/sdk/abi"
 export enum SupportedChains {
     CELO = 42220,
     BASE = 8453,
-    BASE_SEPOLIA = 84532,
 }
 
 export type SupportedChainId = SupportedChains
@@ -39,7 +38,7 @@ export function getG$Token(
 /**
  * Resolves SUP SuperToken address for chain and environment.
  * 
- * Available: Base (8453) production, Base Sepolia (84532) staging/development.
+ * Available: Base (8453) production.
  * @returns Address or undefined if not configured
  */
 export function getSUPToken(
@@ -50,12 +49,8 @@ export function getSUPToken(
         production: {
             [SupportedChains.BASE]: "0xa69f80524381275A7fFdb3AE01c54150644c8792",
         },
-        staging: {
-            [SupportedChains.BASE_SEPOLIA]: "0xFd62b398DD8a233ad37156690631fb9515059d6A",
-        },
-        development: {
-            [SupportedChains.BASE_SEPOLIA]: "0xFd62b398DD8a233ad37156690631fb9515059d6A",
-        },
+        staging: {},
+        development: {},
     }
 
     return addresses[env]?.[chainId]
@@ -65,8 +60,6 @@ export function getSUPToken(
 export const SUBGRAPH_URLS: Record<number | string, string> = {
     [SupportedChains.CELO]: "https://celo-mainnet.subgraph.x.superfluid.dev/",
     [SupportedChains.BASE]: "https://base-mainnet.subgraph.x.superfluid.dev/",
-    [SupportedChains.BASE_SEPOLIA]:
-        "https://base-sepolia.subgraph.x.superfluid.dev/",
     supReserve:
         "https://gateway.thegraph.com/api/subgraphs/id/6dRuPxMvaJAp32hvcTsYbAya69A4t1KUHh2EnV3YQeXU",
 }
@@ -95,11 +88,5 @@ export const CHAIN_CONFIGS: Record<SupportedChains, ChainConfig> = {
         name: "Base",
         rpcUrls: ["https://mainnet.base.org"],
         explorer: "https://basescan.org",
-    },
-    [SupportedChains.BASE_SEPOLIA]: {
-        id: SupportedChains.BASE_SEPOLIA,
-        name: "Base Sepolia",
-        rpcUrls: ["https://sepolia.base.org"],
-        explorer: "https://sepolia.basescan.org",
     },
 }

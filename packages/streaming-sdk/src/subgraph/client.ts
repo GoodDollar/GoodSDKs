@@ -200,16 +200,49 @@ export class SubgraphClient {
   }
 
   async queryStreams(options: GetStreamsOptions): Promise<StreamQueryResult[]> {
-    const { account, direction = "all", first = 100, skip = 0 } = options
-    const data = await this.client.request<{
-      outgoingStreams: SubgraphStream[]
-      incomingStreams: SubgraphStream[]
-    }>(GET_STREAMS, { account: account.toLowerCase(), first, skip })
+    const { account, direction = "all", first: requestedFirst, skip: requestedSkip } = options
+
+    // Internal helper for paginated request
+    const fetchBatch = async (first: number, skip: number) => {
+      if (!account) return { outgoingStreams: [], incomingStreams: [] }
+      return this.client.request<{
+        outgoingStreams: SubgraphStream[]
+        incomingStreams: SubgraphStream[]
+      }>(GET_STREAMS, { account: account.toLowerCase(), first, skip })
+    }
+
+    let allOutgoing: SubgraphStream[] = []
+    let allIncoming: SubgraphStream[] = []
+
+    if (requestedFirst !== undefined && requestedSkip !== undefined) {
+      // User requested explicit pagination, just fetch once
+      const data = await fetchBatch(requestedFirst, requestedSkip)
+      allOutgoing = data.outgoingStreams
+      allIncoming = data.incomingStreams
+    } else {
+      // Loop to fetch all records in batches of 100
+      let skip = requestedSkip ?? 0
+      const batchSize = 100
+      let hasMore = true
+
+      while (hasMore) {
+        const data = await fetchBatch(batchSize, skip)
+        allOutgoing = [...allOutgoing, ...data.outgoingStreams]
+        allIncoming = [...allIncoming, ...data.incomingStreams]
+
+        // Keep looping if either list was full
+        hasMore = (data.outgoingStreams.length === batchSize || data.incomingStreams.length === batchSize)
+        skip += batchSize
+
+        // Safety break to prevent infinite loops in case of weird subgraph behavior
+        if (skip > 5000) break
+      }
+    }
 
     let streams: SubgraphStream[] = []
-    if (direction === "outgoing") streams = data.outgoingStreams
-    else if (direction === "incoming") streams = data.incomingStreams
-    else streams = [...data.outgoingStreams, ...data.incomingStreams]
+    if (direction === "outgoing") streams = allOutgoing
+    else if (direction === "incoming") streams = allIncoming
+    else streams = [...allOutgoing, ...allIncoming]
 
     return streams.map((s) => ({
       id: s.id,
@@ -224,6 +257,7 @@ export class SubgraphClient {
   }
 
   async queryBalances(account: Address): Promise<SuperTokenBalance[]> {
+    if (!account) return []
     const data = await this.client.request<{
       account: { accountTokenSnapshots: SubgraphSnapshot[] } | null
     }>(GET_TOKEN_BALANCE, { account: account.toLowerCase() })
@@ -239,6 +273,7 @@ export class SubgraphClient {
 
   async queryBalanceHistory(options: GetBalanceHistoryOptions): Promise<SuperTokenBalance[]> {
     const { account, fromTimestamp, toTimestamp, first = 100, skip = 0 } = options
+    if (!account) return []
     const data = await this.client.request<{
       accountTokenSnapshotLogs: SubgraphSnapshotLog[]
     }>(GET_BALANCE_HISTORY, {
@@ -259,6 +294,7 @@ export class SubgraphClient {
   }
 
   async queryPoolMemberships(account: Address): Promise<PoolMembership[]> {
+    if (!account) return []
     const data = await this.client.request<{
       account: { poolMemberships: SubgraphPoolMembership[] } | null
     }>(GET_POOL_MEMBERSHIPS, { account: account.toLowerCase() })

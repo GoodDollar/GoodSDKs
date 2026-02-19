@@ -46,8 +46,8 @@ export class GdaSDK {
         // Protocol address from sfpro map
         this.gdaForwarder = (GDA_FORWARDER_ADDRESSES as Record<number, Address>)[this.chainId]
 
-        if (!this.gdaForwarder) {
-            throw new Error(`GDA Forwarder address not found for chain ID: ${this.chainId}`)
+        if (!this.gdaForwarder || this.gdaForwarder === "0x0000000000000000000000000000000000000000") {
+            throw new Error(`GDA Forwarder address not found or invalid for chain ID: ${this.chainId}`)
         }
 
         this.defaultToken = this.resolveTokenSymbol(options?.defaultToken)

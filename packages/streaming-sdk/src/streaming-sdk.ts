@@ -48,8 +48,8 @@ export class StreamingSDK {
         // Protocol addresses from sfpro maps
         this.cfaForwarder = (CFA_FORWARDER_ADDRESSES as Record<number, Address>)[this.chainId]
 
-        if (!this.cfaForwarder) {
-            throw new Error(`CFA Forwarder address not found for chain ID: ${this.chainId}`)
+        if (!this.cfaForwarder || this.cfaForwarder === "0x0000000000000000000000000000000000000000") {
+            throw new Error(`CFA Forwarder address not found or invalid for chain ID: ${this.chainId}`)
         }
 
         this.defaultToken = this.resolveTokenSymbol(options?.defaultToken)
@@ -81,8 +81,9 @@ export class StreamingSDK {
     }
 
     async createStream(params: CreateStreamParams): Promise<Hash> {
-        const { receiver, token, flowRate, onHash } = params
+        const { receiver, token, flowRate, userData = "0x", onHash } = params
 
+        if (!receiver) throw new Error("Receiver address is required")
         if (flowRate <= BigInt(0)) {
             throw new Error("Flow rate must be greater than zero")
         }
@@ -101,7 +102,7 @@ export class StreamingSDK {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
                 functionName: "setFlowrate",
-                args: [resolvedToken, receiver, flowRate],
+                args: [resolvedToken, receiver, flowRate, userData],
             },
             onHash,
         )
