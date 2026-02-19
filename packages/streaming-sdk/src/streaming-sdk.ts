@@ -13,6 +13,7 @@ import {
     DeleteStreamParams,
     StreamInfo,
     GetStreamsOptions,
+    GetBalanceHistoryOptions,
     Environment,
     TokenSymbol,
 } from "./types"
@@ -161,13 +162,9 @@ export class StreamingSDK {
     }
 
     async getActiveStreams(
-        account: Address,
-        direction?: "incoming" | "outgoing" | "all",
+        options: GetStreamsOptions,
     ): Promise<StreamInfo[]> {
-        const streams = await this.subgraphClient.queryStreams({
-            account,
-            direction: direction ?? "all",
-        })
+        const streams = await this.subgraphClient.queryStreams(options)
 
         return streams.map((stream) => ({
             sender: stream.sender,
@@ -200,19 +197,13 @@ export class StreamingSDK {
      * Retrieve balance history for an account
      */
     async getBalanceHistory(
-        account: Address,
-        fromTimestamp?: number,
-        toTimestamp?: number,
+        options: GetBalanceHistoryOptions,
     ) {
-        return this.subgraphClient.queryBalanceHistory({
-            account,
-            fromTimestamp,
-            toTimestamp,
-        })
+        return this.subgraphClient.queryBalanceHistory(options)
     }
 
-    async querySUPReserves() {
-        return this.subgraphClient.querySUPReserves()
+    async querySUPReserves(options: { first?: number; skip?: number } = {}) {
+        return this.subgraphClient.querySUPReserves(options)
     }
 
     getSubgraphClient(): SubgraphClient {

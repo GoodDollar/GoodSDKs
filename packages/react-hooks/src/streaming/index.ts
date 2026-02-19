@@ -192,7 +192,7 @@ export function useStreamList({
         queryFn: async () => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.getActiveStreams(account, direction)
+            return sdk.getActiveStreams({ account, direction })
         },
         enabled: enabled && !!account && !!publicClient,
     })

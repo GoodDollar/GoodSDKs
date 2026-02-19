@@ -106,8 +106,8 @@ export class GdaSDK {
         )
     }
 
-    async getDistributionPools(): Promise<GDAPool[]> {
-        return this.subgraphClient.queryPools()
+    async getDistributionPools(options: { first?: number; skip?: number } = {}): Promise<GDAPool[]> {
+        return this.subgraphClient.queryPools(options)
     }
 
     async getPoolMemberships(account: Address): Promise<PoolMembership[]> {

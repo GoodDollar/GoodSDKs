@@ -7,13 +7,13 @@ export type TokenSymbol = "G$" | "SUP"
 export interface StreamingSDKOptions {
   /** Chain ID. Supported: Celo (42220), Base (8453), Base Sepolia (84532). Inferred from client if omitted. */
   chainId?: number
-  
+
   /** Token address resolution environment. @default 'production' */
   environment?: Environment
-  
+
   /** Subgraph API key for rate limiting. */
   apiKey?: string
-  
+
   /**
    * Default token for stream operations. Defaults to G$ with auto-resolved address.
    * 
@@ -119,10 +119,14 @@ export interface SUPReserveLocker {
 export interface GetStreamsOptions {
   account: Address
   direction?: "incoming" | "outgoing" | "all"
+  first?: number
+  skip?: number
 }
 
 export interface GetBalanceHistoryOptions {
   account: Address
   fromTimestamp?: number
   toTimestamp?: number
+  first?: number
+  skip?: number
 }

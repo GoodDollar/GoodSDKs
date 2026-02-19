@@ -66,13 +66,21 @@ const GET_TOKEN_BALANCE = gql`
 `
 
 const GET_BALANCE_HISTORY = gql`
-  query GetBalanceHistory($account: String!, $fromTimestamp: Int, $toTimestamp: Int) {
+  query GetBalanceHistory(
+    $account: String!, 
+    $fromTimestamp: Int, 
+    $toTimestamp: Int,
+    $first: Int = 100,
+    $skip: Int = 0
+  ) {
     accountTokenSnapshotLogs(
       where: {
         account: $account
         timestamp_gte: $fromTimestamp
         timestamp_lte: $toTimestamp
       }
+      first: $first
+      skip: $skip
       orderBy: timestamp
       orderDirection: asc
     ) {
@@ -125,8 +133,13 @@ const GET_DISTRIBUTION_POOLS = gql`
 `
 
 const GET_SUP_RESERVES = gql`
-  query GetSUPReserves {
-    lockers(orderBy: blockTimestamp, orderDirection: desc) {
+  query GetSUPReserves($first: Int = 10, $skip: Int = 0) {
+    lockers(
+      first: $first
+      skip: $skip
+      orderBy: blockTimestamp 
+      orderDirection: desc
+    ) {
       id
       lockerOwner { id }
       blockNumber
@@ -187,11 +200,11 @@ export class SubgraphClient {
   }
 
   async queryStreams(options: GetStreamsOptions): Promise<StreamQueryResult[]> {
-    const { account, direction = "all" } = options
+    const { account, direction = "all", first = 100, skip = 0 } = options
     const data = await this.client.request<{
       outgoingStreams: SubgraphStream[]
       incomingStreams: SubgraphStream[]
-    }>(GET_STREAMS, { account: account.toLowerCase(), first: 100, skip: 0 })
+    }>(GET_STREAMS, { account: account.toLowerCase(), first, skip })
 
     let streams: SubgraphStream[] = []
     if (direction === "outgoing") streams = data.outgoingStreams
@@ -225,13 +238,15 @@ export class SubgraphClient {
   }
 
   async queryBalanceHistory(options: GetBalanceHistoryOptions): Promise<SuperTokenBalance[]> {
-    const { account, fromTimestamp, toTimestamp } = options
+    const { account, fromTimestamp, toTimestamp, first = 100, skip = 0 } = options
     const data = await this.client.request<{
       accountTokenSnapshotLogs: SubgraphSnapshotLog[]
     }>(GET_BALANCE_HISTORY, {
       account: account.toLowerCase(),
       fromTimestamp: fromTimestamp ? Math.floor(fromTimestamp / 1000) : undefined,
       toTimestamp: toTimestamp ? Math.floor(toTimestamp / 1000) : undefined,
+      first,
+      skip,
     })
 
     return data.accountTokenSnapshotLogs.map((log) => ({
@@ -257,8 +272,9 @@ export class SubgraphClient {
     })) || []
   }
 
-  async queryPools(): Promise<GDAPool[]> {
-    const data = await this.client.request<{ pools: SubgraphPool[] }>(GET_DISTRIBUTION_POOLS, { first: 100, skip: 0 })
+  async queryPools(options: { first?: number; skip?: number } = {}): Promise<GDAPool[]> {
+    const { first = 100, skip = 0 } = options
+    const data = await this.client.request<{ pools: SubgraphPool[] }>(GET_DISTRIBUTION_POOLS, { first, skip })
     return data.pools.map((p) => ({
       id: p.id as Address,
       token: p.token.id as Address,
@@ -269,11 +285,12 @@ export class SubgraphClient {
     }))
   }
 
-  async querySUPReserves(): Promise<SUPReserveLocker[]> {
+  async querySUPReserves(options: { first?: number; skip?: number } = {}): Promise<SUPReserveLocker[]> {
+    const { first = 10, skip = 0 } = options
     const headers: Record<string, string> = {}
     if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`
     const supClient = new GraphQLClient(SUBGRAPH_URLS.supReserve, { headers })
-    const data = await supClient.request<{ lockers: SubgraphLocker[] }>(GET_SUP_RESERVES)
+    const data = await supClient.request<{ lockers: SubgraphLocker[] }>(GET_SUP_RESERVES, { first, skip })
 
     return data.lockers.map((l) => ({
       id: l.id,
