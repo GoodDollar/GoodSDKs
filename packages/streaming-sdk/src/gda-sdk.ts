@@ -5,17 +5,18 @@ import {
     WalletClient,
     type SimulateContractParameters,
 } from "viem"
-import { Environment } from "./types"
 import { gdaForwarderAbi } from "@sfpro/sdk/abi"
 import {
     GDAPool,
     PoolMembership,
     ConnectToPoolParams,
     DisconnectFromPoolParams,
+    TokenSymbol,
+    Environment,
     StreamingSDKOptions,
 } from "./types"
 import { validateChain } from "./utils"
-import { SupportedChains, GDA_FORWARDER_ADDRESSES } from "./constants"
+import { SupportedChains, GDA_FORWARDER_ADDRESSES, getG$Token, getSUPToken } from "./constants"
 import { SubgraphClient } from "./subgraph/client"
 
 export class GdaSDK {
@@ -24,6 +25,8 @@ export class GdaSDK {
     private chainId: SupportedChains
     private subgraphClient: SubgraphClient
     private gdaForwarder: Address
+    private defaultToken: Address | undefined
+    private environment: Environment
 
     constructor(
         publicClient: PublicClient,
@@ -38,13 +41,16 @@ export class GdaSDK {
         this.chainId = validateChain(
             options?.chainId ?? publicClient.chain?.id,
         )
+        this.environment = options?.environment ?? "production"
 
-        // Retrieve protocol address directly from official map
+        // Protocol address from sfpro map
         this.gdaForwarder = (GDA_FORWARDER_ADDRESSES as Record<number, Address>)[this.chainId]
 
         if (!this.gdaForwarder) {
             throw new Error(`GDA Forwarder address not found for chain ID: ${this.chainId}`)
         }
+
+        this.defaultToken = this.resolveTokenSymbol(options?.defaultToken)
 
         if (walletClient) {
             this.setWalletClient(walletClient)
@@ -63,6 +69,13 @@ export class GdaSDK {
             )
         }
         this.walletClient = walletClient
+    }
+
+    // Resolves symbol or address to concrete token address
+    private resolveTokenSymbol(token?: TokenSymbol | Address): Address | undefined {
+        if (!token || token === "G$") return getG$Token(this.chainId, this.environment)
+        if (token === "SUP") return getSUPToken(this.chainId, this.environment)
+        return token as Address
     }
 
     async connectToPool(params: ConnectToPoolParams): Promise<Hash> {

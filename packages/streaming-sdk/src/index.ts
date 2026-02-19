@@ -10,6 +10,7 @@ export * from "./types"
 export {
     SupportedChains,
     getG$Token,
+    getSUPToken,
     SUBGRAPH_URLS,
     CHAIN_CONFIGS,
 } from "./constants"

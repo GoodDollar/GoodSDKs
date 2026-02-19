@@ -12,25 +12,49 @@ export enum SupportedChains {
 export type SupportedChainId = SupportedChains
 
 /**
- * Get G$ SuperToken address for a given chain and environment.
- * Returning undefined for chains like Base where G$ is not yet deployed.
+ * Resolves G$ SuperToken address for chain and environment.
+ * 
+ * Available: Celo (42220) on production, staging, development.
+ * @returns Address or undefined if not configured
  */
 export function getG$Token(
     chainId: number,
     env: Environment = 'production'
 ): Address | undefined {
-    /**
-     * OFFICIAL PROTOCOL ADDRESSES (Public constants)
-     */
     const addresses: Record<Environment, Partial<Record<number, Address>>> = {
         production: {
-            [SupportedChains.CELO]: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A", // GoodDollar (G$) SuperToken
+            [SupportedChains.CELO]: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
         },
         staging: {
             [SupportedChains.CELO]: "0x61FA0fB802fd8345C06da558240E0651886fec69",
         },
         development: {
-            [SupportedChains.CELO]: "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475", // Fallback for local testing
+            [SupportedChains.CELO]: "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475",
+        },
+    }
+
+    return addresses[env]?.[chainId]
+}
+
+/**
+ * Resolves SUP SuperToken address for chain and environment.
+ * 
+ * Available: Base (8453) production, Base Sepolia (84532) staging/development.
+ * @returns Address or undefined if not configured
+ */
+export function getSUPToken(
+    chainId: number,
+    env: Environment = 'production'
+): Address | undefined {
+    const addresses: Record<Environment, Partial<Record<number, Address>>> = {
+        production: {
+            [SupportedChains.BASE]: "0xa69f80524381275A7fFdb3AE01c54150644c8792",
+        },
+        staging: {
+            [SupportedChains.BASE_SEPOLIA]: "0xFd62b398DD8a233ad37156690631fb9515059d6A",
+        },
+        development: {
+            [SupportedChains.BASE_SEPOLIA]: "0xFd62b398DD8a233ad37156690631fb9515059d6A",
         },
     }
 

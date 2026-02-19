@@ -1,13 +1,15 @@
 # @goodsdks/streaming-sdk
 
-TypeScript SDK for interacting with Superfluid streams on Celo and Base, specifically optimized for G$ SuperTokens and GDA (General Distribution Agreement) pools.
+TypeScript SDK for Superfluid streams on Celo and Base, supporting G$ and SUP SuperTokens and GDA (General Distribution Agreement) pools.
 
 ## Features
 
-- **Stream Life-cycle**: Create, update, and delete 1-to-1 streams.
-- **GDA Integration**: Connect/Disconnect from distribution pools.
-- **Data Layer**: Subgraph-based querying for balances and history.
-- **Auto-Resolution**: Automatically handles G$ token addresses for Celo.
+- Auto-resolving token addresses (defaults to G$)
+- Stream lifecycle: create, update, delete
+- GDA pool connections
+- Subgraph queries for balances and history
+- Multi-token support: G$ (Celo), SUP (Base)
+- Environment-based address resolution (production/staging/development)
 
 ## Installation
 
@@ -22,15 +24,42 @@ import { StreamingSDK, calculateFlowRate } from '@goodsdks/streaming-sdk'
 import { createPublicClient, createWalletClient, http, parseEther } from 'viem'
 import { celo } from 'viem/chains'
 
+// Defaults to G$ token with production environment
+const sdk = new StreamingSDK(publicClient, walletClient)
+
+// Create stream (100 G$ per month)
+const flowRate = calculateFlowRate(parseEther('100'), 'month')
+await sdk.createStream({
+  receiver: '0x...',
+  flowRate
+})
+```
+
+## Token Configuration
+
+Defaults to G$ (resolved from environment + chainId):
+
+```typescript
+// Uses G$ token (default)
 const sdk = new StreamingSDK(publicClient, walletClient, {
   environment: 'production'
 })
 
-// Create a stream (100 G$ per month) - G$ token is auto-resolved!
-const flowRate = calculateFlowRate(parseEther('100'), 'month')
+// Use SUP token
+const sdk = new StreamingSDK(publicClient, walletClient, {
+  defaultToken: 'SUP'
+})
+
+// Use custom token
+const sdk = new StreamingSDK(publicClient, walletClient, {
+  defaultToken: '0x...' as Address
+})
+
+// Override per operation
 await sdk.createStream({
-  receiver: '<RECEIVER_ADDRESS>',
-  flowRate
+  receiver: '0x...',
+  token: '0x...' as Address,
+  flowRate: 1000n
 })
 ```
 
@@ -39,67 +68,81 @@ await sdk.createStream({
 ### StreamingSDK
 
 #### `createStream(params)`
-Create a new stream. G$ token is used by default if `token` is omitted.
+Creates a new stream.
+
 ```typescript
 await sdk.createStream({
-  receiver: '<RECEIVER_ADDRESS>',
+  receiver: '0x...',
   flowRate: 1000n,
-  onHash: (hash) => console.log(hash)
+  token?: 'G$' | 'SUP' | Address,  // optional override
+  onHash?: (hash) => console.log(hash)
 })
 ```
 
 #### `updateStream(params)`
-Update an existing stream's flow rate.
+Updates stream flow rate.
+
 ```typescript
 await sdk.updateStream({
-  receiver: '<RECEIVER_ADDRESS>',
-  newFlowRate: 2000n
+  receiver: '0x...',
+  newFlowRate: 2000n,
+  token?: 'G$' | 'SUP' | Address,
+  userData?: '0x',
+  onHash?: (hash) => console.log(hash)
 })
 ```
 
 #### `deleteStream(params)`
-Delete a stream.
+Deletes a stream.
+
 ```typescript
 await sdk.deleteStream({
-  receiver: '<RECEIVER_ADDRESS>'
+  receiver: '0x...',
+  token?: 'G$' | 'SUP' | Address,
+  onHash?: (hash) => console.log(hash)
 })
 ```
 
 #### `getActiveStreams(account, direction?)`
-Get active streams for an account.
+Returns active streams for an account.
 ```typescript
-const streams = await sdk.getActiveStreams('<ACCOUNT_ADDRESS>')
+const streams = await sdk.getActiveStreams('0x...', 'outgoing' | 'incoming' | 'all')
 ```
 
-#### `getSuperTokenBalance(account)`
-Get G$ SuperToken balance for an account.
+#### `getSuperTokenBalance(account, token?)`
+Returns balance for a SuperToken. Uses default token if `token` is omitted.
 ```typescript
-const balance = await sdk.getSuperTokenBalance('<ACCOUNT_ADDRESS>')
+const balance = await sdk.getSuperTokenBalance('0x...', 'SUP'?)
 ```
 
 ### GdaSDK
 
 #### `connectToPool(params)`
-Connect to a distribution pool.
+Connects to a distribution pool.
 ```typescript
 const gda = new GdaSDK(publicClient, walletClient)
 await gda.connectToPool({
-  poolAddress: '<POOL_ADDRESS>'
+  poolAddress: '0x...',
+  userData?: '0x',
+  onHash?: (hash) => console.log(hash)
+})
+```
+
+#### `disconnectFromPool(params)`
+Disconnects from a distribution pool.
+```typescript
+await gda.disconnectFromPool({
+  poolAddress: '0x...'
 })
 ```
 
 ## Supported Chains
 
-- **Celo** (Chain ID: 42220)
-- **Base** (Chain ID: 8453)
-
-## Environment Configuration
-
-| Environment | G$ Resolution |
-|-------------|------------------|
-| production  | Auto-resolved |
-| staging     | Auto-resolved |
-| development | Auto-resolved |
+| Token | Chain | Chain ID | Environment |
+|-------|-------|----------|-------------|
+| G$ | Celo | 42220 | production, staging, development |
+| SUP | Base | 8453 | production |
+| SUP | Base Sepolia | 84532 | staging, development |
 
 ## License
 

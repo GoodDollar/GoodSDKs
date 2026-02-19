@@ -12,6 +12,7 @@ import {
     type PoolMembership,
     type SUPReserveLocker,
     type Environment,
+    type TokenSymbol,
     type CreateStreamParams,
     type UpdateStreamParams,
     type DeleteStreamParams,
@@ -22,14 +23,14 @@ import {
  */
 export interface UseCreateStreamParams {
     receiver: Address
-    token?: Address
+    token?: TokenSymbol | Address
     flowRate: bigint
     environment?: Environment
 }
 
 export interface UseUpdateStreamParams {
     receiver: Address
-    token?: Address
+    token?: TokenSymbol | Address
     newFlowRate: bigint
     userData?: `0x${string}`
     environment?: Environment
@@ -37,7 +38,7 @@ export interface UseUpdateStreamParams {
 
 export interface UseDeleteStreamParams {
     receiver: Address
-    token?: Address
+    token?: TokenSymbol | Address
     environment?: Environment
 }
 
@@ -78,7 +79,7 @@ export interface UseSupReservesParams {
  */
 const STREAMING_ENVIRONMENTS = ["production", "staging", "development"] as const
 
-function useStreamingSdks() {
+function useStreamingSdks(options?: { defaultToken?: TokenSymbol | Address }) {
     const publicClient = usePublicClient()
     const { data: walletClient } = useWalletClient()
 
@@ -93,15 +94,18 @@ function useStreamingSdks() {
                     new StreamingSDK(
                         publicClient,
                         walletClient ? (walletClient as WalletClient) : undefined,
-                        { environment: env }
+                        {
+                            environment: env,
+                            defaultToken: options?.defaultToken
+                        }
                     )
                 )
             } catch (err) {
-                // Silently skip unsupported environments (e.g. Base in some configs)
+                // Silently skip unsupported environments
             }
         }
         return m
-    }, [publicClient, walletClient])
+    }, [publicClient, walletClient, options?.defaultToken])
 }
 
 /**

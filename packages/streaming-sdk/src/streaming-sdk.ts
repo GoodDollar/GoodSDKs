@@ -14,9 +14,10 @@ import {
     StreamInfo,
     GetStreamsOptions,
     Environment,
+    TokenSymbol,
 } from "./types"
 import { validateChain } from "./utils"
-import { SupportedChains, CFA_FORWARDER_ADDRESSES, getG$Token } from "./constants"
+import { SupportedChains, CFA_FORWARDER_ADDRESSES, getG$Token, getSUPToken } from "./constants"
 import { SubgraphClient } from "./subgraph/client"
 
 export class StreamingSDK {
@@ -43,15 +44,14 @@ export class StreamingSDK {
         )
         this.environment = options?.environment ?? "production"
 
-        // Retrieve protocol addresses directly from official maps
+        // Protocol addresses from sfpro maps
         this.cfaForwarder = (CFA_FORWARDER_ADDRESSES as Record<number, Address>)[this.chainId]
 
         if (!this.cfaForwarder) {
             throw new Error(`CFA Forwarder address not found for chain ID: ${this.chainId}`)
         }
 
-        // resolve default token
-        this.defaultToken = getG$Token(this.chainId, this.environment)
+        this.defaultToken = this.resolveTokenSymbol(options?.defaultToken)
 
         if (walletClient) {
             this.setWalletClient(walletClient)
@@ -60,6 +60,13 @@ export class StreamingSDK {
         this.subgraphClient = new SubgraphClient(this.chainId, {
             apiKey: options?.apiKey,
         })
+    }
+
+    // Resolves symbol or address to concrete token address
+    private resolveTokenSymbol(token?: TokenSymbol | Address): Address | undefined {
+        if (!token || token === "G$") return getG$Token(this.chainId, this.environment)
+        if (token === "SUP") return getSUPToken(this.chainId, this.environment)
+        return token as Address
     }
 
     setWalletClient(walletClient: WalletClient) {
@@ -80,11 +87,11 @@ export class StreamingSDK {
         }
 
         // resolve token
-        const resolvedToken = token ?? this.defaultToken
+        const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
         if (!resolvedToken) {
             throw new Error(
-                `G$ token not available for chain ${this.chainId} in ${this.environment} environment. ` +
-                `Please provide a token address explicitly or use a supported chain/environment.`
+                `Token address not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide an address explicitly or set a defaultToken symbol.`
             )
         }
 
@@ -107,11 +114,11 @@ export class StreamingSDK {
         }
 
         // resolve token
-        const resolvedToken = token ?? this.defaultToken
+        const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
         if (!resolvedToken) {
             throw new Error(
-                `G$ token not available for chain ${this.chainId} in ${this.environment} environment. ` +
-                `Please provide a token address explicitly or use a supported chain/environment.`
+                `Token address not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide an address explicitly or set a defaultToken symbol.`
             )
         }
 
@@ -131,12 +138,12 @@ export class StreamingSDK {
     async deleteStream(params: DeleteStreamParams): Promise<Hash> {
         const { receiver, token, onHash } = params
 
-        // Use provided token or default to auto-resolved G$ token
-        const resolvedToken = token ?? this.defaultToken
+        // resolve token
+        const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
         if (!resolvedToken) {
             throw new Error(
-                `G$ token not available for chain ${this.chainId} in ${this.environment} environment. ` +
-                `Please provide a token address explicitly or use a supported chain/environment.`
+                `Token address not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide an address explicitly or set a defaultToken symbol.`
             )
         }
 
@@ -172,14 +179,18 @@ export class StreamingSDK {
         }))
     }
 
-    async getSuperTokenBalance(account: Address): Promise<bigint> {
-        const token = getG$Token(this.chainId, this.environment)
+    /**
+     * Get the balance of a SuperToken for an account.
+     * If no token is provided, uses the SDK's defaultToken.
+     */
+    async getSuperTokenBalance(account: Address, token?: TokenSymbol | Address): Promise<bigint> {
+        const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
 
-        if (!token) return BigInt(0)
+        if (!resolvedToken) return BigInt(0)
 
         const balances = await this.subgraphClient.queryBalances(account)
         const tokenBalance = balances.find(
-            (b) => b.token.toLowerCase() === token.toLowerCase(),
+            (b) => b.token.toLowerCase() === resolvedToken.toLowerCase(),
         )
 
         return tokenBalance?.balance ?? BigInt(0)

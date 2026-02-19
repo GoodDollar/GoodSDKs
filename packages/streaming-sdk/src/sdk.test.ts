@@ -10,6 +10,7 @@ import {
     formatFlowRate,
     flowRateFromAmount,
     getG$Token,
+    getSUPToken,
 } from "./index"
 
 /**
@@ -149,14 +150,81 @@ describe("StreamingSDK", () => {
             )
         })
 
-        it("should throw when token cannot be resolved (unsupported chain)", async () => {
-            // Mock a public client for an unsupported chain (e.g. Ethereum Mainnet 1)
-            // Note: validateChain throws if chainId is not supported, so we use a supported chain
-            // but one where getG$Token returns undefined if that were possible.
-            // Actually, we can just test that it throws if we try to initialize with a chain
-            // that is supported but doesn't have a G$ token if there was one.
-            // For now, let's just verify it works for SupportedChains.
+    })
+
+    describe("defaultToken Option", () => {
+        it("should default to G$ when no defaultToken is specified", async () => {
+            const sdk = new StreamingSDK(publicClient, walletClient)
+            await sdk.createStream({ receiver: "0xreceiver" as Address, flowRate: BigInt(100) })
+            expect(publicClient.simulateContract).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    args: expect.arrayContaining([TEST_SUPERTOKEN])
+                })
+            )
         })
+
+        it("should use G$ address when defaultToken is 'G$'", async () => {
+            const sdk = new StreamingSDK(publicClient, walletClient, { defaultToken: "G$" })
+            await sdk.createStream({ receiver: "0xreceiver" as Address, flowRate: BigInt(100) })
+            expect(publicClient.simulateContract).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    args: expect.arrayContaining([TEST_SUPERTOKEN])
+                })
+            )
+        })
+
+        it("should use raw address when defaultToken is an Address", async () => {
+            const customToken = "0xcafe000000000000000000000000000000000001" as Address
+            const sdk = new StreamingSDK(publicClient, walletClient, { defaultToken: customToken })
+            await sdk.createStream({ receiver: "0xreceiver" as Address, flowRate: BigInt(100) })
+            expect(publicClient.simulateContract).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    args: expect.arrayContaining([customToken])
+                })
+            )
+        })
+
+        it("should resolve SUP token for Base when defaultToken is 'SUP'", () => {
+            const basePublicClient = createMockPublicClient(SupportedChains.BASE)
+            const baseWalletClient = createMockWalletClient(SupportedChains.BASE)
+            const sdk = new StreamingSDK(basePublicClient, baseWalletClient, { defaultToken: "SUP" })
+            expect(sdk).toBeDefined()
+
+            const supAddr = getSUPToken(SupportedChains.BASE, "production")
+            expect(supAddr).toBe("0xa69f80524381275A7fFdb3AE01c54150644c8792")
+        })
+
+        it("should allow per-call token to override defaultToken", async () => {
+            const overrideToken = "0xoverride000000000000000000000000000000001" as Address
+            const sdk = new StreamingSDK(publicClient, walletClient, { defaultToken: "G$" })
+            await sdk.createStream({ receiver: "0xreceiver" as Address, flowRate: BigInt(100), token: overrideToken })
+            expect(publicClient.simulateContract).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    args: expect.arrayContaining([overrideToken])
+                })
+            )
+        })
+
+        it("should resolve balance for defaultToken when symbol given to getSuperTokenBalance", async () => {
+            const sdk = new StreamingSDK(publicClient, undefined, { defaultToken: "G$" })
+            const mockBalances = [{ token: TEST_SUPERTOKEN, balance: BigInt(500) }]
+            vi.spyOn(sdk.getSubgraphClient(), "queryBalances").mockResolvedValue(mockBalances as any)
+
+            const balance = await sdk.getSuperTokenBalance("0xaccount" as Address)
+            expect(balance).toBe(BigInt(500))
+        })
+
+        it("should resolve balance for SUP when explicitly requested via symbol", async () => {
+            const basePublicClient = createMockPublicClient(SupportedChains.BASE)
+            const sdk = new StreamingSDK(basePublicClient)
+            const SUP_ADDR = getSUPToken(SupportedChains.BASE) as Address
+            const mockBalances = [{ token: SUP_ADDR, balance: BigInt(1000) }]
+            vi.spyOn(sdk.getSubgraphClient(), "queryBalances").mockResolvedValue(mockBalances as any)
+
+            const balance = await sdk.getSuperTokenBalance("0xaccount" as Address, "SUP")
+            expect(balance).toBe(BigInt(1000))
+        })
+
     })
 })
 
@@ -257,6 +325,18 @@ describe("Error Handling", () => {
             expect(() => new StreamingSDK(publicClient, walletClient, { chainId: 1 })).toThrow(
                 "Unsupported chain ID"
             )
+        })
+
+        it("should throw when token cannot be resolved (Base with G$ symbol)", async () => {
+            const basePublicClient = createMockPublicClient(SupportedChains.BASE)
+            const sdk = new StreamingSDK(basePublicClient)
+            await expect(
+                sdk.createStream({
+                    receiver: "0xreceiver" as Address,
+                    flowRate: BigInt(100),
+                    token: "G$"
+                })
+            ).rejects.toThrow("Token address not available")
         })
     })
 

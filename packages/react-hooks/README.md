@@ -69,13 +69,13 @@ export const App = () => (
 ### Streaming Hooks
 
 - `useStreamList({ account, environment, enabled })`
-  - Fetches all active streams for an account.
+  - Fetches all active streams for an account. Supports filtering by environment.
 - `useGDAPools({ environment, enabled })`
-  - Lists all available distribution pools.
+  - Lists all available distribution pools for a given environment.
 - `useSupReserves({ apiKey, environment, enabled })`
   - Fetches SUP reserve holdings. **Requires `apiKey`** for Base mainnet (decentralized subgraph).
 - `useCreateStream()`, `useUpdateStream()`, `useDeleteStream()`
-  - Mutators for managing 1-to-1 streams.
+  - Mutators for managing 1-to-1 streams. Supports `token` as `TokenSymbol` ('G$' | 'SUP') or `Address`.
 - `useConnectToPool()`, `useDisconnectFromPool()`
   - Mutators for GDA pool memberships.
 

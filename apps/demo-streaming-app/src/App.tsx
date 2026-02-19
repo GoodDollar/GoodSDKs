@@ -28,11 +28,13 @@ import {
     calculateFlowRate,
     formatFlowRate,
     getG$Token,
+    getSUPToken,
     SupportedChains,
     type Environment,
     type StreamInfo,
     type GDAPool,
     type SUPReserveLocker,
+    type TokenSymbol,
 } from "@goodsdks/streaming-sdk"
 import { parseEther, type Address } from "viem"
 
@@ -255,6 +257,7 @@ export default function App() {
     const { switchChain } = useSwitchChain()
 
     const [environment, setEnvironment] = useState<Environment>("production")
+    const [selectedToken, setSelectedToken] = useState<TokenSymbol>("G$")
     const [poolAddress, setPoolAddress] = useState("")
     const [timeUnit, setTimeUnit] = useState<"month" | "day" | "hour">("month")
     const apiKey = import.meta.env.VITE_GRAPH_API_KEY || ""
@@ -287,13 +290,20 @@ export default function App() {
 
     const chainId = publicClient?.chain?.id
 
-    // Display token address; resolution is handled by SDK
-    const G$_TOKEN = chainId ? getG$Token(chainId, environment) : undefined
+    // Resolves address for display
+    const RESOLVED_TOKEN_ADDR = chainId
+        ? (selectedToken === "G$" ? getG$Token(chainId, environment) : getSUPToken(chainId, environment))
+        : undefined
 
     const handleCreateStream = (receiver: string, amount: string) => {
         if (!receiver || !amount) return alert("Please fill in all fields")
         const flowRate = calculateFlowRate(parseEther(amount), timeUnit)
-        runMutationWithAlerts(createStream, { receiver: receiver as Address, environment, flowRate }, {
+        runMutationWithAlerts(createStream, {
+            receiver: receiver as Address,
+            environment,
+            flowRate,
+            token: selectedToken
+        }, {
             onSuccess: () => refetchStreams(),
             successMessage: "Stream created!"
         })
@@ -302,7 +312,12 @@ export default function App() {
     const handleUpdateStream = (receiver: string, amount: string) => {
         if (!receiver || !amount) return alert("Please fill in all fields")
         const newFlowRate = calculateFlowRate(parseEther(amount), timeUnit)
-        runMutationWithAlerts(updateStream, { receiver: receiver as Address, environment, newFlowRate }, {
+        runMutationWithAlerts(updateStream, {
+            receiver: receiver as Address,
+            environment,
+            newFlowRate,
+            token: selectedToken
+        }, {
             onSuccess: () => refetchStreams(),
             successMessage: "Stream updated!"
         })
@@ -310,7 +325,11 @@ export default function App() {
 
     const handleDeleteStream = (receiver: string) => {
         if (!receiver) return alert("Please provide receiver address")
-        runMutationWithAlerts(deleteStream, { receiver: receiver as Address, environment }, {
+        runMutationWithAlerts(deleteStream, {
+            receiver: receiver as Address,
+            environment,
+            token: selectedToken
+        }, {
             onSuccess: () => refetchStreams(),
             successMessage: "Stream deleted!"
         })
@@ -368,7 +387,25 @@ export default function App() {
                             </XStack>
                         </SectionCard>
 
-                        <SectionCard bg="white" gap="$2" title="SDK ENVIRONMENT" flex={1}>
+                        <SectionCard bg="white" gap="$2" title="TOKEN & ENVIRONMENT" flex={1}>
+                            <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1" mb="$2">
+                                {(["G$", "SUP"] as const).map(tk => (
+                                    <Button
+                                        key={tk}
+                                        size="$2"
+                                        flex={1}
+                                        backgroundColor={selectedToken === tk ? "white" : "transparent"}
+                                        color={selectedToken === tk ? "$blue10" : "$gray11"}
+                                        borderWidth={0}
+                                        elevation={selectedToken === tk ? 2 : 0}
+                                        onPress={() => setSelectedToken(tk)}
+                                        disabled={tk === "G$" && chainId === SupportedChains.BASE} // G$ not on Base yet
+                                        opacity={tk === "G$" && chainId === SupportedChains.BASE ? 0.3 : 1}
+                                    >
+                                        {tk}
+                                    </Button>
+                                ))}
+                            </XStack>
                             <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1">
                                 {(["production", "staging", "development"] as const).map(env => (
                                     <Button
@@ -385,8 +422,8 @@ export default function App() {
                                     </Button>
                                 ))}
                             </XStack>
-                            <Text fontSize={12} color="$gray10">
-                                G$ Token: <Text fontWeight="bold" color="$blue10">{G$_TOKEN ? `${G$_TOKEN.slice(0, 10)}...` : "Not configured"}</Text>
+                            <Text fontSize={11} color="$gray10" mt="$2">
+                                Current {selectedToken}: <Text fontWeight="bold" color="$blue10">{RESOLVED_TOKEN_ADDR ? `${RESOLVED_TOKEN_ADDR.slice(0, 10)}...` : "Not available"}</Text>
                             </Text>
                         </SectionCard>
                     </XStack>
@@ -415,7 +452,7 @@ export default function App() {
                                         onAction={handleCreateStream}
                                         timeUnit={timeUnit}
                                         setTimeUnit={setTimeUnit}
-                                        disabled={!G$_TOKEN}
+                                        disabled={!RESOLVED_TOKEN_ADDR}
                                     />
                                 </View>
                                 <View flex={1}>
@@ -425,7 +462,7 @@ export default function App() {
                                         buttonColor="$orange10"
                                         isLoading={isUpdating}
                                         onAction={handleUpdateStream}
-                                        disabled={!G$_TOKEN}
+                                        disabled={!RESOLVED_TOKEN_ADDR}
                                     />
                                 </View>
                             </XStack>
@@ -437,7 +474,7 @@ export default function App() {
                                 isLoading={isDeleting}
                                 onAction={(r) => handleDeleteStream(r)}
                                 showAmount={false}
-                                disabled={!G$_TOKEN}
+                                disabled={!RESOLVED_TOKEN_ADDR}
                             />
                         </YStack>
                     )}
