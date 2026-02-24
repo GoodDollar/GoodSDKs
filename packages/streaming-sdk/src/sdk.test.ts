@@ -100,12 +100,19 @@ describe("StreamingSDK", () => {
             receiver: "0xreceiver" as Address,
             token: TEST_SUPERTOKEN,
             flowRate: BigInt(100),
+            userData: "0x1234",
         })
 
         expect(hash).toBe("0xhash")
         expect(publicClient.simulateContract).toHaveBeenCalledWith(
             expect.objectContaining({
-                args: expect.arrayContaining([TEST_SUPERTOKEN, "0xreceiver", BigInt(100)]),
+                args: expect.arrayContaining([
+                    TEST_SUPERTOKEN,
+                    "0x0000000000000000000000000000000000000001",
+                    "0xreceiver",
+                    BigInt(100),
+                    "0x1234",
+                ]),
             })
         )
     })
@@ -115,6 +122,7 @@ describe("StreamingSDK", () => {
         const hash = await sdk.deleteStream({
             receiver: "0xreceiver" as Address,
             token: TEST_SUPERTOKEN,
+            userData: "0xabcd" as `0x${string}`,
         })
         expect(hash).toBe("0xhash")
     })

@@ -69,9 +69,9 @@ export const App = () => (
 ### Streaming Hooks
 
 - `useStreamList({ account, environment, enabled })`
-  - Fetches all active streams for an account. Supports filtering by environment.
-- `useGDAPools({ environment, enabled })`
-  - Lists all available distribution pools for a given environment.
+  - Fetches all active streams for an account (subgraph query is chain-based; `environment` only affects SDK token resolution for write operations).
+- `useGDAPools({ enabled })`
+  - Lists all available distribution pools for the connected chain.
 - `useSupReserves({ apiKey, enabled })`
   - Fetches SUP reserve holdings. **Requires `apiKey`** for Base mainnet (decentralized subgraph).
 - `useCreateStream()`, `useUpdateStream()`, `useDeleteStream()`

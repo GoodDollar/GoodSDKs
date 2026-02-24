@@ -73,7 +73,12 @@ export class GdaSDK {
 
     // Resolves symbol or address to concrete token address
     private resolveTokenSymbol(token?: TokenSymbol | Address): Address | undefined {
-        if (!token || token === "G$") return getG$Token(this.chainId, this.environment)
+        if (!token) {
+            return this.chainId === SupportedChains.BASE
+                ? getSUPToken(this.chainId, this.environment)
+                : getG$Token(this.chainId, this.environment)
+        }
+        if (token === "G$") return getG$Token(this.chainId, this.environment)
         if (token === "SUP") return getSUPToken(this.chainId, this.environment)
         return token as Address
     }

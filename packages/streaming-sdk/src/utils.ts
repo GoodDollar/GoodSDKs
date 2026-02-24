@@ -3,8 +3,9 @@ import {
     SupportedChains,
     CHAIN_CONFIGS,
     getG$Token,
+    getSUPToken,
 } from "./constants"
-import { Environment } from "./types"
+import { Environment, TokenSymbol } from "./types"
 
 // Chain utilities
 export function isSupportedChain(
@@ -29,13 +30,7 @@ export function getSuperTokenAddress(
     chainId: SupportedChains,
     environment: Environment,
 ): Address {
-    const address = getG$Token(chainId, environment)
-    if (!address) {
-        throw new Error(
-            `G$ SuperToken address not configured for chain ${CHAIN_CONFIGS[chainId].name} in ${environment} environment`,
-        )
-    }
-    return address
+    return getSuperTokenAddressForSymbol(chainId, environment, "G$")
 }
 
 export function getSuperTokenAddressSafe(
@@ -44,6 +39,36 @@ export function getSuperTokenAddressSafe(
 ): Address | undefined {
     if (!isSupportedChain(chainId)) return undefined
     return getG$Token(chainId, environment)
+}
+
+export function getSuperTokenAddressForSymbol(
+    chainId: SupportedChains,
+    environment: Environment,
+    token: TokenSymbol,
+): Address {
+    const address =
+        token === "SUP"
+            ? getSUPToken(chainId, environment)
+            : getG$Token(chainId, environment)
+
+    if (!address) {
+        throw new Error(
+            `${token} SuperToken address not configured for chain ${CHAIN_CONFIGS[chainId].name} in ${environment} environment`,
+        )
+    }
+
+    return address
+}
+
+export function getSuperTokenAddressForSymbolSafe(
+    chainId: number | undefined,
+    environment: Environment,
+    token: TokenSymbol,
+): Address | undefined {
+    if (!isSupportedChain(chainId)) return undefined
+    return token === "SUP"
+        ? getSUPToken(chainId, environment)
+        : getG$Token(chainId, environment)
 }
 
 export function getChainConfig(chainId: SupportedChains) {

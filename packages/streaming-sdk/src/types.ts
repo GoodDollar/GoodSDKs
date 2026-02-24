@@ -15,11 +15,13 @@ export interface StreamingSDKOptions {
   apiKey?: string
 
   /**
-   * Default token for stream operations. Defaults to G$ with auto-resolved address.
+   * Default token for stream operations. Defaults to:
+   * - Celo: `G$`
+   * - Base: `SUP`
    * 
    * - `'G$'` | `'SUP'` → address resolved from environment + chainId
    * - `Address` → use specific token address
-   * - `undefined` → defaults to G$
+   * - `undefined` → defaults to chain default token
    * 
    * Can be overridden per-operation via the `token` parameter.
    */
@@ -40,6 +42,8 @@ export interface CreateStreamParams {
   receiver: Address
   token?: TokenSymbol | Address
   flowRate: bigint
+  /** Optional bytes forwarded to the Superfluid CFA forwarder. */
+  userData?: `0x${string}`
   onHash?: (hash: Hash) => void
 }
 
@@ -54,6 +58,8 @@ export interface UpdateStreamParams {
 export interface DeleteStreamParams {
   receiver: Address
   token?: TokenSymbol | Address
+  /** Optional bytes forwarded to the Superfluid CFA forwarder. */
+  userData?: `0x${string}`
   onHash?: (hash: Hash) => void
 }
 

@@ -26,5 +26,7 @@ export {
     validateChain,
     getSuperTokenAddress,
     getSuperTokenAddressSafe,
+    getSuperTokenAddressForSymbol,
+    getSuperTokenAddressForSymbolSafe,
     getChainConfig,
 } from "./utils"

@@ -13,9 +13,6 @@ import {
     type SUPReserveLocker,
     type Environment,
     type TokenSymbol,
-    type CreateStreamParams,
-    type UpdateStreamParams,
-    type DeleteStreamParams,
 } from "@goodsdks/streaming-sdk"
 
 /**
@@ -25,6 +22,7 @@ export interface UseCreateStreamParams {
     receiver: Address
     token?: TokenSymbol | Address
     flowRate: bigint
+    userData?: `0x${string}`
     environment?: Environment
 }
 
@@ -39,6 +37,7 @@ export interface UseUpdateStreamParams {
 export interface UseDeleteStreamParams {
     receiver: Address
     token?: TokenSymbol | Address
+    userData?: `0x${string}`
     environment?: Environment
 }
 
@@ -50,7 +49,6 @@ export interface UseStreamListParams {
 }
 
 export interface UseGDAPoolsParams {
-    environment?: Environment
     enabled?: boolean
 }
 
@@ -125,11 +123,12 @@ export function useCreateStream() {
             receiver,
             token,
             flowRate,
+            userData = "0x",
             environment = "production",
         }: UseCreateStreamParams): Promise<Hash> => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.createStream({ receiver, token, flowRate })
+            return sdk.createStream({ receiver, token, flowRate, userData })
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["streams"] })
@@ -168,10 +167,11 @@ export function useDeleteStream() {
             receiver,
             token,
             environment = "production",
+            userData = "0x",
         }: UseDeleteStreamParams): Promise<Hash> => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.deleteStream({ receiver, token })
+            return sdk.deleteStream({ receiver, token, userData })
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["streams"] })
@@ -200,21 +200,20 @@ export function useStreamList({
 }
 
 export function useGDAPools({
-    environment = "production",
     enabled = true,
 }: UseGDAPoolsParams = {}) {
     const publicClient = usePublicClient()
     const sdk = useMemo(() => {
         if (!publicClient) return null
         try {
-            return new GdaSDK(publicClient, undefined, { chainId: publicClient.chain?.id, environment })
+            return new GdaSDK(publicClient, undefined, { chainId: publicClient.chain?.id })
         } catch (e) {
             return null
         }
-    }, [publicClient, environment])
+    }, [publicClient])
 
     return useQuery<GDAPool[]>({
-        queryKey: ["gda-pools", publicClient?.chain?.id, environment],
+        queryKey: ["gda-pools", publicClient?.chain?.id],
         queryFn: async () => {
             if (!sdk) throw new Error("Public client not available")
             return sdk.getDistributionPools()

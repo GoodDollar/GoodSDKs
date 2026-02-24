@@ -4,7 +4,7 @@ TypeScript SDK for Superfluid streams on Celo and Base, supporting G$ and SUP Su
 
 ## Features
 
-- Auto-resolving token addresses (defaults to G$)
+- Auto-resolving token addresses (defaults to G$ on Celo, SUP on Base)
 - Stream lifecycle: create, update, delete
 - GDA pool connections
 - Subgraph queries for balances and history
@@ -24,7 +24,7 @@ import { StreamingSDK, calculateFlowRate } from '@goodsdks/streaming-sdk'
 import { createPublicClient, createWalletClient, http, parseEther } from 'viem'
 import { celo } from 'viem/chains'
 
-// Defaults to G$ token with production environment
+// Defaults to chain default token with production environment (G$ on Celo, SUP on Base)
 const sdk = new StreamingSDK(publicClient, walletClient)
 
 // Create stream (100 G$ per month)
@@ -37,10 +37,10 @@ await sdk.createStream({
 
 ## Token Configuration
 
-Defaults to G$ (resolved from environment + chainId):
+Defaults to chain default token (resolved from environment + chainId):
 
 ```typescript
-// Uses G$ token (default)
+// Uses chain default token (default)
 const sdk = new StreamingSDK(publicClient, walletClient, {
   environment: 'production'
 })
@@ -75,6 +75,7 @@ await sdk.createStream({
   receiver: '0x...',
   flowRate: 1000n,
   token?: 'G$' | 'SUP' | Address,  // optional override
+  userData?: '0x',
   onHash?: (hash) => console.log(hash)
 })
 ```
@@ -99,6 +100,7 @@ Deletes a stream.
 await sdk.deleteStream({
   receiver: '0x...',
   token?: 'G$' | 'SUP' | Address,
+  userData?: '0x',
   onHash?: (hash) => console.log(hash)
 })
 ```

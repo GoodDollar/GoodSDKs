@@ -65,7 +65,12 @@ export class StreamingSDK {
 
     // Resolves symbol or address to concrete token address
     private resolveTokenSymbol(token?: TokenSymbol | Address): Address | undefined {
-        if (!token || token === "G$") return getG$Token(this.chainId, this.environment)
+        if (!token) {
+            return this.chainId === SupportedChains.BASE
+                ? getSUPToken(this.chainId, this.environment)
+                : getG$Token(this.chainId, this.environment)
+        }
+        if (token === "G$") return getG$Token(this.chainId, this.environment)
         if (token === "SUP") return getSUPToken(this.chainId, this.environment)
         return token as Address
     }
@@ -81,7 +86,7 @@ export class StreamingSDK {
     }
 
     async createStream(params: CreateStreamParams): Promise<Hash> {
-        const { receiver, token, flowRate, onHash } = params
+        const { receiver, token, flowRate, userData = "0x", onHash } = params
 
         if (!receiver) throw new Error("Receiver address is required")
         if (flowRate <= BigInt(0)) {
@@ -97,12 +102,14 @@ export class StreamingSDK {
             )
         }
 
+        const account = await this.getAccount()
+
         return this.submitAndWait(
             {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
-                functionName: "setFlowrate",
-                args: [resolvedToken, receiver, flowRate],
+                functionName: "createFlow",
+                args: [resolvedToken, account, receiver, flowRate, userData],
             },
             onHash,
         )
@@ -138,7 +145,7 @@ export class StreamingSDK {
     }
 
     async deleteStream(params: DeleteStreamParams): Promise<Hash> {
-        const { receiver, token, onHash } = params
+        const { receiver, token, userData = "0x", onHash } = params
 
         // resolve token
         const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
@@ -156,7 +163,7 @@ export class StreamingSDK {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
                 functionName: "deleteFlow",
-                args: [resolvedToken, account, receiver, "0x"],
+                args: [resolvedToken, account, receiver, userData],
             },
             onHash,
         )

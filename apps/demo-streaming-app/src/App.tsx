@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import {
     View,
     Text,
@@ -276,12 +276,11 @@ export default function App() {
         account: address as Address,
         environment,
         enabled: !!address,
-    }) as { data: StreamInfo[] | undefined, isLoading: boolean, refetch: () => void }
+    })
 
     const { data: pools, isLoading: poolsLoading } = useGDAPools({
-        environment,
         enabled: !!address,
-    }) as { data: GDAPool[] | undefined, isLoading: boolean }
+    })
 
     const { data: supReserves, isLoading: supLoading } = useSupReserves({
         apiKey,
@@ -289,6 +288,17 @@ export default function App() {
     })
 
     const chainId = publicClient?.chain?.id
+
+    // Keep UI state consistent with network capabilities
+    useEffect(() => {
+        if (chainId === SupportedChains.BASE) {
+            if (selectedToken !== "SUP") setSelectedToken("SUP")
+            if (environment !== "production") setEnvironment("production")
+        }
+        if (chainId === SupportedChains.CELO) {
+            if (selectedToken !== "G$") setSelectedToken("G$")
+        }
+    }, [chainId, environment, selectedToken])
 
     // Resolves address for display
     const RESOLVED_TOKEN_ADDR = chainId
@@ -390,6 +400,8 @@ export default function App() {
                         <SectionCard bg="white" gap="$2" title="TOKEN & ENVIRONMENT" flex={1}>
                             <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1" mb="$2">
                                 {(["G$", "SUP"] as const).map(tk => (
+                                    // Token availability is chain-dependent: G$ on Celo, SUP on Base
+                                    // Keep UI explicit to avoid "Not available" confusion.
                                     <Button
                                         key={tk}
                                         size="$2"
@@ -399,8 +411,16 @@ export default function App() {
                                         borderWidth={0}
                                         elevation={selectedToken === tk ? 2 : 0}
                                         onPress={() => setSelectedToken(tk)}
-                                        disabled={tk === "G$" && chainId === SupportedChains.BASE} // G$ not on Base yet
-                                        opacity={tk === "G$" && chainId === SupportedChains.BASE ? 0.3 : 1}
+                                        disabled={
+                                            (tk === "G$" && chainId === SupportedChains.BASE) ||
+                                            (tk === "SUP" && chainId === SupportedChains.CELO)
+                                        }
+                                        opacity={
+                                            (tk === "G$" && chainId === SupportedChains.BASE) ||
+                                                (tk === "SUP" && chainId === SupportedChains.CELO)
+                                                ? 0.3
+                                                : 1
+                                        }
                                     >
                                         {tk}
                                     </Button>
@@ -417,6 +437,8 @@ export default function App() {
                                         borderWidth={0}
                                         elevation={environment === env ? 2 : 0}
                                         onPress={() => setEnvironment(env)}
+                                        disabled={chainId === SupportedChains.BASE && env !== "production"}
+                                        opacity={chainId === SupportedChains.BASE && env !== "production" ? 0.4 : 1}
                                     >
                                         {env.charAt(0).toUpperCase() + env.slice(1)}
                                     </Button>
