@@ -18,7 +18,7 @@ export const ClaimButton: React.FC = () => {
   const [txHash, setTxHash] = useState<string | null>(null)
   const { sdk: claimSDK, loading, error: sdkError } = useClaimSDK("development")
   const [sdk, setSdk] = useState<typeof claimSDK | null>(null)
-  const [claimAmount, setClaimAmount] = useState<Number | null>(null)
+  const [claimAmount, setClaimAmount] = useState<number | null>(null)
   const [altClaimAvailable, setAltClaimAvailable] = useState(false)
   const [altChainId, setAltChainId] = useState<SupportedChains | null>(null)
 

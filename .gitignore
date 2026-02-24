@@ -40,3 +40,5 @@ yarn-error.log*
 apps/engagement-app/tsconfig.tsbuildinfo
 .vscode/settings.json
 e2e.log 
+.bounties
+codex-resume
