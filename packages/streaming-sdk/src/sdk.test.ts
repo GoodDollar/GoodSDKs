@@ -100,13 +100,12 @@ describe("StreamingSDK", () => {
             receiver: "0xreceiver" as Address,
             token: TEST_SUPERTOKEN,
             flowRate: BigInt(100),
-            userData: "0x1234"
         })
 
         expect(hash).toBe("0xhash")
         expect(publicClient.simulateContract).toHaveBeenCalledWith(
             expect.objectContaining({
-                args: expect.arrayContaining(["0x1234"])
+                args: expect.arrayContaining([TEST_SUPERTOKEN, "0xreceiver", BigInt(100)]),
             })
         )
     })

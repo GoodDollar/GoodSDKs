@@ -19,7 +19,7 @@ export function isSupportedChain(
 export function validateChain(chainId: number | undefined): SupportedChains {
     if (!isSupportedChain(chainId)) {
         throw new Error(
-            `Unsupported chain ID: ${chainId}. Supported chains: Celo (42220), Base (8453), Base Sepolia (84532)`,
+            `Unsupported chain ID: ${chainId}. Supported chains: Celo (42220), Base (8453)`,
         )
     }
     return chainId

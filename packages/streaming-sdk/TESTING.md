@@ -44,7 +44,10 @@ async function testSDK() {
   // 3. Test subgraph queries
   console.log('Step 3: Query active streams')
   try {
-    const streams = await sdk.getActiveStreams('0x0000000000000000000000000000000000000001')
+    const streams = await sdk.getActiveStreams({
+      account: '0x0000000000000000000000000000000000000001',
+      direction: 'all',
+    })
     console.log(`   Found ${streams.length} active streams\n`)
   } catch (error) {
     console.log(`   Query executed (account may not exist): ${error.message}\n`)
@@ -326,5 +329,4 @@ Run with:
 chmod +x validate-sdk.sh
 ./validate-sdk.sh
 ```
-
 

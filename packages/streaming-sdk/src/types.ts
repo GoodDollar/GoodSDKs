@@ -5,7 +5,7 @@ export type Environment = "production" | "staging" | "development"
 export type TokenSymbol = "G$" | "SUP"
 
 export interface StreamingSDKOptions {
-  /** Chain ID. Supported: Celo (42220), Base (8453), Base Sepolia (84532). Inferred from client if omitted. */
+  /** Chain ID. Supported: Celo (42220), Base (8453). Inferred from client if omitted. */
   chainId?: number
 
   /** Token address resolution environment. @default 'production' */
@@ -40,7 +40,6 @@ export interface CreateStreamParams {
   receiver: Address
   token?: TokenSymbol | Address
   flowRate: bigint
-  userData?: `0x${string}`
   onHash?: (hash: Hash) => void
 }
 

@@ -81,7 +81,7 @@ export class StreamingSDK {
     }
 
     async createStream(params: CreateStreamParams): Promise<Hash> {
-        const { receiver, token, flowRate, userData = "0x", onHash } = params
+        const { receiver, token, flowRate, onHash } = params
 
         if (!receiver) throw new Error("Receiver address is required")
         if (flowRate <= BigInt(0)) {

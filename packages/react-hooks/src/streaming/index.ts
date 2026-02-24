@@ -25,7 +25,6 @@ export interface UseCreateStreamParams {
     receiver: Address
     token?: TokenSymbol | Address
     flowRate: bigint
-    userData?: `0x${string}`
     environment?: Environment
 }
 
@@ -71,7 +70,6 @@ export interface UseDisconnectFromPoolParams {
 }
 
 export interface UseSupReservesParams {
-    environment?: Environment
     apiKey?: string
     enabled?: boolean
 }
@@ -127,12 +125,11 @@ export function useCreateStream() {
             receiver,
             token,
             flowRate,
-            userData = "0x",
             environment = "production",
         }: UseCreateStreamParams): Promise<Hash> => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.createStream({ receiver, token, flowRate, userData })
+            return sdk.createStream({ receiver, token, flowRate })
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["streams"] })
