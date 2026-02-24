@@ -103,10 +103,13 @@ await sdk.deleteStream({
 })
 ```
 
-#### `getActiveStreams(account, direction?)`
+#### `getActiveStreams(options)`
 Returns active streams for an account.
 ```typescript
-const streams = await sdk.getActiveStreams('0x...', 'outgoing' | 'incoming' | 'all')
+const streams = await sdk.getActiveStreams({
+  account: '0x...',
+  direction: 'outgoing' // 'incoming' | 'outgoing' | 'all'
+})
 ```
 
 #### `getSuperTokenBalance(account, token?)`

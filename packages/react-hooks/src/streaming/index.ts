@@ -51,6 +51,7 @@ export interface UseStreamListParams {
 }
 
 export interface UseGDAPoolsParams {
+    environment?: Environment
     enabled?: boolean
 }
 
@@ -202,20 +203,21 @@ export function useStreamList({
 }
 
 export function useGDAPools({
-    enabled = true
+    environment = "production",
+    enabled = true,
 }: UseGDAPoolsParams = {}) {
     const publicClient = usePublicClient()
     const sdk = useMemo(() => {
         if (!publicClient) return null
         try {
-            return new GdaSDK(publicClient, undefined, { chainId: publicClient.chain?.id })
+            return new GdaSDK(publicClient, undefined, { chainId: publicClient.chain?.id, environment })
         } catch (e) {
             return null
         }
-    }, [publicClient])
+    }, [publicClient, environment])
 
     return useQuery<GDAPool[]>({
-        queryKey: ["gda-pools", publicClient?.chain?.id],
+        queryKey: ["gda-pools", publicClient?.chain?.id, environment],
         queryFn: async () => {
             if (!sdk) throw new Error("Public client not available")
             return sdk.getDistributionPools()

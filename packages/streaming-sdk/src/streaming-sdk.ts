@@ -102,7 +102,7 @@ export class StreamingSDK {
                 address: this.cfaForwarder,
                 abi: cfaForwarderAbi,
                 functionName: "setFlowrate",
-                args: [resolvedToken, receiver, flowRate, userData],
+                args: [resolvedToken, receiver, flowRate],
             },
             onHash,
         )
