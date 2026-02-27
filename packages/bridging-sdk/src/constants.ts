@@ -39,7 +39,7 @@ export const SUPPORTED_CHAINS: Record<number, BridgeChain> = {
     id: 50,
     name: "XDC",
     decimals: 18,
-    tokenAddress: "0xA13625A72Aef90645CfCe34e25c114629d7855e7",
+    tokenAddress: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c",
     nativeCurrency: {
       name: "XDC Network",
       symbol: "XDC",

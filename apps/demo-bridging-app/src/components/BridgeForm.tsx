@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react"
-import { useAccount, useReadContract } from "wagmi"
+import { useAccount } from "wagmi"
 import { formatUnits } from "viem"
-import { useBridgingSDK, useBridgeFee, parseAmount } from "@goodsdks/bridging-sdk"
-import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
+import { useBridgingSDK, useBridgeFee } from "@goodsdks/react-hooks"
+import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS, parseAmount } from "@goodsdks/bridging-sdk"
 import type { BridgeProtocol, ChainId } from "@goodsdks/bridging-sdk"
 
 interface BridgeFormProps {
@@ -18,31 +18,36 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   const [amount, setAmount] = useState("")
   const [recipient, setRecipient] = useState("")
   const [isBridging, setIsBridging] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
+  const [allowance, setAllowance] = useState<bigint>(0n)
+  const [balance, setBalance] = useState<{ formatted: string; value: bigint } | undefined>()
   const [error, setError] = useState<string | null>(null)
 
-  // Get user G$ token balance (not native chain balance)
-  const { data: rawBalance } = useReadContract({
-    address: SUPPORTED_CHAINS[fromChain].tokenAddress,
-    abi: [{
-      name: "balanceOf",
-      type: "function",
-      stateMutability: "view",
-      inputs: [{ name: "account", type: "address" }],
-      outputs: [{ name: "", type: "uint256" }],
-    }] as const,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    chainId: fromChain,
-    query: { enabled: !!address },
-  })
+  // Fetch balance and allowance using SDK
+  useEffect(() => {
+    if (!sdk || !address) return
 
-  const decimals = SUPPORTED_CHAINS[fromChain].decimals
-  const balance = rawBalance != null
-    ? { formatted: formatUnits(rawBalance as bigint, decimals), value: rawBalance as bigint }
-    : undefined
+    const fetchData = async () => {
+      try {
+        const [bal, allow] = await Promise.all([
+          sdk.getG$Balance(address),
+          sdk.getAllowance(address)
+        ])
+        const decimals = SUPPORTED_CHAINS[fromChain].decimals
+        setBalance({ formatted: formatUnits(bal, decimals), value: bal })
+        setAllowance(allow)
+      } catch (err) {
+        console.error("Failed to fetch balance/allowance:", err)
+      }
+    }
+
+    fetchData()
+    const interval = setInterval(fetchData, 10000)
+    return () => clearInterval(interval)
+  }, [sdk, address, fromChain])
 
   // Get fee estimate
-  const { fee, loading: feeLoading } = useBridgeFee(
+  const { fee, loading: feeLoading, error: feeError } = useBridgeFee(
     fromChain,
     toChain,
     defaultProtocol
@@ -54,6 +59,27 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       setRecipient(address)
     }
   }, [address, recipient])
+
+  const handleApprove = async () => {
+    if (!sdk) return
+    try {
+      setIsApproving(true)
+      setError(null)
+      const decimals = SUPPORTED_CHAINS[fromChain].decimals
+      const amountInWei = parseAmount(amount, decimals)
+      await sdk.approve(amountInWei)
+      
+      // Refresh allowance
+      if (address) {
+        const allow = await sdk.getAllowance(address)
+        setAllowance(allow)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Approval failed")
+    } finally {
+      setIsApproving(false)
+    }
+  }
 
   const handleBridge = async () => {
     if (!sdk || !address) return
@@ -108,6 +134,10 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
     const estimate = val * 0.999 - (fee ? 0.01 : 0) 
     return Math.max(0, estimate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
+
+  const decimals = SUPPORTED_CHAINS[fromChain].decimals
+  const amountInWei = parseAmount(amount, decimals)
+  const needsApproval = amountInWei > allowance
 
   return (
     <div className="space-y-8">
@@ -242,9 +272,29 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       </div>
 
       {/* Action Button */}
+      {needsApproval ? (
+        <button
+          onClick={handleApprove}
+          disabled={!amount || isApproving || sdkLoading}
+          className="premium-button w-full text-xl py-5 !bg-blue-600 mb-4"
+        >
+          {isApproving ? (
+            <span className="flex items-center justify-center gap-3">
+              <svg className="animate-spin h-6 w-6 text-white" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Approving G$...
+            </span>
+          ) : (
+            `Approve G$ on ${SUPPORTED_CHAINS[fromChain].name}`
+          )}
+        </button>
+      ) : null}
+
       <button
         onClick={handleBridge}
-        disabled={!amount || isBridging || sdkLoading}
+        disabled={!amount || isBridging || sdkLoading || needsApproval}
         className="premium-button w-full text-xl py-5"
       >
         {isBridging ? (
@@ -275,6 +325,11 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       {error && (
         <div className="bg-red-50 text-red-600 p-4 rounded-2xl font-medium text-center border border-red-100">
           {error}
+        </div>
+      )}
+      {feeError && (
+        <div className="bg-orange-50 text-orange-600 p-4 rounded-2xl font-medium text-center border border-orange-100">
+          {feeError}
         </div>
       )}
     </div>

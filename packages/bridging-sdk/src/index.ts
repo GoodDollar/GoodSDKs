@@ -1,10 +1,6 @@
 // Core SDK
 export { BridgingSDK } from "./viem-sdk"
 
-// React Hooks
-export { useBridgingSDK, useBridgeFee, useBridgeTransactionStatus } from "./wagmi-sdk"
-export type { UseBridgingSDKResult } from "./wagmi-sdk"
-
 // Types
 export type {
   BridgeProtocol,
@@ -14,9 +10,6 @@ export type {
   ExecutedTransferEvent,
   EventOptions,
   FeeEstimate,
-  BridgeParams,
-  BridgeParamsWithLz,
-  BridgeParamsWithAxelar,
   CanBridgeResult,
   TransactionStatus,
   BridgeHistory,
@@ -47,20 +40,6 @@ export {
   calculateTotalCost,
   validateSufficientBalance,
 } from "./utils/fees"
-
-export {
-  getExplorerLink,
-  getTransactionStatus,
-  pollTransactionStatus,
-  formatTimestamp,
-  getTimeElapsed,
-  getStatusLabel,
-  getStatusColor,
-  isValidTxHash,
-  truncateTxHash,
-  formatChainName,
-  formatProtocolName,
-} from "./utils/tracking"
 
 // Constants
 export {

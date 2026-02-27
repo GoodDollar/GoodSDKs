@@ -7,30 +7,30 @@ import {
   type TransactionReceipt,
   type SimulateContractParameters,
 } from "viem"
-import { normalizeAmount, denormalizeAmount } from "./utils/decimals"
+import { normalizeAmount } from "./utils/decimals"
 import {
+  fetchFeeEstimates,
   getFeeEstimate,
   validateFeeCoverage,
-  validateSufficientBalance,
 } from "./utils/fees"
-import { getTransactionStatus, getExplorerLink } from "./utils/tracking"
 import {
   SUPPORTED_CHAINS,
   BRIDGE_CONTRACT_ADDRESSES,
   EVENT_QUERY_BATCH_SIZE,
+  API_ENDPOINTS,
 } from "./constants"
 import type {
   BridgeProtocol,
   ChainId,
-  BridgeParams,
-  BridgeParamsWithLz,
-  BridgeParamsWithAxelar,
   CanBridgeResult,
   FeeEstimate,
   BridgeRequestEvent,
   ExecutedTransferEvent,
   EventOptions,
   TransactionStatus,
+  GoodServerFeeResponse,
+  LayerZeroScanResponse,
+  AxelarscanResponse,
 } from "./types"
 
 import { MESSAGE_PASSING_BRIDGE_ABI } from "./abi"
@@ -39,6 +39,7 @@ export class BridgingSDK {
   public publicClient: PublicClient
   private walletClient: WalletClient | null = null
   private currentChainId: ChainId
+  private fees: GoodServerFeeResponse | null = null
 
   constructor(
     publicClient: PublicClient,
@@ -54,6 +55,13 @@ export class BridgingSDK {
     if (!SUPPORTED_CHAINS[this.currentChainId]) {
       throw new Error(`Unsupported chain ID: ${this.currentChainId}`)
     }
+  }
+
+  /**
+   * Initializes the SDK by fetching and caching bridge fees
+   */
+  async initialize(): Promise<void> {
+    this.fees = await fetchFeeEstimates()
   }
 
   setWalletClient(walletClient: WalletClient) {
@@ -113,11 +121,21 @@ export class BridgingSDK {
 
   /**
    * Estimates the fee for bridging to a target chain using a specific protocol
+   * Uses cached fees if available, otherwise fetches them
    */
   async estimateFee(
     targetChainId: ChainId,
     protocol: BridgeProtocol,
   ): Promise<FeeEstimate> {
+    // Protocol support validation
+    if (protocol === "AXELAR" && (this.currentChainId === 50 || this.currentChainId === 122 || targetChainId === 50 || targetChainId === 122)) {
+      throw new Error(`Axelar bridging is not supported for ${SUPPORTED_CHAINS[this.currentChainId].name} or ${SUPPORTED_CHAINS[targetChainId].name}`)
+    }
+
+    if (!this.fees) {
+      await this.initialize()
+    }
+
     return await getFeeEstimate(this.currentChainId, targetChainId, protocol)
   }
 
@@ -136,8 +154,66 @@ export class BridgingSDK {
       protocol,
       msgValue,
       fn: "bridgeTo",
-      args: [target, targetChainId, amount, protocol === "LAYERZERO" ? 0 : 1],
+      args: [target, targetChainId, amount, protocol === "AXELAR" ? 0 : 1],
     })
+  }
+
+  /**
+   * Gets the G$ token balance for an address on the current chain
+   */
+  async getG$Balance(address: Address): Promise<bigint> {
+    const tokenAddress = SUPPORTED_CHAINS[this.currentChainId]?.tokenAddress
+    if (!tokenAddress) throw new Error("G$ token address not found")
+
+    return (await this.publicClient.readContract({
+      address: tokenAddress as Address,
+      abi: parseAbi(["function balanceOf(address) view returns (uint256)"]),
+      functionName: "balanceOf",
+      args: [address],
+    })) as bigint
+  }
+
+  /**
+   * Gets the current allowance for the bridge contract
+   */
+  async getAllowance(owner: Address): Promise<bigint> {
+    const tokenAddress = SUPPORTED_CHAINS[this.currentChainId]?.tokenAddress
+    const bridgeAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
+    
+    if (!tokenAddress || !bridgeAddress) throw new Error("G$ token or bridge address not found")
+
+    return (await this.publicClient.readContract({
+      address: tokenAddress as Address,
+      abi: parseAbi(["function allowance(address,address) view returns (uint256)"]),
+      functionName: "allowance",
+      args: [owner, bridgeAddress as Address],
+    })) as bigint
+  }
+
+  /**
+   * Approves the bridge contract to spend G$ tokens
+   */
+  async approve(amount: bigint): Promise<TransactionReceipt> {
+    if (!this.walletClient) throw new Error("Wallet client not initialized")
+    
+    const tokenAddress = SUPPORTED_CHAINS[this.currentChainId]?.tokenAddress
+    const bridgeAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
+    
+    if (!tokenAddress || !bridgeAddress) throw new Error("G$ token or bridge address not found")
+
+    const account = await this.walletClient.getAddresses()
+    if (!account[0]) throw new Error("No account found")
+
+    const { request } = await this.publicClient.simulateContract({
+      account: account[0],
+      address: tokenAddress as Address,
+      abi: parseAbi(["function approve(address,uint256) returns (bool)"]),
+      functionName: "approve",
+      args: [bridgeAddress as Address, amount],
+    })
+
+    const hash = await this.walletClient.writeContract(request)
+    return await this.publicClient.waitForTransactionReceipt({ hash })
   }
 
   /**
@@ -166,7 +242,7 @@ export class BridgingSDK {
     target: Address,
     targetChainId: ChainId,
     amount: bigint,
-    gasRefundAddress?: Address,
+    _gasRefundAddress?: Address,
     msgValue?: bigint,
   ): Promise<TransactionReceipt> {
     return this.bridgeInternal({
@@ -223,7 +299,25 @@ export class BridgingSDK {
   }
 
   /**
-   * Fetches BridgeRequest events for an address
+   * Fetches the combined, sorted bridge history for an address
+   */
+  async getHistory(address: Address, options?: EventOptions): Promise<(BridgeRequestEvent | ExecutedTransferEvent)[]> {
+    const [requests, executed] = await Promise.all([
+      this.getBridgeRequests(address, options),
+      this.getExecutedTransfers(address, options)
+    ])
+
+    const history: (BridgeRequestEvent | ExecutedTransferEvent)[] = [...requests, ...executed]
+    
+    return history.sort((a, b) => {
+      if (a.blockNumber < b.blockNumber) return 1
+      if (a.blockNumber > b.blockNumber) return -1
+      return 0
+    })
+  }
+
+  /**
+   * Fetches BridgeRequest events for an address with block optimization
    */
   async getBridgeRequests(
     address: Address,
@@ -231,12 +325,11 @@ export class BridgingSDK {
   ): Promise<BridgeRequestEvent[]> {
     const contractAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
     if (!contractAddress) {
-      throw new Error(
-        `Bridge contract not deployed on chain ${this.currentChainId}`,
-      )
+      throw new Error(`Bridge contract not deployed on chain ${this.currentChainId}`)
     }
 
-    const fromBlock = options?.fromBlock || 0n
+    const currentBlock = await this.publicClient.getBlockNumber()
+    const fromBlock = options?.fromBlock || (currentBlock > 50000n ? currentBlock - 50000n : 0n)
     const toBlock = options?.toBlock || "latest"
     const limit = options?.limit || EVENT_QUERY_BATCH_SIZE
 
@@ -245,9 +338,7 @@ export class BridgingSDK {
         address: contractAddress as Address,
         abi: MESSAGE_PASSING_BRIDGE_ABI,
         eventName: "BridgeRequest",
-        args: {
-          from: address,
-        },
+        args: { from: address },
         fromBlock,
         toBlock,
       })
@@ -262,19 +353,17 @@ export class BridgingSDK {
           amount: log.args.normalizedAmount as bigint,
           targetChainId: Number(log.args.targetChainId) as ChainId,
           timestamp: log.args.timestamp as bigint,
-          bridge: log.args.bridge === 0 ? "LAYERZERO" : "AXELAR",
+          bridge: log.args.bridge === 0 ? "AXELAR" : "LAYERZERO",
           id: log.args.id as bigint,
         },
       }))
     } catch (error) {
-      throw new Error(
-        `Failed to fetch bridge requests: ${error instanceof Error ? error.message : "Unknown error"}`,
-      )
+      throw new Error(`Failed to fetch bridge requests: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }
 
   /**
-   * Fetches ExecutedTransfer events for an address
+   * Fetches ExecutedTransfer events for an address with block optimization
    */
   async getExecutedTransfers(
     address: Address,
@@ -282,12 +371,11 @@ export class BridgingSDK {
   ): Promise<ExecutedTransferEvent[]> {
     const contractAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
     if (!contractAddress) {
-      throw new Error(
-        `Bridge contract not deployed on chain ${this.currentChainId}`,
-      )
+      throw new Error(`Bridge contract not deployed on chain ${this.currentChainId}`)
     }
 
-    const fromBlock = options?.fromBlock || 0n
+    const currentBlock = await this.publicClient.getBlockNumber()
+    const fromBlock = options?.fromBlock || (currentBlock > 50000n ? currentBlock - 50000n : 0n)
     const toBlock = options?.toBlock || "latest"
     const limit = options?.limit || EVENT_QUERY_BATCH_SIZE
 
@@ -296,9 +384,7 @@ export class BridgingSDK {
         address: contractAddress as Address,
         abi: MESSAGE_PASSING_BRIDGE_ABI,
         eventName: "ExecutedTransfer",
-        args: {
-          from: address,
-        },
+        args: { from: address },
         fromBlock,
         toBlock,
       })
@@ -313,32 +399,94 @@ export class BridgingSDK {
           amount: log.args.normalizedAmount as bigint,
           fee: log.args.fee as bigint,
           sourceChainId: Number(log.args.sourceChainId) as ChainId,
-          bridge: log.args.bridge === 0 ? "LAYERZERO" : "AXELAR",
+          bridge: log.args.bridge === 0 ? "AXELAR" : "LAYERZERO",
           id: log.args.id as bigint,
         },
       }))
     } catch (error) {
-      throw new Error(
-        `Failed to fetch executed transfers: ${error instanceof Error ? error.message : "Unknown error"}`,
-      )
+      throw new Error(`Failed to fetch executed transfers: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }
 
   /**
-   * Gets the status of a bridge transaction
+   * Gets the status of a bridge transaction from external APIs
    */
   async getTransactionStatus(
     txHash: Hash,
     protocol: BridgeProtocol,
   ): Promise<TransactionStatus> {
-    return await getTransactionStatus(txHash, protocol)
+    if (protocol === "LAYERZERO") {
+      return this.getLayerZeroStatus(txHash)
+    } else {
+      return this.getAxelarStatus(txHash)
+    }
+  }
+
+  private async getLayerZeroStatus(txHash: Hash): Promise<TransactionStatus> {
+    const response = await fetch(`${API_ENDPOINTS.LAYERZERO_SCAN}/message?txHash=${txHash}`)
+    const data: LayerZeroScanResponse = await response.json()
+    if (!data.messages || data.messages.length === 0) return { status: "pending" }
+    const message = data.messages[0]
+    return {
+      status: message.status === "DELIVERED" ? "completed" : message.status === "FAILED" ? "failed" : "pending",
+      srcTxHash: message.srcTxHash,
+      dstTxHash: message.dstTxHash,
+      timestamp: message.timestamp * 1000,
+    }
+  }
+
+  private async getAxelarStatus(txHash: Hash): Promise<TransactionStatus> {
+    const response = await fetch(`${API_ENDPOINTS.AXELARSCAN}/gmp?txHash=${txHash}`)
+    const data: AxelarscanResponse = await response.json()
+    if (!data.data || data.data.length === 0) return { status: "pending" }
+    const transaction = data.data[0]
+    return {
+      status: transaction.status === "executed" ? "completed" : transaction.status === "failed" ? "failed" : "pending",
+      srcTxHash: transaction.sourceTxHash,
+      dstTxHash: transaction.destinationTxHash,
+      timestamp: new Date(transaction.updatedAt).getTime(),
+    }
   }
 
   /**
    * Generates an explorer link for a bridge transaction
    */
-  getExplorerLink(txHash: Hash, protocol: BridgeProtocol): string {
-    return getExplorerLink(txHash, protocol)
+  explorerLink(txHash: Hash, protocol: BridgeProtocol): string {
+    return protocol === "LAYERZERO" 
+      ? `https://layerzeroscan.com/tx/${txHash}`
+      : `https://axelarscan.io/gmp/${txHash}`
+  }
+
+  /**
+   * Formats a chain name for display
+   */
+  static formatChainName(chainId: ChainId): string {
+    switch (chainId) {
+      case 42220: return "Celo"
+      case 122: return "Fuse"
+      case 1: return "Ethereum"
+      case 50: return "XDC"
+      default: return `Chain ${chainId}`
+    }
+  }
+
+  /**
+   * Formats a protocol name for display
+   */
+  static formatProtocolName(protocol: BridgeProtocol): string {
+    return protocol === "LAYERZERO" ? "LayerZero" : "Axelar"
+  }
+
+  /**
+   * Gets a human-readable status label
+   */
+  static getStatusLabel(status: TransactionStatus): string {
+    switch (status.status) {
+      case "pending": return "Pending"
+      case "completed": return "Completed"
+      case "failed": return "Failed"
+      default: return "Unknown"
+    }
   }
 
   /**

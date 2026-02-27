@@ -36,6 +36,7 @@
     "wagmi": "*"
   },
   "dependencies": {
+    "@goodsdks/bridging-sdk": "workspace:*",
     "@goodsdks/citizen-sdk": "*",
     "@goodsdks/good-reserve": "workspace:*",
     "@goodsdks/streaming-sdk": "*",

@@ -1,71 +1,12 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useAccount } from "wagmi"
-import { useBridgingSDK } from "@goodsdks/bridging-sdk"
-import {
-  formatChainName,
-  formatProtocolName,
-  formatTimestamp,
-  getStatusLabel,
-  getExplorerLink,
-} from "@goodsdks/bridging-sdk"
-import type {
-  BridgeRequestEvent,
-  ExecutedTransferEvent,
-  BridgeProtocol,
-} from "@goodsdks/bridging-sdk"
-
-interface TransactionItem {
-  type: "request" | "executed"
-  data: BridgeRequestEvent | ExecutedTransferEvent
-  protocol: BridgeProtocol
-}
+import { useBridgingSDK, useBridgeHistory } from "@goodsdks/react-hooks"
+import { BridgingSDK } from "@goodsdks/bridging-sdk"
+import type { BridgeRequestEvent, ExecutedTransferEvent } from "@goodsdks/bridging-sdk"
 
 export function TransactionHistory() {
   const { address, isConnected } = useAccount()
-  const { sdk } = useBridgingSDK()
-  const [transactions, setTransactions] = useState<TransactionItem[]>([])
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!isConnected || !sdk || !address) return
-
-    const fetchTransactions = async () => {
-      try {
-        setLoading(true)
-        const [requests, executed] = await Promise.all([
-          sdk.getBridgeRequests(address as `0x${string}`),
-          sdk.getExecutedTransfers(address as `0x${string}`),
-        ])
-
-        const allTransactions: TransactionItem[] = [
-          ...requests.map((req) => ({
-            type: "request" as const,
-            data: req,
-            protocol: req.args.bridge,
-          })),
-          ...executed.map((exec) => ({
-            type: "executed" as const,
-            data: exec,
-            protocol: exec.args.bridge,
-          })),
-        ].sort((a, b) =>
-          a.data.blockNumber === b.data.blockNumber
-            ? 0
-            : a.data.blockNumber < b.data.blockNumber
-              ? 1
-              : -1,
-        )
-
-        setTransactions(allTransactions)
-      } catch (err) {
-        console.error("Failed to fetch transactions:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTransactions()
-  }, [isConnected, sdk, address])
+  const { history, loading } = useBridgeHistory(address)
 
   if (!isConnected) return null
 
@@ -95,7 +36,7 @@ export function TransactionHistory() {
     )
   }
 
-  if (transactions.length === 0) {
+  if (history.length === 0) {
     return (
       <div className="premium-card text-center p-12">
         <p className="text-slate-400 font-medium text-lg mb-2">
@@ -110,25 +51,27 @@ export function TransactionHistory() {
 
   return (
     <div className="space-y-4">
-      {transactions.map((tx, index) => (
+      {history.map((tx: BridgeRequestEvent | ExecutedTransferEvent, index: number) => (
         <TransactionCard key={index} transaction={tx} />
       ))}
     </div>
   )
 }
 
-function TransactionCard({ transaction }: { transaction: TransactionItem }) {
+function TransactionCard({ transaction }: { transaction: BridgeRequestEvent | ExecutedTransferEvent }) {
   const { sdk } = useBridgingSDK()
   const [status, setStatus] = useState<any>(null)
   const [statusLoading, setStatusLoading] = useState(false)
+  const type = "targetChainId" in transaction.args ? "request" : "executed"
+  const protocol = transaction.args.bridge
 
   const fetchStatus = async () => {
-    if (!sdk || transaction.type !== "request") return
+    if (!sdk || type !== "request") return
     try {
       setStatusLoading(true)
       const txStatus = await sdk.getTransactionStatus(
-        transaction.data.transactionHash,
-        transaction.protocol,
+        transaction.transactionHash,
+        protocol,
       )
       setStatus(txStatus)
     } catch (err) {
@@ -138,7 +81,8 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
     }
   }
 
-  const formatAmount = (amount: bigint, decimals: number) => {
+  const formatAmountValue = (amount: bigint, chainId: number) => {
+    const decimals = chainId === 1 || chainId === 122 ? 2 : 18
     const val = Number(amount) / Math.pow(10, decimals)
     return val.toLocaleString(undefined, {
       minimumFractionDigits: 2,
@@ -146,33 +90,15 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
     })
   }
 
-  const getDecimalsForChain = (chainId: number) => {
-    switch (chainId) {
-      case 42220:
-      case 50:
-        return 18
-      case 1:
-      case 122:
-        return 2
-      default:
-        return 18
-    }
-  }
+  const srcChainId = type === "request"
+    ? sdk?.publicClient.chain?.id || 42220
+    : (transaction.args as ExecutedTransferEvent["args"]).sourceChainId
 
-  const srcChainId =
-    transaction.type === "request"
-      ? sdk?.publicClient.chain?.id || 42220
-      : (transaction.data.args as any).sourceChainId
+  const dstChainId = type === "request"
+    ? (transaction.args as BridgeRequestEvent["args"]).targetChainId
+    : sdk?.publicClient.chain?.id || 42220
 
-  const dstChainId =
-    transaction.type === "request"
-      ? (transaction.data.args as any).targetChainId
-      : sdk?.publicClient.chain?.id || 42220
-
-  const amount = formatAmount(
-    transaction.data.args.amount,
-    getDecimalsForChain(Number(srcChainId)),
-  )
+  const amount = formatAmountValue(transaction.args.amount, Number(srcChainId))
 
   return (
     <div className="premium-card !p-6 flex flex-col gap-6">
@@ -181,27 +107,21 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="text-slate-900 font-bold">
-              Bridged via {formatProtocolName(transaction.protocol)}
+              Bridged via {BridgingSDK.formatProtocolName(protocol)}
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-slate-400 text-sm font-medium">
-              {transaction.type === "request" &&
-              "timestamp" in transaction.data.args
-                ? formatTimestamp(
-                    Number(
-                      (transaction.data.args as BridgeRequestEvent["args"])
-                        .timestamp,
-                    ) * 1000,
-                  )
-                : `Block #${transaction.data.blockNumber}`}
+              {type === "request"
+                ? new Date(Number((transaction.args as BridgeRequestEvent["args"]).timestamp) * 1000).toLocaleString()
+                : `Block #${transaction.blockNumber}`}
             </span>
           </div>
           <div className="flex items-center gap-3">
             <div
-              className={`w-2 h-2 rounded-full ${transaction.type === "request" ? "bg-blue-500" : "bg-emerald-500"}`}
+              className={`w-2 h-2 rounded-full ${type === "request" ? "bg-blue-500" : "bg-emerald-500"}`}
             ></div>
             <span className="text-slate-500 text-sm font-semibold capitalize">
-              {transaction.type === "request" ? "Initiated" : "Completed"}
+              {type === "request" ? "Initiated" : "Completed"}
             </span>
           </div>
         </div>
@@ -213,14 +133,14 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-white shadow-sm">
-              {formatChainName(Number(srcChainId))[0]}
+              {BridgingSDK.formatChainName(Number(srcChainId))[0]}
             </div>
             <div className="flex flex-col">
               <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
                 From
               </span>
               <span className="text-slate-900 font-bold">
-                {formatChainName(Number(srcChainId))}
+                {BridgingSDK.formatChainName(Number(srcChainId))}
               </span>
             </div>
           </div>
@@ -243,21 +163,21 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
 
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-white shadow-sm">
-              {formatChainName(Number(dstChainId))[0]}
+              {BridgingSDK.formatChainName(Number(dstChainId))[0]}
             </div>
             <div className="flex flex-col">
               <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
                 To
               </span>
               <span className="text-slate-900 font-bold">
-                {formatChainName(Number(dstChainId))}
+                {BridgingSDK.formatChainName(Number(dstChainId))}
               </span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          {transaction.type === "request" && !status && (
+          {type === "request" && !status && (
             <button
               onClick={fetchStatus}
               disabled={statusLoading}
@@ -271,15 +191,15 @@ function TransactionCard({ transaction }: { transaction: TransactionItem }) {
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-100">
               <div className="animate-pulse w-2 h-2 rounded-full bg-orange-400"></div>
               <span className="text-orange-600 font-bold text-sm">
-                {getStatusLabel(status)}
+                {BridgingSDK.getStatusLabel(status)}
               </span>
             </div>
           )}
 
           <a
-            href={getExplorerLink(
-              transaction.data.transactionHash,
-              transaction.protocol,
+            href={sdk?.explorerLink(
+              transaction.transactionHash,
+              protocol,
             )}
             target="_blank"
             rel="noopener"

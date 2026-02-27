@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useBridgeFee } from "@goodsdks/bridging-sdk"
+import { useBridgeFee } from "@goodsdks/react-hooks"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
 import type { BridgeProtocol, ChainId } from "@goodsdks/bridging-sdk"
 
