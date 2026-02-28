@@ -13,16 +13,9 @@ import {
 import { waitForTransactionReceipt } from "viem/actions"
 
 import { IdentitySDK } from "./viem-identity-sdk"
-import {
-  contractEnv,
-  chainConfigs,
-  FALLBACK_CHAIN_PRIORITY,
-  SupportedChains,
-  faucetABI,
-  isSupportedChain,
-  ubiSchemeV2ABI,
-} from "../constants"
+import { contractEnv, chainConfigs, FALLBACK_CHAIN_PRIORITY, SupportedChains, faucetABI, isSupportedChain, ubiSchemeV2ABI } from "../constants"
 import type { ContractAddresses } from "../constants"
+import { createVerificationCallbackUrl } from "../utils/auth"
 import { resolveChainAndContract } from "../utils/chains"
 import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
 import {
@@ -103,8 +96,8 @@ export class ClaimSDK {
     this.env = env
 
     this.rdu = rdu
-    this.identitySDK.resolveCallbackUrl(rdu, 'claim').then(
-      (resolvedUrl) => { this.rdu = resolvedUrl },
+    createVerificationCallbackUrl(rdu, { source: "gooddollar_claim_verification" }).then(
+      (resolvedUrl: string) => { this.rdu = resolvedUrl },
     ).catch(() => {})
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
@@ -456,13 +449,22 @@ export class ClaimSDK {
 
   /**
    * Redirects the user through the face-verification flow.
-   * Delegates to IdentitySDK for Farcaster-aware navigation.
+   * @throws If face verification redirect is only supported in browser environments.
    */
   private async fvRedirect(): Promise<void> {
-    await this.identitySDK.navigateToFaceVerification(
+    const fvLink = await this.identitySDK.generateFVLink(
+      false,
       this.rdu,
-      this.chainId,
+      this.chainId
     )
+
+    if (typeof window !== "undefined") {
+      window.location.href = fvLink
+    } else {
+      throw new Error(
+        "Face verification redirect is only supported in browser environments.",
+      )
+    }
   }
 
   /**

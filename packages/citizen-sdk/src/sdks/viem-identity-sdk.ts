@@ -29,7 +29,6 @@ import {
   navigateToUrl,
   createVerificationCallbackUrl,
   createFarcasterUniversalLink,
-  isInFarcasterMiniApp,
   type FarcasterAppConfig,
 } from "../utils/auth"
 
@@ -58,7 +57,6 @@ export interface IdentitySDKOptions {
   publicClient: PublicClient
   walletClient: WalletClient<any, Chain | undefined, Account | undefined>
   env: contractEnv
-  farcasterConfig?: FarcasterAppConfig
 }
 
 /**
@@ -72,21 +70,18 @@ export class IdentitySDK {
   public env: contractEnv = "production"
   private readonly chainId: SupportedChains
   private readonly fvDefaultChain: SupportedChains
-  private readonly farcasterConfig?: FarcasterAppConfig
 
   /**
    * Initializes the IdentitySDK.
    * @param publicClient - The PublicClient instance.
    * @param walletClient - The WalletClient with WalletActions.
    * @param env - The environment to use ("production" | "staging" | "development").
-   * @param farcasterConfig - Optional Farcaster App config (appId, appSlug).
    */
   constructor({
     account,
     publicClient,
     walletClient,
     env,
-    farcasterConfig,
   }: IdentitySDKOptions) {
     if (!walletClient.account) {
       throw new Error(
@@ -97,7 +92,6 @@ export class IdentitySDK {
     this.walletClient = walletClient
     this.env = env
     this.account = account ?? walletClient.account.address
-    this.farcasterConfig = farcasterConfig
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
       walletClient,
@@ -265,23 +259,8 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        const isInFarcaster = await isInFarcasterMiniApp();
-
-        if (isInFarcaster && this.farcasterConfig) {
-          const universalLinkCallback = createFarcasterUniversalLink(
-            this.farcasterConfig,
-            'verify',
-            {
-              source: "gooddollar_identity_verification",
-              account: address,
-              nonce: nonce
-            }
-          );
-          params[popupMode ? "cbu" : "rdu"] = universalLinkCallback;
-        } else {
-          const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl);
-          params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
-        }
+        const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl);
+        params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
       }
 
       url.searchParams.append(
@@ -315,34 +294,18 @@ export class IdentitySDK {
   }
 
   /**
-   * Resolves the correct callback URL based on the current context.
-   * In Farcaster Mini App context, returns a Farcaster Universal Link.
-   * Otherwise, appends optional query parameters to the provided URL.
-   * @param baseUrl - The base callback URL.
-   * @param callbackType - The callback type for Farcaster links.
-   * @returns The resolved callback URL.
+   * Generates a Farcaster Universal Link to be used as a callback URL.
+   * @param farcasterConfig - The Farcaster App config.
+   * @param callbackType - The callback type for Farcaster links (e.g., 'verify').
+   * @returns The generated Farcaster universal link.
    */
-  async resolveCallbackUrl(
-    baseUrl: string,
-    callbackType: 'verify' | 'callback' | 'claim' = 'verify',
-  ): Promise<string> {
-    try {
-      const isInFarcaster = await isInFarcasterMiniApp();
-
-      if (isInFarcaster && this.farcasterConfig) {
-        return createFarcasterUniversalLink(
-          this.farcasterConfig,
-          callbackType,
-          { source: `gooddollar_${callbackType}_verification` }
-        );
-      }
-
-      return await createVerificationCallbackUrl(baseUrl, {
-        source: `gooddollar_${callbackType}_verification`
-      });
-    } catch {
-      return baseUrl;
-    }
+  generateFarcasterCallback(
+    farcasterConfig: FarcasterAppConfig,
+    callbackType: "verify" | "callback" | "claim" = "verify",
+  ): string {
+    return createFarcasterUniversalLink(farcasterConfig, callbackType, {
+      source: `gooddollar_${callbackType}_verification`,
+    })
   }
 
   /**

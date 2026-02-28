@@ -6,7 +6,6 @@ import { useIdentitySDK } from "./wagmi-identity-sdk"
 
 export const useClaimSDK = (
   env: contractEnv = "production",
-  farcasterConfig?: FarcasterAppConfig,
 ): {
   sdk: ClaimSDK | null
   loading: boolean
@@ -14,7 +13,7 @@ export const useClaimSDK = (
 } => {
   const publicClient = usePublicClient() as PublicClient
   const { data: walletClient } = useWalletClient()
-  const { sdk: identitySDK, error: identityError } = useIdentitySDK(env, farcasterConfig)
+  const { sdk: identitySDK, error: identityError } = useIdentitySDK(env)
 
   const [sdk, setSDK] = useState<ClaimSDK | null>(null)
   const [error, setError] = useState<string | null>(null)
