@@ -11,7 +11,10 @@ export interface StreamingSDKOptions {
   /** Token address resolution environment. @default 'production' */
   environment?: Environment
 
-  /** Subgraph API key for rate limiting. */
+  /**
+   * Optional subgraph API key.
+   * Required for SUP reserves queries which use The Graph Gateway endpoint.
+   */
   apiKey?: string
 
   /**

@@ -73,7 +73,7 @@ export const App = () => (
 - `useGDAPools({ enabled })`
   - Lists all available distribution pools for the connected chain.
 - `useSupReserves({ apiKey, enabled })`
-  - Fetches SUP reserve holdings. **Requires `apiKey`** for Base mainnet (decentralized subgraph).
+  - Fetches SUP reserve holdings. **Requires `apiKey`** (The Graph Gateway) on Base mainnet.
 - `useCreateStream()`, `useUpdateStream()`, `useDeleteStream()`
   - Mutators for managing 1-to-1 streams. Supports `token` as `TokenSymbol` ('G$' | 'SUP') or `Address`.
 - `useConnectToPool()`, `useDisconnectFromPool()`
