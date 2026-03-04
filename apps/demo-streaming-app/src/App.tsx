@@ -535,7 +535,7 @@ export default function App() {
                             {!hasGraphApiKey ? (
                                 <View p="$4" ai="center" bg="#F7FAFC" br="$3">
                                     <Text color="$gray10" textAlign="center">
-                                        Set `VITE_GRAPH_API_KEY` to load SUP reserves from The Graph Gateway.
+                                        To view SUP reserves, add `VITE_GRAPH_API_KEY` (The Graph Gateway) to your `.env` and restart `yarn dev`.
                                     </Text>
                                 </View>
                             ) : supLoading ? <Spinner /> : (supReserves && supReserves.length > 0) ? (
