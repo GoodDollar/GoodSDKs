@@ -35,6 +35,7 @@ await sdk.createStream({
 - **Create Streams** - Create G$ streams with a simple form (no token address needed!)
 - **View Active Streams** - See all your incoming and outgoing streams
 - **Manage Streams** - Delete streams you've created
+- **GDA Memberships** - View your pool memberships and connect/disconnect with `isConnected` status
 - **Visual API Examples** - See the actual code being used in real-time
 
 ## Setup

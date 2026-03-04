@@ -19,7 +19,7 @@ import {
     useUpdateStream,
     useDeleteStream,
     useStreamList,
-    useGDAPools,
+    usePoolMemberships,
     useSupReserves,
     useConnectToPool,
     useDisconnectFromPool,
@@ -32,7 +32,7 @@ import {
     SupportedChains,
     type Environment,
     type StreamInfo,
-    type GDAPool,
+    type PoolMembership,
     type SUPReserveLocker,
     type TokenSymbol,
 } from "@goodsdks/streaming-sdk"
@@ -205,48 +205,67 @@ const ActiveStreamsList: React.FC<{
     </SectionCard>
 )
 
-const GDAPoolsSection: React.FC<{
-    pools: GDAPool[]
+const GDAMembershipsSection: React.FC<{
+    memberships: PoolMembership[]
     isLoading: boolean
-    poolAddress: string
-    setPoolAddress: (addr: string) => void
-    onConnect: () => void
-    onDisconnect: () => void
+    onConnect: (pool: Address) => void
+    onDisconnect: (pool: Address) => void
     isConnecting: boolean
     isDisconnecting: boolean
-}> = ({ pools, isLoading, poolAddress, setPoolAddress, onConnect, onDisconnect, isConnecting, isDisconnecting }) => (
-    <SectionCard title="Distribution Pools (GDA)">
-        <YStack gap="$2">
-            <XStack gap="$2">
-                <Button flex={1} backgroundColor="$green10" color="white" onPress={onConnect} disabled={isConnecting} hoverStyle={{ opacity: 0.8 }}>
-                    {isConnecting ? <Spinner color="white" /> : "Connect"}
-                </Button>
-                <Button flex={1} backgroundColor="$red10" color="white" onPress={onDisconnect} disabled={isDisconnecting} hoverStyle={{ opacity: 0.8 }}>
-                    {isDisconnecting ? <Spinner color="white" /> : "Disconnect"}
-                </Button>
-            </XStack>
-            {isLoading ? <Spinner /> : (pools && pools.length > 0) ? (
-                <YStack gap="$2">
-                    {pools.slice(0, 5).map((p, i) => (
-                        <YStack
-                            key={i}
-                            padding="$3"
-                            backgroundColor="#F7FAFC"
-                            borderRadius="$3"
-                            onPress={() => setPoolAddress(p.id)}
-                            hoverStyle={{ backgroundColor: "#EDF2F7" }}
-                            cursor="pointer"
-                            borderWidth={poolAddress === p.id ? 1 : 0}
-                            borderColor="$blue10"
-                            gap="$1"
+}> = ({ memberships, isLoading, onConnect, onDisconnect, isConnecting, isDisconnecting }) => (
+    <SectionCard title="My GDA Pool Memberships">
+        {isLoading ? <Spinner /> : (memberships && memberships.length > 0) ? (
+            <YStack gap="$2">
+                {memberships.map((m, i) => (
+                    <YStack
+                        key={`${m.pool}-${i}`}
+                        padding="$3"
+                        backgroundColor="#F7FAFC"
+                        borderRadius="$3"
+                        borderWidth={1}
+                        borderColor="#E2E8F0"
+                        gap="$2"
+                    >
+                        <XStack justifyContent="space-between" ai="center">
+                            <Text fontSize={12} fontWeight="bold" color="$blue11">
+                                {m.pool.slice(0, 10)}...{m.pool.slice(-6)}
+                            </Text>
+                            <View
+                                paddingHorizontal="$2"
+                                paddingVertical="$1"
+                                borderRadius="$2"
+                                backgroundColor={m.isConnected ? "$green4" : "$gray3"}
+                            >
+                                <Text fontSize={10} color={m.isConnected ? "$green10" : "$gray10"}>
+                                    {m.isConnected ? "Connected" : "Disconnected"}
+                                </Text>
+                            </View>
+                        </XStack>
+
+                        <XStack justifyContent="space-between">
+                            <Text fontSize={11} color="$gray10">
+                                Units: <Text fontWeight="600" color="$gray12">{m.units.toString()}</Text>
+                            </Text>
+                            <Text fontSize={11} color="$gray10">
+                                Claimed: <Text fontWeight="600" color="$gray12">{m.totalAmountClaimed.toString()}</Text>
+                            </Text>
+                        </XStack>
+
+                        <Button
+                            backgroundColor={m.isConnected ? "$red10" : "$green10"}
+                            color="white"
+                            onPress={() => (m.isConnected ? onDisconnect(m.pool) : onConnect(m.pool))}
+                            disabled={isConnecting || isDisconnecting}
+                            hoverStyle={{ opacity: 0.8 }}
                         >
-                            <Text fontSize={12} fontWeight="bold" color="$blue11">{p.id.slice(0, 10)}... Admin: {p.admin?.slice(0, 6)}</Text>
-                            <Text fontSize={11} color="$gray9">Current Flow Rate: <Text color="$green10" fontWeight="600">{formatFlowRate(p.flowRate, "month")}</Text></Text>
-                        </YStack>
-                    ))}
-                </YStack>
-            ) : <Text color="$gray10" textAlign="center" padding="$4">No pools found</Text>}
-        </YStack>
+                            {m.isConnected ? "Disconnect" : "Connect"}
+                        </Button>
+                    </YStack>
+                ))}
+            </YStack>
+        ) : (
+            <Text color="$gray10" textAlign="center" padding="$4">No GDA pool memberships found</Text>
+        )}
     </SectionCard>
 )
 
@@ -255,10 +274,10 @@ export default function App() {
     const { address, isConnected } = useAccount()
     const publicClient = usePublicClient()
     const { switchChain } = useSwitchChain()
+    const chainId = publicClient?.chain?.id
 
     const [environment, setEnvironment] = useState<Environment>("production")
     const [selectedToken, setSelectedToken] = useState<TokenSymbol>("G$")
-    const [poolAddress, setPoolAddress] = useState("")
     const [timeUnit, setTimeUnit] = useState<"month" | "day" | "hour">("month")
     const apiKey = import.meta.env.VITE_GRAPH_API_KEY || ""
     const hasGraphApiKey = !!apiKey
@@ -279,16 +298,15 @@ export default function App() {
         enabled: !!address,
     })
 
-    const { data: pools, isLoading: poolsLoading } = useGDAPools({
-        enabled: !!address,
+    const { data: memberships, isLoading: membershipsLoading } = usePoolMemberships({
+        account: address as Address,
+        enabled: !!address && chainId !== SupportedChains.BASE,
     })
 
     const { data: supReserves, isLoading: supLoading } = useSupReserves({
         apiKey,
         enabled: isConnected && environment === "production" && hasGraphApiKey,
     })
-
-    const chainId = publicClient?.chain?.id
 
     // Keep UI state consistent with network capabilities
     useEffect(() => {
@@ -512,13 +530,23 @@ export default function App() {
                                     <ActiveStreamsList streams={streams || []} isLoading={streamsLoading} onRefresh={() => refetchStreams()} />
                                 </View>
                                 <View flex={1}>
-                                    <GDAPoolsSection
-                                        pools={pools || []}
-                                        isLoading={poolsLoading}
-                                        poolAddress={poolAddress}
-                                        setPoolAddress={setPoolAddress}
-                                        onConnect={() => runMutationWithAlerts(connectToPool, { poolAddress: poolAddress as Address }, { successMessage: "Connected!" })}
-                                        onDisconnect={() => runMutationWithAlerts(disconnectFromPool, { poolAddress: poolAddress as Address }, { successMessage: "Disconnected!" })}
+                                    <GDAMembershipsSection
+                                        memberships={memberships || []}
+                                        isLoading={membershipsLoading}
+                                        onConnect={(pool) =>
+                                            runMutationWithAlerts(
+                                                connectToPool,
+                                                { poolAddress: pool },
+                                                { successMessage: "Connected!" }
+                                            )
+                                        }
+                                        onDisconnect={(pool) =>
+                                            runMutationWithAlerts(
+                                                disconnectFromPool,
+                                                { poolAddress: pool },
+                                                { successMessage: "Disconnected!" }
+                                            )
+                                        }
                                         isConnecting={isConnecting}
                                         isDisconnecting={isDisconnecting}
                                     />

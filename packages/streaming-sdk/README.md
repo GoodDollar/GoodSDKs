@@ -142,6 +142,18 @@ await gda.disconnectFromPool({
 })
 ```
 
+#### `getPoolMemberships(account)`
+Returns pool memberships (including `isConnected`) for an account.
+```typescript
+const memberships = await gda.getPoolMemberships('0x...' as Address)
+```
+
+#### `getDistributionPools()`
+Lists distribution pools for the connected chain.
+```typescript
+const pools = await gda.getDistributionPools()
+```
+
 ## Supported Chains
 
 | Token | Chain | Chain ID | Environment |
