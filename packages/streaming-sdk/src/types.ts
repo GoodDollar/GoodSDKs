@@ -12,7 +12,8 @@ export interface StreamingSDKOptions {
   environment?: Environment
 
   /**
-   * Required subgraph API key for SUP reserves queries which use The Graph Gateway endpoint.
+   * Optional subgraph API key.
+   * Required for SUP reserves queries which use The Graph Gateway endpoint.
    */
   apiKey?: string
 

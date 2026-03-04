@@ -326,8 +326,7 @@ export class SubgraphClient {
     if (!this.apiKey) {
       throw new Error(
         "Missing apiKey for SUP reserves subgraph (The Graph Gateway). " +
-          "Provide `apiKey` when creating SubgraphClient/StreamingSDK/GdaSDK, " +
-          "or set `VITE_GRAPH_API_KEY` in the demo app."
+          "Provide `apiKey` when creating SubgraphClient/StreamingSDK/GdaSDK."
       )
     }
     const headers: Record<string, string> = {}

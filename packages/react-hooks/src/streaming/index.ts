@@ -300,7 +300,7 @@ export function useSupReserves({
             if (!apiKey) {
                 throw new Error(
                     "Missing apiKey for SUP reserves subgraph (The Graph Gateway). " +
-                    "Provide `apiKey` or set `VITE_GRAPH_API_KEY` in the demo app."
+                    "Provide `apiKey` (in the demo app, set `VITE_GRAPH_API_KEY`)."
                 )
             }
             const client = new SubgraphClient(SupportedChains.BASE, { apiKey })
