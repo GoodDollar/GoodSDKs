@@ -49,6 +49,7 @@ export interface UseStreamListParams {
 }
 
 export interface UseGDAPoolsParams {
+    account: Address
     enabled?: boolean
 }
 
@@ -200,8 +201,9 @@ export function useStreamList({
 }
 
 export function useGDAPools({
+    account,
     enabled = true,
-}: UseGDAPoolsParams = {}) {
+}: UseGDAPoolsParams) {
     const publicClient = usePublicClient()
     const sdk = useMemo(() => {
         if (!publicClient) return null
@@ -213,12 +215,12 @@ export function useGDAPools({
     }, [publicClient])
 
     return useQuery<GDAPool[]>({
-        queryKey: ["gda-pools", publicClient?.chain?.id],
+        queryKey: ["gda-pools", account, publicClient?.chain?.id],
         queryFn: async () => {
             if (!sdk) throw new Error("Public client not available")
-            return sdk.getDistributionPools()
+            return sdk.getDistributionPools(account)
         },
-        enabled: enabled && !!publicClient,
+        enabled: enabled && !!publicClient && !!account,
     })
 }
 

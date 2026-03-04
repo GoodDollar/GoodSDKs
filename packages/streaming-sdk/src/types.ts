@@ -94,6 +94,8 @@ export interface GDAPool {
   totalAmountClaimed: bigint
   flowRate: bigint
   admin: Address
+  /** Connection status for the queried account — present when fetched via getDistributionPools/queryMemberPools */
+  isConnected?: boolean
 }
 
 export interface PoolMembership {

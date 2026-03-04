@@ -72,8 +72,8 @@ export const App = () => (
   - Fetches all active streams for an account (subgraph query is chain-based; `environment` only affects SDK token resolution for write operations).
 - `usePoolMemberships({ account, enabled })`
   - Fetches GDA pool memberships for an account, including `isConnected` status (recommended for most UIs).
-- `useGDAPools({ enabled })`
-  - Lists all available distribution pools for the connected chain (can be noisy; mostly useful for exploration/debugging).
+- `useGDAPools({ account, enabled })`
+  - Lists distribution pools where `account` is a member, including `isConnected` status per pool.
 - `useSupReserves({ apiKey, enabled })`
   - Fetches SUP reserve holdings. **Requires `apiKey`** (The Graph Gateway) on Base mainnet.
 - `useCreateStream()`, `useUpdateStream()`, `useDeleteStream()`

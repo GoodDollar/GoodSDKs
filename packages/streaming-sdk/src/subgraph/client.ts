@@ -113,9 +113,10 @@ const GET_POOL_MEMBERSHIPS = gql`
   }
 `
 
-const GET_DISTRIBUTION_POOLS = gql`
-  query GetDistributionPools($first: Int = 100, $skip: Int = 0) {
+const GET_MEMBER_POOLS = gql`
+  query GetMemberPools($account: String!, $first: Int = 100, $skip: Int = 0) {
     pools(
+      where: { poolMembers_: { account: $account } }
       first: $first
       skip: $skip
       orderBy: createdAtTimestamp
@@ -128,6 +129,10 @@ const GET_DISTRIBUTION_POOLS = gql`
       flowRate
       admin { id }
       createdAtTimestamp
+      poolMembers(where: { account: $account }) {
+        isConnected
+        units
+      }
     }
   }
 `
@@ -172,6 +177,7 @@ interface SubgraphPool {
   totalAmountDistributedUntilUpdatedAt: string
   flowRate: string
   admin: SubgraphAccount
+  poolMembers?: { isConnected: boolean; units: string }[]
 }
 interface SubgraphPoolMembership { pool: SubgraphPool; units: string; isConnected: boolean; totalAmountClaimed: string }
 interface SubgraphLocker { id: string; lockerOwner: SubgraphAccount; blockNumber: string; blockTimestamp: string }
@@ -308,9 +314,17 @@ export class SubgraphClient {
     })) || []
   }
 
-  async queryPools(options: { first?: number; skip?: number } = {}): Promise<GDAPool[]> {
+  /**
+   * Fetch only GDA pools the given account is a member of, with their
+   * connected/disconnected status for that account.
+   */
+  async queryMemberPools(account: Address, options: { first?: number; skip?: number } = {}): Promise<GDAPool[]> {
+    if (!account) return []
     const { first = 100, skip = 0 } = options
-    const data = await this.client.request<{ pools: SubgraphPool[] }>(GET_DISTRIBUTION_POOLS, { first, skip })
+    const data = await this.client.request<{ pools: SubgraphPool[] }>(
+      GET_MEMBER_POOLS,
+      { account: account.toLowerCase(), first, skip }
+    )
     return data.pools.map((p) => ({
       id: p.id as Address,
       token: p.token.id as Address,
@@ -318,6 +332,8 @@ export class SubgraphClient {
       totalAmountClaimed: BigInt(p.totalAmountDistributedUntilUpdatedAt),
       flowRate: BigInt(p.flowRate),
       admin: p.admin.id as Address,
+      // Surface per-member connection status returned by the filtered query
+      isConnected: p.poolMembers?.[0]?.isConnected ?? false,
     }))
   }
 
@@ -326,7 +342,7 @@ export class SubgraphClient {
     if (!this.apiKey) {
       throw new Error(
         "Missing apiKey for SUP reserves subgraph (The Graph Gateway). " +
-          "Provide `apiKey` when creating SubgraphClient/StreamingSDK/GdaSDK."
+        "Provide `apiKey` when creating SubgraphClient/StreamingSDK/GdaSDK."
       )
     }
     const headers: Record<string, string> = {}

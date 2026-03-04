@@ -262,14 +262,25 @@ describe("GdaSDK", () => {
         expect(hash).toBe("0xhash")
     })
 
-    it("should fetch distribution pools via subgraph", async () => {
+    it("should fetch distribution pools (member pools) via subgraph", async () => {
         const sdk = new GdaSDK(publicClient)
-        const mockPools = [{ id: "0xpool", token: "0xtoken", totalUnits: BigInt(0), flowRate: BigInt(0), admin: "0xadmin" }]
+        const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+        const mockPools = [{
+            id: "0xpool" as Address,
+            token: "0xtoken" as Address,
+            totalUnits: BigInt(0),
+            totalAmountClaimed: BigInt(0),
+            flowRate: BigInt(0),
+            admin: "0xadmin" as Address,
+            isConnected: false
+        }]
 
-        // Mocking private subgraph client response
-        vi.spyOn(sdk as any, "getDistributionPools").mockResolvedValue(mockPools)
+        const queryMemberPoolsSpy = vi
+            .spyOn((sdk as any).subgraphClient, "queryMemberPools")
+            .mockResolvedValue(mockPools)
 
-        const pools = await sdk.getDistributionPools()
+        const pools = await sdk.getDistributionPools(mockAccount)
+        expect(queryMemberPoolsSpy).toHaveBeenCalledWith(mockAccount, {})
         expect(pools).toEqual(mockPools)
     })
 })

@@ -137,9 +137,9 @@ async function testSubgraph() {
 
   console.log('Streams found:', streams)
 
-  // Test querying pools
-  const pools = await client.queryPools()
-  console.log('GDA Pools:', pools)
+  // Test querying member pools for a specific account
+  const pools = await client.queryMemberPools('0x...')
+  console.log('GDA member pools:', pools)
 
   // Test querying SUP reserves (Base) - requires The Graph Gateway apiKey
   const supClient = new SubgraphClient(SupportedChains.BASE, { apiKey: process.env.GRAPH_API_KEY })

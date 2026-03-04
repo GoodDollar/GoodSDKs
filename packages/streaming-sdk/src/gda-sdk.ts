@@ -111,16 +111,24 @@ export class GdaSDK {
         )
     }
 
-    async getDistributionPools(options: { first?: number; skip?: number } = {}): Promise<GDAPool[]> {
-        return this.subgraphClient.queryPools(options)
+    /**
+     * Fetch GDA pools that the given account is a member of.
+     * Only returns pools relevant to this wallet, together with the
+     * connected/disconnected status for that account.
+     */
+    async getDistributionPools(account: Address, options: { first?: number; skip?: number } = {}): Promise<GDAPool[]> {
+        return this.subgraphClient.queryMemberPools(account, options)
     }
 
     async getPoolMemberships(account: Address): Promise<PoolMembership[]> {
         return this.subgraphClient.queryPoolMemberships(account)
     }
 
-    async getPoolDetails(poolId: Address): Promise<GDAPool | null> {
-        const pools = await this.getDistributionPools()
+    /**
+     * Look up a specific pool by ID, scoped to the given account's memberships.
+     */
+    async getPoolDetails(poolId: Address, account: Address): Promise<GDAPool | null> {
+        const pools = await this.getDistributionPools(account)
         return pools.find((p) => p.id.toLowerCase() === poolId.toLowerCase()) ?? null
     }
 

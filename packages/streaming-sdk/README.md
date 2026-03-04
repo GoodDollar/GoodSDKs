@@ -148,10 +148,10 @@ Returns pool memberships (including `isConnected`) for an account.
 const memberships = await gda.getPoolMemberships('0x...' as Address)
 ```
 
-#### `getDistributionPools()`
-Lists distribution pools for the connected chain.
+#### `getDistributionPools(account)`
+Lists only distribution pools where `account` is a member, including per-pool `isConnected` status for that account.
 ```typescript
-const pools = await gda.getDistributionPools()
+const pools = await gda.getDistributionPools('0x...' as Address)
 ```
 
 ## Supported Chains
