@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import {
     View,
     Text,
@@ -318,6 +318,31 @@ export default function App() {
             if (selectedToken !== "G$") setSelectedToken("G$")
         }
     }, [chainId, environment, selectedToken])
+
+    // Demo-only: make missing Graph key obvious in the console too (helps reviewers/devs)
+    const missingGraphKeyLoggedRef = useRef(false)
+    useEffect(() => {
+        if (missingGraphKeyLoggedRef.current) return
+        if (typeof window === "undefined") return
+        const sessionKey = "demo-streaming-app:missing-graph-api-key-logged"
+        if (window.sessionStorage.getItem(sessionKey)) {
+            missingGraphKeyLoggedRef.current = true
+            return
+        }
+        const shouldLog =
+            chainId === SupportedChains.BASE &&
+            isConnected &&
+            environment === "production" &&
+            !hasGraphApiKey
+        if (!shouldLog) return
+
+        window.sessionStorage.setItem(sessionKey, "1")
+        missingGraphKeyLoggedRef.current = true
+        console.warn(
+            "[demo-streaming-app] SUP reserves use The Graph Gateway and require `VITE_GRAPH_API_KEY`. " +
+            "Add it to `apps/demo-streaming-app/.env`, restart `yarn dev`, then refresh."
+        )
+    }, [chainId, isConnected, environment, hasGraphApiKey])
 
     // Resolves address for display
     const RESOLVED_TOKEN_ADDR = chainId
