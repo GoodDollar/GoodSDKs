@@ -140,6 +140,11 @@ async function testSubgraph() {
   // Test querying pools
   const pools = await client.queryPools()
   console.log('GDA Pools:', pools)
+
+  // Test querying SUP reserves (Base) - requires The Graph Gateway apiKey
+  const supClient = new SubgraphClient(SupportedChains.BASE, { apiKey: process.env.GRAPH_API_KEY })
+  const reserves = await supClient.querySUPReserves()
+  console.log('SUP reserves:', reserves)
 }
 
 testSubgraph()
@@ -149,10 +154,13 @@ testSubgraph()
 
 ### 4. **Test with Superfluid Subgraph Playground**
 
-Visit the Superfluid subgraph explorer to verify queries work:
+Visit the Superfluid decentralized subgraph endpoints to verify queries work:
 
-**Celo Subgraph:**
-https://api.thegraph.com/subgraphs/id/6dRuPxMvaJAp32hvcTsYbAya69A4t1KUHh2EnV3YQeXU
+**Celo:**
+https://celo-mainnet.subgraph.x.superfluid.dev/
+
+**Base:**
+https://base-mainnet.subgraph.x.superfluid.dev/
 
 Test this query:
 ```graphql
@@ -329,4 +337,3 @@ Run with:
 chmod +x validate-sdk.sh
 ./validate-sdk.sh
 ```
-

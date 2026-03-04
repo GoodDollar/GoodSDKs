@@ -323,6 +323,13 @@ export class SubgraphClient {
 
   async querySUPReserves(options: { first?: number; skip?: number } = {}): Promise<SUPReserveLocker[]> {
     const { first = 10, skip = 0 } = options
+    if (!this.apiKey) {
+      throw new Error(
+        "Missing apiKey for SUP reserves subgraph (The Graph Gateway). " +
+          "Provide `apiKey` when creating SubgraphClient/StreamingSDK/GdaSDK, " +
+          "or set `VITE_GRAPH_API_KEY` in the demo app."
+      )
+    }
     const headers: Record<string, string> = {}
     if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`
     const supClient = new GraphQLClient(SUBGRAPH_URLS.supReserve, { headers })

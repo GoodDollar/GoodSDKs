@@ -46,6 +46,8 @@ await sdk.createStream({
 
 2. **Configure Environment**
    Create a `.env` file with your WalletConnect Project ID.
+   
+   If you want to load **SUP reserves** on Base, also set a The Graph Gateway key (`VITE_GRAPH_API_KEY`). Without it, the reserves query is skipped and the UI will prompt you to configure it.
 
 3. **Build Dependencies**
    ```bash
@@ -60,4 +62,3 @@ yarn dev
 ```
 
 Open the URL shown in your terminal to view the app.
-

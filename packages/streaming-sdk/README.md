@@ -8,6 +8,7 @@ TypeScript SDK for Superfluid streams on Celo and Base, supporting G$ and SUP Su
 - Stream lifecycle: create, update, delete
 - GDA pool connections
 - Subgraph queries for balances and history
+- SUP reserves query support (Base) via The Graph Gateway (requires `apiKey`)
 - Multi-token support: G$ (Celo), SUP (Base)
 - Environment-based address resolution (production/staging/development)
 

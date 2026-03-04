@@ -261,6 +261,7 @@ export default function App() {
     const [poolAddress, setPoolAddress] = useState("")
     const [timeUnit, setTimeUnit] = useState<"month" | "day" | "hour">("month")
     const apiKey = import.meta.env.VITE_GRAPH_API_KEY || ""
+    const hasGraphApiKey = !!apiKey
 
     const { mutate: createStream, isLoading: isCreating } = useCreateStream()
     const { mutate: updateStream, isLoading: isUpdating } = useUpdateStream()
@@ -284,7 +285,7 @@ export default function App() {
 
     const { data: supReserves, isLoading: supLoading } = useSupReserves({
         apiKey,
-        enabled: isConnected && environment === "production",
+        enabled: isConnected && environment === "production" && hasGraphApiKey,
     })
 
     const chainId = publicClient?.chain?.id
@@ -531,12 +532,18 @@ export default function App() {
                             <XStack ai="center" gap="$2" mb="$2">
                                 <Text fontSize={12} color="$orange10" fontWeight="600">(Only on Base mainnet)</Text>
                             </XStack>
-                            {supLoading ? <Spinner /> : (supReserves && supReserves.length > 0) ? (
+                            {!hasGraphApiKey ? (
+                                <View p="$4" ai="center" bg="#F7FAFC" br="$3">
+                                    <Text color="$gray10" textAlign="center">
+                                        Set `VITE_GRAPH_API_KEY` to load SUP reserves from The Graph Gateway.
+                                    </Text>
+                                </View>
+                            ) : supLoading ? <Spinner /> : (supReserves && supReserves.length > 0) ? (
                                 <YStack gap="$2">
                                     {supReserves.slice(0, 5).map((l: SUPReserveLocker, i: number) => (
                                         <XStack key={i} padding="$3" backgroundColor="#F7FAFC" borderRadius="$3" justifyContent="space-between" ai="center" borderWidth={1} borderColor="#E2E8F0">
                                             <YStack>
-                                                <Text fontSize={12} fontWeight="bold" color="$blue11">Locker: {l.id?.slice(0, 10)}...</Text>
+                                                <Text fontSize={12} fontWeight="bold" color="$blue11">Reserve: {l.id?.slice(0, 10)}...</Text>
                                                 <Text fontSize={10} color="$gray9">Owner: {l.lockerOwner?.slice(0, 10)}...</Text>
                                             </YStack>
                                             <Text fontSize={10} color="$gray10">ID: {i + 1}</Text>
@@ -545,7 +552,7 @@ export default function App() {
                                 </YStack>
                             ) : (
                                 <View p="$4" ai="center" bg="#F7FAFC" br="$3">
-                                    <Text color="$gray10" textAlign="center">No SUP lockers found or unsupported chain</Text>
+                                    <Text color="$gray10" textAlign="center">No SUP reserves found</Text>
                                 </View>
                             )}
                         </SectionCard>

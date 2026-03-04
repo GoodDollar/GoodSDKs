@@ -297,9 +297,15 @@ export function useSupReserves({
     return useQuery<SUPReserveLocker[]>({
         queryKey: ["sup-reserves", SupportedChains.BASE, apiKey],
         queryFn: async () => {
+            if (!apiKey) {
+                throw new Error(
+                    "Missing apiKey for SUP reserves subgraph (The Graph Gateway). " +
+                    "Provide `apiKey` or set `VITE_GRAPH_API_KEY` in the demo app."
+                )
+            }
             const client = new SubgraphClient(SupportedChains.BASE, { apiKey })
             return client.querySUPReserves()
         },
-        enabled,
+        enabled: enabled && !!apiKey,
     })
 }
