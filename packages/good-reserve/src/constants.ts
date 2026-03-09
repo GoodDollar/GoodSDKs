@@ -1,55 +1,102 @@
-import { parseAbi } from "viem"
+import { parseAbi, type Address } from "viem"
 
-// Source: https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json
+// Sources:
+// - https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json
+// - https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deploy-settings.json
+export const CELO_CHAIN_ID = 42220
+export const XDC_CHAIN_ID = 50
+
+export type SupportedReserveChain = "celo" | "xdc"
+
+export type ExchangeHelperReserveConfig = {
+  mode: "exchange-helper"
+  exchangeHelper: Address
+  buyGDFactory: Address
+  goodDollar: Address
+  stableToken: Address
+}
+
+export type MentoBrokerReserveConfig = {
+  mode: "mento-broker"
+  broker: Address
+  exchangeProvider: Address
+  goodDollar: Address
+  stableToken: Address
+}
+
+export type UnavailableReserveConfig = {
+  mode: "unavailable"
+  reason: string
+  goodDollar: Address
+  stableToken: Address
+}
+
+export type ReserveChainConfig =
+  | ExchangeHelperReserveConfig
+  | MentoBrokerReserveConfig
+  | UnavailableReserveConfig
+
 export const RESERVE_CONTRACT_ADDRESSES = {
   production: {
     celo: {
-      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D" as const,
-      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2" as const,
-      goodDollar: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const,
-      reserveToken: "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const,
+      mode: "exchange-helper",
+      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D",
+      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2",
+      goodDollar: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
+      stableToken: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
     },
     xdc: {
-      exchangeHelper: undefined,
-      buyGDFactory: undefined,
-      goodDollar: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c" as const,
-      reserveToken: "0xfA2958CB79b0491CC627c1557F441eF849Ca8eb1" as const,
+      mode: "unavailable",
+      reason:
+        "XDC production reserve swap endpoints are not published in GoodProtocol deployment.json yet",
+      goodDollar: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c",
+      stableToken: "0xfA2958CB79b0491CC627c1557F441eF849Ca8eb1",
     },
   },
   staging: {
     celo: {
-      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D" as const,
-      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2" as const,
-      goodDollar: "0x61FA0fB802fd8345C06da558240E0651886fec69" as const,
-      reserveToken: "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const,
+      mode: "exchange-helper",
+      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D",
+      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2",
+      goodDollar: "0x61FA0fB802fd8345C06da558240E0651886fec69",
+      stableToken: "0xeed145D8d962146AFc568E9579948576f63D5Dc2",
     },
     xdc: {
-      exchangeHelper: undefined,
-      buyGDFactory: undefined,
-      goodDollar: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c" as const, // Uses prod addresses per protocol standard unless specified
-      reserveToken: "0xfA2958CB79b0491CC627c1557F441eF849Ca8eb1" as const,
+      mode: "unavailable",
+      reason:
+        "XDC staging reserve swap endpoints are not published in GoodProtocol deployment.json",
+      goodDollar: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c",
+      stableToken: "0xfA2958CB79b0491CC627c1557F441eF849Ca8eb1",
     },
   },
   development: {
     celo: {
-      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D" as const,
-      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2" as const,
-      goodDollar: "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475" as const,
-      reserveToken: "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const,
+      mode: "exchange-helper",
+      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D",
+      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2",
+      goodDollar: "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475",
+      stableToken: "0xeed145D8d962146AFc568E9579948576f63D5Dc2",
     },
     xdc: {
-      // NOTE: development-xdc uses MentoBroker/MentoReserve, not standard ExchangeHelper right now.
-      // So these are technically undefined until standard reserve contracts hit.
-      exchangeHelper: undefined,
-      buyGDFactory: undefined,
-      goodDollar: "0xA13625A72Aef90645CfCe34e25c114629d7855e7" as const,
-      reserveToken: "0xCCE5f6B605164B7784b4719829d84b0f7493b906" as const,
+      mode: "mento-broker",
+      broker: "0x6ef11986dc7ebde345134068877efecd18d7430c",
+      exchangeProvider: "0x1fad5a713da1f51e2a1ac4ca2e1d621919f0aba0",
+      goodDollar: "0xA13625A72Aef90645CfCe34e25c114629d7855e7",
+      stableToken: "0xCCE5f6B605164B7784b4719829d84b0f7493b906",
     },
   },
-} as const
+} as const satisfies Record<
+  "production" | "staging" | "development",
+  Record<SupportedReserveChain, ReserveChainConfig>
+>
 
-export const CELO_CHAIN_ID = 42220
-export const XDC_CHAIN_ID = 50
+export const getReserveChainFromId = (
+  chainId: number,
+): SupportedReserveChain | null => {
+  if (chainId === CELO_CHAIN_ID) return "celo"
+  if (chainId === XDC_CHAIN_ID) return "xdc"
+  return null
+}
 
 export const exchangeHelperABI = parseAbi([
   "function buy(address _buyWith, uint256 _tokenAmount, uint256 _minReturn) returns (uint256)",
@@ -61,6 +108,17 @@ export const exchangeHelperABI = parseAbi([
 export const buyGDFactoryABI = parseAbi([
   "function getBuyQuote(address _buyWith, uint256 _tokenAmount) view returns (uint256 gdAmount)",
   "function getSellQuote(uint256 _gdAmount, address _sellTo) view returns (uint256 tokenAmount)",
+])
+
+export const mentoBrokerABI = parseAbi([
+  "function getAmountOut(address exchangeProvider, bytes32 exchangeId, address tokenIn, address tokenOut, uint256 amountIn) view returns (uint256 amountOut)",
+  "function swapIn(address exchangeProvider, bytes32 exchangeId, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin) returns (uint256 amountOut)",
+  "event Swap(address exchangeProvider, bytes32 indexed exchangeId, address indexed trader, address indexed tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut)",
+])
+
+export const mentoExchangeProviderABI = parseAbi([
+  "function getExchangeIds() view returns (bytes32[])",
+  "function getPoolExchange(bytes32 exchangeId) view returns (address reserveAsset, address tokenAddress, uint256 tokenSupply, uint256 reserveBalance, uint32 reserveRatio, uint32 exitContribution)",
 ])
 
 export const erc20ABI = parseAbi([
