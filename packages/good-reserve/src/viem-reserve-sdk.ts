@@ -4,6 +4,7 @@ import {
   type WalletClient,
   type TransactionReceipt,
   type SimulateContractParameters,
+  maxUint256,
 } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
 import {
@@ -600,7 +601,7 @@ export class GoodReserveSDK {
         address: token,
         abi: erc20ABI,
         functionName: "approve",
-        args: [spender, amount],
+        args: [spender, maxUint256],
       },
       onHash,
     )
