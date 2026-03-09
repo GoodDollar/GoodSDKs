@@ -9,10 +9,16 @@ import { waitForTransactionReceipt } from "viem/actions"
 import {
   RESERVE_CONTRACT_ADDRESSES,
   CELO_CHAIN_ID,
+  XDC_CHAIN_ID,
   exchangeHelperABI,
   buyGDFactoryABI,
   erc20ABI,
 } from "./constants"
+
+export interface ReserveTransactionResult {
+  hash: `0x${string}`
+  receipt: TransactionReceipt
+}
 
 export type ReserveEnv = "production" | "staging" | "development"
 
@@ -35,7 +41,12 @@ export interface GetReserveEventsOptions {
 export class GoodReserveSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient | null
-  private contracts: (typeof RESERVE_CONTRACT_ADDRESSES)[ReserveEnv]
+  private contracts: {
+    exchangeHelper: Address
+    buyGDFactory: Address
+    goodDollar: Address
+    reserveToken: Address
+  }
 
   constructor(
     publicClient: PublicClient,
@@ -43,12 +54,27 @@ export class GoodReserveSDK {
     env: ReserveEnv = "production",
   ) {
     if (!publicClient) throw new Error("Public client is required")
-    if (publicClient.chain?.id !== CELO_CHAIN_ID) {
-      throw new Error("The GoodDollar reserve is only available on Celo")
+
+    const chainId = publicClient.chain?.id
+    if (chainId !== CELO_CHAIN_ID && chainId !== XDC_CHAIN_ID) {
+      throw new Error(
+        "The GoodDollar reserve is only available on Celo and XDC",
+      )
     }
+
+    const envContracts = RESERVE_CONTRACT_ADDRESSES[env]
+    const chainContracts =
+      chainId === CELO_CHAIN_ID ? envContracts.celo : envContracts.xdc
+
+    if (!chainContracts.exchangeHelper || !chainContracts.buyGDFactory) {
+      throw new Error(
+        `Reserve contracts are not deployed for environment '${env}' on this chain (${chainId})`,
+      )
+    }
+
     this.publicClient = publicClient
     this.walletClient = walletClient ?? null
-    this.contracts = RESERVE_CONTRACT_ADDRESSES[env]
+    this.contracts = chainContracts as Required<typeof chainContracts>
   }
 
   // Read methods.
@@ -59,7 +85,7 @@ export class GoodReserveSDK {
    * @param amountIn - Amount in token wei
    */
   async getBuyQuote(tokenIn: Address, amountIn: bigint): Promise<bigint> {
-    if (amountIn <= 0n) throw new Error("amountIn must be greater than zero")
+    this.validateAmount(amountIn, "amountIn")
 
     return this.publicClient.readContract({
       address: this.contracts.buyGDFactory,
@@ -75,7 +101,7 @@ export class GoodReserveSDK {
    * @param sellTo - Address of the token to receive (e.g. cUSD)
    */
   async getSellQuote(gdAmount: bigint, sellTo: Address): Promise<bigint> {
-    if (gdAmount <= 0n) throw new Error("gdAmount must be greater than zero")
+    this.validateAmount(gdAmount, "gdAmount")
 
     return this.publicClient.readContract({
       address: this.contracts.buyGDFactory,
@@ -169,21 +195,22 @@ export class GoodReserveSDK {
     amountIn: bigint,
     minReturn: bigint,
     onHash?: (hash: `0x${string}`) => void,
-  ): Promise<TransactionReceipt> {
-    if (amountIn <= 0n) throw new Error("amountIn must be greater than zero")
-    if (minReturn < 0n) throw new Error("minReturn cannot be negative")
+  ): Promise<ReserveTransactionResult> {
+    this.validateAmount(amountIn, "amountIn")
+    this.validateMinReturn(minReturn)
 
     await this.ensureAllowance(tokenIn, amountIn, onHash)
 
-    return this.submitAndWait(
-      {
-        address: this.contracts.exchangeHelper,
-        abi: exchangeHelperABI,
-        functionName: "buy",
-        args: [tokenIn, amountIn, minReturn],
-      },
-      onHash,
-    )
+    // Simulate to catch any revert (e.g., slippage or low balance) before broadcasting
+    const { request } = await this.publicClient.simulateContract({
+      account: await this.getAccount(),
+      address: this.contracts.exchangeHelper,
+      abi: exchangeHelperABI,
+      functionName: "buy",
+      args: [tokenIn, amountIn, minReturn],
+    })
+
+    return this.submitAndWait(request, onHash)
   }
 
   /**
@@ -199,24 +226,32 @@ export class GoodReserveSDK {
     gdAmount: bigint,
     minReturn: bigint,
     onHash?: (hash: `0x${string}`) => void,
-  ): Promise<TransactionReceipt> {
-    if (gdAmount <= 0n) throw new Error("gdAmount must be greater than zero")
-    if (minReturn < 0n) throw new Error("minReturn cannot be negative")
+  ): Promise<ReserveTransactionResult> {
+    this.validateAmount(gdAmount, "gdAmount")
+    this.validateMinReturn(minReturn)
 
     await this.ensureAllowance(this.contracts.goodDollar, gdAmount, onHash)
 
-    return this.submitAndWait(
-      {
-        address: this.contracts.exchangeHelper,
-        abi: exchangeHelperABI,
-        functionName: "sell",
-        args: [sellTo, gdAmount, minReturn],
-      },
-      onHash,
-    )
+    const { request } = await this.publicClient.simulateContract({
+      account: await this.getAccount(),
+      address: this.contracts.exchangeHelper,
+      abi: exchangeHelperABI,
+      functionName: "sell",
+      args: [sellTo, gdAmount, minReturn],
+    })
+
+    return this.submitAndWait(request, onHash)
   }
 
   // Internal helper methods.
+
+  private validateAmount(amount: bigint, fieldName: string) {
+    if (amount <= 0n) throw new Error(`${fieldName} must be greater than zero`)
+  }
+
+  private validateMinReturn(minReturn: bigint) {
+    if (minReturn < 0n) throw new Error("minReturn cannot be negative")
+  }
 
   private getWalletClient(): WalletClient {
     if (!this.walletClient)
@@ -246,32 +281,30 @@ export class GoodReserveSDK {
 
     if (allowance >= amount) return
 
-    await this.submitAndWait(
-      {
-        address: token,
-        abi: erc20ABI,
-        functionName: "approve",
-        args: [this.contracts.exchangeHelper, amount],
-      },
-      onHash,
-    )
+    const { request } = await this.publicClient.simulateContract({
+      account: await this.getAccount(),
+      address: token,
+      abi: erc20ABI,
+      functionName: "approve",
+      args: [this.contracts.exchangeHelper, amount],
+    })
+
+    await this.submitAndWait(request, onHash)
   }
 
   private async submitAndWait(
-    params: SimulateContractParameters,
+    // Need to use any here because SimulateContractParameters return type is deeply complex
+    // and varies between execute methods depending on args.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    request: any,
     onHash?: (hash: `0x${string}`) => void,
-  ): Promise<TransactionReceipt> {
+  ): Promise<ReserveTransactionResult> {
     const wc = this.getWalletClient()
-    const account = await this.getAccount()
-
-    const { request } = await this.publicClient.simulateContract({
-      account,
-      ...params,
-    })
 
     const hash = await wc.writeContract(request)
     onHash?.(hash)
 
-    return waitForTransactionReceipt(this.publicClient, { hash })
+    const receipt = await waitForTransactionReceipt(this.publicClient, { hash })
+    return { hash, receipt }
   }
 }

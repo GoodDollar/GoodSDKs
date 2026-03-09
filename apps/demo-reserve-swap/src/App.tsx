@@ -35,7 +35,14 @@ export function App() {
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <div style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "600px", margin: "0 auto" }}>
+        <div
+          style={{
+            padding: "40px",
+            fontFamily: "sans-serif",
+            maxWidth: "600px",
+            margin: "0 auto",
+          }}
+        >
           <h1>GoodDollar Reserve Swap</h1>
           <p style={{ marginBottom: "24px", color: "#666" }}>
             Connect a wallet on Celo mainnet to interact with the reserve.

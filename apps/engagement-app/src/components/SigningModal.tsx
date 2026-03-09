@@ -7,8 +7,8 @@ import {
 } from "@/components/ui/dialog"
 
 interface SigningModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 export function SigningModal({ open, onOpenChange }: SigningModalProps) {
@@ -18,11 +18,11 @@ export function SigningModal({ open, onOpenChange }: SigningModalProps) {
         <DialogHeader>
           <DialogTitle>Confirm Transaction</DialogTitle>
           <DialogDescription>
-            Please sign the transaction in your wallet to continue.
-            This signature is required to complete the transaction.
+            Please sign the transaction in your wallet to continue. This
+            signature is required to complete the transaction.
           </DialogDescription>
         </DialogHeader>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

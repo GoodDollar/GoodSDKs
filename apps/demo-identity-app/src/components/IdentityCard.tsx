@@ -7,7 +7,9 @@ export const IdentityCard: React.FC = () => {
   const { address } = useAccount()
   const { sdk: identitySDK, loading, error } = useIdentitySDK("development")
   const [expiry, setExpiry] = useState<string | undefined>(undefined)
-  const [isWhitelisted, setIsWhitelisted] = useState<boolean | undefined>(undefined)
+  const [isWhitelisted, setIsWhitelisted] = useState<boolean | undefined>(
+    undefined,
+  )
   const [rootAddress, setRootAddress] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -22,7 +24,9 @@ export const IdentityCard: React.FC = () => {
         setRootAddress(root)
 
         if (whitelisted) {
-          const identityExpiry = await identitySDK.getIdentityExpiryData(root as `0x${string}`)
+          const identityExpiry = await identitySDK.getIdentityExpiryData(
+            root as `0x${string}`,
+          )
 
           const { expiryTimestamp } = identitySDK.calculateIdentityExpiry(
             identityExpiry?.lastAuthenticated ?? BigInt(0),
@@ -69,11 +73,14 @@ export const IdentityCard: React.FC = () => {
           <Text color="$text" fontSize="$medium" mb="$small">
             Connected Wallet: {address.slice(0, 6)}...{address.slice(-4)}
           </Text>
-          {isWhitelisted && rootAddress && rootAddress.toLowerCase() !== address.toLowerCase() && (
-            <Text color="$text" fontSize="$medium" mb="$small">
-              Root Identity: {rootAddress.slice(0, 6)}...{rootAddress.slice(-4)}
-            </Text>
-          )}
+          {isWhitelisted &&
+            rootAddress &&
+            rootAddress.toLowerCase() !== address.toLowerCase() && (
+              <Text color="$text" fontSize="$medium" mb="$small">
+                Root Identity: {rootAddress.slice(0, 6)}...
+                {rootAddress.slice(-4)}
+              </Text>
+            )}
           <Text color="$text" fontSize="$medium">
             Status: {isWhitelisted ? "Whitelisted" : "Not Whitelisted"}
           </Text>

@@ -1,20 +1,20 @@
-import React, { useEffect, useState } from "react";
-import { useEngagementRewards } from "@goodsdks/engagement-sdk";
-import { useParams } from "react-router-dom";
-import { useAccount } from "wagmi";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import React, { useEffect, useState } from "react"
+import { useEngagementRewards } from "@goodsdks/engagement-sdk"
+import { useParams } from "react-router-dom"
+import { useAccount } from "wagmi"
+import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/ui/card";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
+} from "@/components/ui/card"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
 import {
   Form,
   FormControl,
@@ -23,50 +23,50 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { useSigningModal } from "@/hooks/useSigningModal";
-import { SigningModal } from "./SigningModal";
+} from "@/components/ui/form"
+import { useSigningModal } from "@/hooks/useSigningModal"
+import { SigningModal } from "./SigningModal"
 
-import env from "@/env";
-import { TruncatedAddress } from "./ui/TruncatedAddress";
+import env from "@/env"
+import { TruncatedAddress } from "./ui/TruncatedAddress"
 
 interface AppDetails {
-  owner: string;
-  rewardReceiver: string;
-  userAndInviterPercentage: number;
-  userPercentage: number;
-  description: string;
-  url: string;
-  email: string;
+  owner: string
+  rewardReceiver: string
+  userAndInviterPercentage: number
+  userPercentage: number
+  description: string
+  url: string
+  email: string
 }
 
 const formSchema = z.object({
   app: z
     .string()
     .startsWith("0x", { message: "Must be a valid Ethereum address" }),
-});
+})
 
 const ApproveForm: React.FC = () => {
-  const { appAddress } = useParams<{ appAddress: string }>();
-  const { isConnected } = useAccount();
-  const { toast } = useToast();
-  const engagementRewards = useEngagementRewards(env.rewardsContract); //{} as any  // Replace with actual contract address
+  const { appAddress } = useParams<{ appAddress: string }>()
+  const { isConnected } = useAccount()
+  const { toast } = useToast()
+  const engagementRewards = useEngagementRewards(env.rewardsContract) //{} as any  // Replace with actual contract address
   const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } =
-    useSigningModal();
+    useSigningModal()
 
   const [previousDetails, setPreviousDetails] = useState<AppDetails | null>(
     null,
-  );
-  const [currentDetails, setCurrentDetails] = useState<AppDetails | null>(null);
+  )
+  const [currentDetails, setCurrentDetails] = useState<AppDetails | null>(null)
 
   useEffect(() => {
     const loadAppDetails = async () => {
-      if (!appAddress || !engagementRewards) return;
+      if (!appAddress || !engagementRewards) return
 
       // Get current details from contract
       const info = await engagementRewards.getAppInfo(
         appAddress as `0x${string}`,
-      );
+      )
       setCurrentDetails({
         owner: info[0],
         rewardReceiver: info[1],
@@ -75,14 +75,14 @@ const ApproveForm: React.FC = () => {
         description: info[9],
         url: info[10],
         email: info[11],
-      });
+      })
 
       // Get previous approved details from events
       const events = await engagementRewards.getAppHistory(
         appAddress as `0x${string}`,
-      );
+      )
       if (events.length > 1) {
-        const prevEvent = events[events.length - 2]; // Get second to last event
+        const prevEvent = events[events.length - 2] // Get second to last event
         setPreviousDetails({
           owner: prevEvent.owner,
           rewardReceiver: prevEvent.rewardReceiver,
@@ -91,20 +91,20 @@ const ApproveForm: React.FC = () => {
           description: prevEvent.description,
           url: prevEvent.url,
           email: prevEvent.email,
-        });
+        })
       }
-    };
+    }
 
-    loadAppDetails();
+    loadAppDetails()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appAddress, engagementRewards !== undefined]);
+  }, [appAddress, engagementRewards !== undefined])
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       app: appAddress || "",
     },
-  });
+  })
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!isConnected) {
@@ -112,8 +112,8 @@ const ApproveForm: React.FC = () => {
         title: "Wallet not connected",
         description: "Please connect your wallet first",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
 
     await wrapWithSigningModal(async () => {
@@ -123,16 +123,16 @@ const ApproveForm: React.FC = () => {
           toast({
             title: "Transaction Submitted",
             description: `Transaction hash: ${hash}`,
-          });
+          })
         },
-      );
+      )
 
       if (receipt?.status === "success") {
-        form.reset();
+        form.reset()
       }
-      return receipt;
-    }, "The application has been approved successfully!");
-  };
+      return receipt
+    }, "The application has been approved successfully!")
+  }
 
   if (!isConnected) {
     return (
@@ -144,7 +144,7 @@ const ApproveForm: React.FC = () => {
           </CardDescription>
         </CardHeader>
       </Card>
-    );
+    )
   }
 
   return (
@@ -272,7 +272,7 @@ const ApproveForm: React.FC = () => {
         onOpenChange={setIsSigningModalOpen}
       />
     </>
-  );
-};
+  )
+}
 
-export default ApproveForm;
+export default ApproveForm

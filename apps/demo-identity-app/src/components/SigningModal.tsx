@@ -1,9 +1,9 @@
-import React from "react";
-import { Dialog, Text, YStack, Spinner } from "tamagui";
+import React from "react"
+import { Dialog, Text, YStack, Spinner } from "tamagui"
 
 interface SigningModalProps {
-  open: boolean;
-  onClose: () => void;
+  open: boolean
+  onClose: () => void
 }
 
 export const SigningModal: React.FC<SigningModalProps> = ({
@@ -48,5 +48,5 @@ export const SigningModal: React.FC<SigningModalProps> = ({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>
-  );
-};
+  )
+}

@@ -53,12 +53,11 @@ Can be used in any website, for a quick setup:
 </html>
 ```
 
-
 ## Configurable Options
 
 Customize the `gooddollar-savings-widget` using these properties:
 
-- **`connectWallet`**:  _(Set via JavaScript property)_  
+- **`connectWallet`**: _(Set via JavaScript property)_  
   Defines the function when the "Connect Wallet" button is clicked.
 
 - **`web3Provider`**: _(Set via JavaScript property)_  

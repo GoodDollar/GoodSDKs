@@ -1,5 +1,5 @@
-import { Account, createWalletClient, http } from "viem";
-import { Envs, FV_IDENTIFIER_MSG2 } from "../constants";
+import { Account, createWalletClient, http } from "viem"
+import { Envs, FV_IDENTIFIER_MSG2 } from "../constants"
 
 async function signMessageWithViem(
   account: Account,
@@ -8,34 +8,34 @@ async function signMessageWithViem(
   const walletClient = createWalletClient({
     account,
     transport: http(),
-  });
+  })
 
-  return walletClient.signMessage({ message });
+  return walletClient.signMessage({ message })
 }
 
 export interface ParsedBody {
-  ok?: number;
-  success?: boolean;
-  error?: string;
-  [key: string]: any;
+  ok?: number
+  success?: boolean
+  error?: string
+  [key: string]: any
 }
 
 type SafeParseResult = {
-  body: ParsedBody;
-  error?: Error;
-};
+  body: ParsedBody
+  error?: Error
+}
 
 const safeParse = async (response: Response): Promise<SafeParseResult> => {
   try {
-    const body = await response.json();
-    return { body };
+    const body = await response.json()
+    return { body }
   } catch (error) {
-    return { error: new Error("Failed to parse JSON response"), body: {} };
+    return { error: new Error("Failed to parse JSON response"), body: {} }
   }
-};
+}
 
 export const g$Response = async (response: Response) => {
-  const { body, error } = await safeParse(response);
+  const { body, error } = await safeParse(response)
 
   if (
     !response.ok ||
@@ -43,11 +43,11 @@ export const g$Response = async (response: Response) => {
     ("ok" in body && !body.ok) ||
     ("success" in body && !body.success)
   ) {
-    throw error || new Error(body.error || "Unknown server error");
+    throw error || new Error(body.error || "Unknown server error")
   }
 
-  return body;
-};
+  return body
+}
 
 export const g$Request = (
   json: any,
@@ -57,13 +57,13 @@ export const g$Request = (
   method,
   headers: { "Content-Type": "application/json", ...headers },
   body: JSON.stringify(json),
-});
+})
 
 export const g$AuthRequest = (
   token: string,
   json: any,
   method: string = "POST",
-) => g$Request(json, method, { Authorization: `Bearer ${token}` });
+) => g$Request(json, method, { Authorization: `Bearer ${token}` })
 
 /**
  * Authenticates a user with the GoodDollar server.
@@ -73,29 +73,29 @@ export async function fvAuth(
   signerOrAddress: string | Account,
   fvSig?: string,
 ): Promise<{ token: string; fvsig: string }> {
-  const { backend } = Envs[env];
-  const authEndpoint = `${backend}/auth/fv2`;
+  const { backend } = Envs[env]
+  const authEndpoint = `${backend}/auth/fv2`
 
-  let account: Account;
-  let fvsig: string;
+  let account: Account
+  let fvsig: string
 
   if (typeof signerOrAddress === "string") {
     if (!fvSig) {
-      throw new Error("fvSig is required when an address is provided.");
+      throw new Error("fvSig is required when an address is provided.")
     }
-    account = { address: signerOrAddress } as Account;
-    fvsig = fvSig;
+    account = { address: signerOrAddress } as Account
+    fvsig = fvSig
   } else {
-    account = signerOrAddress;
-    const message = FV_IDENTIFIER_MSG2.replace("<account>", account.address);
-    fvsig = await signMessageWithViem(account, message);
+    account = signerOrAddress
+    const message = FV_IDENTIFIER_MSG2.replace("<account>", account.address)
+    fvsig = await signMessageWithViem(account, message)
   }
 
   const response = await fetch(
     authEndpoint,
     g$Request({ fvsig, account: account.address }),
-  );
-  const { token } = await g$Response(response);
+  )
+  const { token } = await g$Response(response)
 
-  return { token, fvsig };
+  return { token, fvsig }
 }

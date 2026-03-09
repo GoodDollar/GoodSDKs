@@ -2,7 +2,7 @@
 
 SDK for buying and selling G$ through the GoodDollar reserve using viem.
 
-The reserve runs on **Celo mainnet** via the Mento protocol. Contract addresses are sourced from the canonical [GoodProtocol deployment.json](https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json).
+The reserve runs on **Celo mainnet** and **XDC mainnet** (development/testnet only for now). Contract addresses are sourced from the canonical [GoodProtocol deployment.json](https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json).
 
 ## Installation
 
@@ -28,13 +28,21 @@ const sdk = new GoodReserveSDK(publicClient, walletClient, "production")
 const gdOut = await sdk.getBuyQuote(CUSD_ADDRESS, parseUnits("10", 18))
 
 // Buy G$ with cUSD
-await sdk.buy(CUSD_ADDRESS, parseUnits("10", 18), gdOut * 95n / 100n)
+const { hash: buyHash, receipt: buyReceipt } = await sdk.buy(
+  CUSD_ADDRESS,
+  parseUnits("10", 18),
+  (gdOut * 95n) / 100n,
+)
 
 // Get a sell quote
 const cusdOut = await sdk.getSellQuote(parseUnits("100", 2), CUSD_ADDRESS)
 
 // Sell G$
-await sdk.sell(CUSD_ADDRESS, parseUnits("100", 2), cusdOut * 95n / 100n)
+const { hash: sellHash, receipt: sellReceipt } = await sdk.sell(
+  CUSD_ADDRESS,
+  parseUnits("100", 2),
+  (cusdOut * 95n) / 100n,
+)
 
 // Fetch transaction history
 const history = await sdk.getTransactionHistory(account)
@@ -61,21 +69,21 @@ function ReserveButton() {
 
 ### `GoodReserveSDK`
 
-| Method | Description |
-|--------|-------------|
-| `getBuyQuote(tokenIn, amountIn)` | Returns estimated G$ output for a given token input |
-| `getSellQuote(gdAmount, sellTo)` | Returns estimated token output for a given G$ input |
-| `getGDBalance(account)` | Returns G$ balance of an account |
-| `getTransactionHistory(account, options?)` | Returns past buy/sell events for an account |
-| `buy(tokenIn, amountIn, minReturn, onHash?)` | Approves and buys G$ |
-| `sell(sellTo, gdAmount, minReturn, onHash?)` | Approves and sells G$ |
+| Method                                       | Description                                         |
+| -------------------------------------------- | --------------------------------------------------- |
+| `getBuyQuote(tokenIn, amountIn)`             | Returns estimated G$ output for a given token input |
+| `getSellQuote(gdAmount, sellTo)`             | Returns estimated token output for a given G$ input |
+| `getGDBalance(account)`                      | Returns G$ balance of an account                    |
+| `getTransactionHistory(account, options?)`   | Returns past buy/sell events for an account         |
+| `buy(tokenIn, amountIn, minReturn, onHash?)` | Approves and buys G$                                |
+| `sell(sellTo, gdAmount, minReturn, onHash?)` | Approves and sells G$                               |
 
 ## Chain support
 
-Only **Celo** (chainId `42220`) is supported. The constructor throws if a non-Celo client is provided.
+**Celo** (`42220`) and **XDC** (`50`) are supported. The constructor throws if initialized on an unsupported chain, or on an environment where the reserve hasn't been deployed yet (e.g. `production` on XDC).
 
 ## ABI / Address source
 
-Addresses pinned to:
+Addresses and ABIs pinned to GoodProtocol:
 `https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json`
-(`production-celo` network)
+`https://github.com/GoodDollar/GoodProtocol` (commit: `master`)
