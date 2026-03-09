@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useAccount } from "wagmi"
+import { useAccount, useBalance } from "wagmi"
 import { formatUnits } from "viem"
 import { useBridgingSDK, useBridgeFee } from "@goodsdks/react-hooks"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS, parseAmount } from "@goodsdks/bridging-sdk"
@@ -20,24 +20,20 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   const [isBridging, setIsBridging] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [allowance, setAllowance] = useState<bigint>(0n)
-  const [balance, setBalance] = useState<{ formatted: string; value: bigint } | undefined>()
+  const [fromBalanceStr, setFromBalanceStr] = useState("0")
+  const [toBalanceStr, setToBalanceStr] = useState("0")
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch balance and allowance using SDK
+  // Fetch allowance
   useEffect(() => {
     if (!sdk || !address) return
 
     const fetchData = async () => {
       try {
-        const [bal, allow] = await Promise.all([
-          sdk.getG$Balance(address),
-          sdk.getAllowance(address)
-        ])
-        const decimals = SUPPORTED_CHAINS[fromChain].decimals
-        setBalance({ formatted: formatUnits(bal, decimals), value: bal })
+        const allow = await sdk.getAllowance(address)
         setAllowance(allow)
       } catch (err) {
-        console.error("Failed to fetch balance/allowance:", err)
+        console.error("Failed to fetch allowance:", err)
       }
     }
 
@@ -45,6 +41,33 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
     const interval = setInterval(fetchData, 10000)
     return () => clearInterval(interval)
   }, [sdk, address, fromChain])
+
+  // Get cross-chain balances using standard Wagmi hook
+  const { data: fromBalanceData } = useBalance({
+    address: address,
+    chainId: fromChain,
+    token: SUPPORTED_CHAINS[fromChain].tokenAddress,
+    query: { refetchInterval: 10000 }
+  });
+
+  const { data: toBalanceData } = useBalance({
+    address: address,
+    chainId: toChain,
+    token: SUPPORTED_CHAINS[toChain].tokenAddress,
+    query: { refetchInterval: 10000 }
+  });
+
+  useEffect(() => {
+    if (fromBalanceData) setFromBalanceStr(fromBalanceData.formatted)
+    else setFromBalanceStr("0")
+  }, [fromBalanceData])
+
+  useEffect(() => {
+    if (toBalanceData) setToBalanceStr(toBalanceData.formatted)
+    else setToBalanceStr("0")
+  }, [toBalanceData])
+
+  const balance = fromBalanceData ? { formatted: fromBalanceData.formatted, value: fromBalanceData.value } : undefined;
 
   // Get fee estimate
   const { fee, loading: feeLoading, error: feeError } = useBridgeFee(
@@ -97,7 +120,12 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
 
       const canBridgeResult = await sdk.canBridge(address, amountInWei, toChain)
       if (!canBridgeResult.isWithinLimit) {
-        throw new Error(canBridgeResult.error || "Bridge limit exceeded")
+        let errMsg = canBridgeResult.error || "Bridge limit exceeded"
+        // Friendly parsing for common custom errors
+        if (errMsg.includes("BRIDGE_LIMITS")) {
+          errMsg = "Amount is outside the allowed bridge limits (check minimum amount or daily limit)."
+        }
+        throw new Error(errMsg)
       }
 
       await sdk.bridgeTo(
@@ -156,7 +184,13 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
             </div>
             <select 
               value={fromChain} 
-              onChange={(e) => setFromChain(Number(e.target.value) as ChainId)}
+              onChange={(e) => {
+                const newFromChain = Number(e.target.value) as ChainId
+                if (newFromChain === toChain) {
+                  setToChain(fromChain)
+                }
+                setFromChain(newFromChain)
+              }}
               className="absolute inset-0 opacity-0 cursor-pointer"
             >
               {Object.entries(SUPPORTED_CHAINS).map(([id, chain]) => (
@@ -258,7 +292,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
         <div>
           <div className="flex justify-between mb-3 px-1">
             <label className="text-slate-900 font-bold text-lg">You will receive on {SUPPORTED_CHAINS[toChain].name.toUpperCase()}</label>
-            <span className="text-slate-400 font-semibold">Balance: 0.00 G$</span>
+            <span className="text-slate-400 font-semibold">Balance: {parseFloat(toBalanceStr).toFixed(2)} G$</span>
           </div>
           <div className="relative">
             <input

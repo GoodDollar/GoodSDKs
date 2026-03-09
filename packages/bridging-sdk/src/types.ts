@@ -110,16 +110,21 @@ export interface GoodServerFeeResponse {
 }
 
 export interface LayerZeroScanResponse {
-  messages: Array<{
-    srcChainId: ChainId
-    srcUaAddress: Address
-    dstChainId: ChainId
-    dstUaAddress: Address
-    srcTxHash: Hash
-    dstTxHash?: Hash
-    status: "INFLIGHT" | "DELIVERED" | "FAILED"
-    blockNumber: number
-    timestamp: number
+  data: Array<{
+    source: {
+      tx: {
+        txHash: Hash
+      }
+    }
+    destination?: {
+      tx: {
+        txHash: Hash
+      }
+    }
+    status: {
+      name: "INFLIGHT" | "DELIVERED" | "FAILED" | string
+    }
+    created: string
   }>
 }
 

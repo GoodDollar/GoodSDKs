@@ -40,6 +40,8 @@ export class BridgingSDK {
   private walletClient: WalletClient | null = null
   private currentChainId: ChainId
   private fees: GoodServerFeeResponse | null = null
+  private lastFeeFetchTime: number = 0
+  private readonly FEE_CACHE_TTL = 60000 // 60 seconds
 
   constructor(
     publicClient: PublicClient,
@@ -62,6 +64,7 @@ export class BridgingSDK {
    */
   async initialize(): Promise<void> {
     this.fees = await fetchFeeEstimates()
+    this.lastFeeFetchTime = Date.now()
   }
 
   setWalletClient(walletClient: WalletClient) {
@@ -107,6 +110,27 @@ export class BridgingSDK {
           args: [from, normalizedAmount],
         })) as [boolean, string]
 
+      if (!isWithinLimit && canBridgeError.includes("BRIDGE_LIMITS")) {
+        // Fetch detailed limits to provide a better error message
+        try {
+          const limits = await this.publicClient.readContract({
+            address: contractAddress as Address,
+            abi: MESSAGE_PASSING_BRIDGE_ABI,
+            functionName: "bridgeLimits"
+          }) as [bigint, bigint, bigint, bigint, boolean];
+          
+          const minAmountObj = limits[3];
+          if (normalizedAmount < minAmountObj) {
+            return {
+              isWithinLimit: false,
+              error: `Amount is below the minimum required bridge limit. It must be at least ${minAmountObj.toString()} wei.`,
+            }
+          }
+        } catch (e) {
+          console.warn("Could not fetch specific bridge limits for error details", e)
+        }
+      }
+
       return {
         isWithinLimit,
         error: isWithinLimit ? undefined : canBridgeError,
@@ -126,17 +150,26 @@ export class BridgingSDK {
   async estimateFee(
     targetChainId: ChainId,
     protocol: BridgeProtocol,
+    fromChainId?: ChainId,
   ): Promise<FeeEstimate> {
+    const sourceChain = fromChainId || this.currentChainId;
+    
     // Protocol support validation
-    if (protocol === "AXELAR" && (this.currentChainId === 50 || this.currentChainId === 122 || targetChainId === 50 || targetChainId === 122)) {
-      throw new Error(`Axelar bridging is not supported for ${SUPPORTED_CHAINS[this.currentChainId].name} or ${SUPPORTED_CHAINS[targetChainId].name}`)
+    if (protocol === "AXELAR" && (sourceChain === 50 || sourceChain === 122 || targetChainId === 50 || targetChainId === 122)) {
+      throw new Error(`Axelar bridging is not supported for ${SUPPORTED_CHAINS[sourceChain].name} or ${SUPPORTED_CHAINS[targetChainId].name}`)
     }
 
-    if (!this.fees) {
-      await this.initialize()
+    const now = Date.now()
+    if (!this.fees || now - this.lastFeeFetchTime > this.FEE_CACHE_TTL) {
+      try {
+        await this.initialize()
+      } catch (err) {
+        if (!this.fees) throw err;
+        console.warn("Using stale fee cache due to fetch error:", err);
+      }
     }
 
-    return await getFeeEstimate(this.currentChainId, targetChainId, protocol)
+    return await getFeeEstimate(sourceChain, targetChainId, protocol, this.fees!)
   }
 
   /**
@@ -423,15 +456,17 @@ export class BridgingSDK {
   }
 
   private async getLayerZeroStatus(txHash: Hash): Promise<TransactionStatus> {
-    const response = await fetch(`${API_ENDPOINTS.LAYERZERO_SCAN}/message?txHash=${txHash}`)
-    const data: LayerZeroScanResponse = await response.json()
-    if (!data.messages || data.messages.length === 0) return { status: "pending" }
-    const message = data.messages[0]
+    const response = await fetch(`${API_ENDPOINTS.LAYERZERO_SCAN}/messages/tx/${txHash}`)
+    const json = await response.json()
+    const data: LayerZeroScanResponse = json
+    if (!data.data || data.data.length === 0) return { status: "pending" }
+    
+    const message = data.data[0]
     return {
-      status: message.status === "DELIVERED" ? "completed" : message.status === "FAILED" ? "failed" : "pending",
-      srcTxHash: message.srcTxHash,
-      dstTxHash: message.dstTxHash,
-      timestamp: message.timestamp * 1000,
+      status: message.status.name === "DELIVERED" ? "completed" : message.status.name === "FAILED" ? "failed" : "pending",
+      srcTxHash: message.source.tx.txHash,
+      dstTxHash: message.destination?.tx?.txHash,
+      timestamp: new Date(message.created).getTime(),
     }
   }
 

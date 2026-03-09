@@ -21,6 +21,19 @@ export function useBridgingSDK(): UseBridgingSDKResult {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Prevent re-initialization if we already have an SDK for this chain
+    if (sdk && sdk.getCurrentChainId() === chainId) {
+      // Just update the wallet client if it changed
+      if (walletClient) {
+        try {
+          sdk.setWalletClient(walletClient as any);
+        } catch (e) {
+          console.error("Failed to update wallet client", e);
+        }
+      }
+      return;
+    }
+
     const initSDK = async () => {
       try {
         setLoading(true)
@@ -49,7 +62,7 @@ export function useBridgingSDK(): UseBridgingSDKResult {
     }
 
     initSDK()
-  }, [publicClient, walletClient, chainId])
+  }, [chainId, publicClient, walletClient]) // Re-added walletClient so the early-return block can attach it
 
   return { sdk, loading, error }
 }
@@ -75,7 +88,7 @@ export function useBridgeFee(
         setLoading(true)
         setError(null)
 
-        const feeEstimate = await sdk.estimateFee(toChainId, protocol)
+        const feeEstimate = await sdk.estimateFee(toChainId, protocol, fromChainId)
 
         setFee({
           amount: feeEstimate.fee,
