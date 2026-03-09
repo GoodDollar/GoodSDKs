@@ -18,7 +18,7 @@ export async function fetchFeeEstimates(): Promise<GoodServerFeeResponse> {
       throw new Error(`Failed to fetch fee estimates: ${response.statusText}`)
     }
 
-    return await response.json()
+    return await response.json();
   } catch (error) {
     throw new Error(
       `Fee estimation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -46,8 +46,12 @@ export async function getFeeEstimate(
   fromChainId: ChainId,
   toChainId: ChainId,
   protocol: BridgeProtocol,
+  feeData?: GoodServerFeeResponse,
 ): Promise<FeeEstimate> {
-  const feeData = await fetchFeeEstimates()
+  // Fallback to fetch if not provided
+  if (!feeData) {
+    feeData = await fetchFeeEstimates();
+  }
 
   const protocolData = feeData[protocol]
   if (!protocolData) {
