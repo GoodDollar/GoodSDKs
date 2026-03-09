@@ -156,6 +156,18 @@ export class GoodReserveSDK {
   }
 
   /**
+   * Returns ERC20 decimals for a token.
+   */
+  async getTokenDecimals(token: Address): Promise<number> {
+    const decimals = await this.publicClient.readContract({
+      address: token,
+      abi: erc20ABI,
+      functionName: "decimals",
+    })
+    return Number(decimals)
+  }
+
+  /**
    * Returns the default reserve stable token address for the connected chain/env.
    */
   getStableTokenAddress(): Address {

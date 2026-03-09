@@ -17,10 +17,13 @@ export function ReserveSwap() {
   const [amountIn, setAmountIn] = useState("")
   const [quote, setQuote] = useState<bigint | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [txStatus, setTxStatus] = useState<"idle" | "pending" | "done" | "error">("idle")
   const [txResult, setTxResult] = useState<string | null>(null)
   const [txError, setTxError] = useState<string | null>(null)
+  const [stableDecimals, setStableDecimals] = useState(18)
+  const [gdDecimals, setGdDecimals] = useState(18)
 
   const isXdc = chain?.id === 50
   const chainLabel = isXdc ? "XDC" : "Celo"
@@ -28,11 +31,44 @@ export function ReserveSwap() {
   const fallbackStable = isXdc ? FALLBACK_STABLE_TOKENS.xdc : FALLBACK_STABLE_TOKENS.celo
   const stableToken = sdk?.getStableTokenAddress() ?? fallbackStable
 
-  const stableDecimals = 18
-  const gdDecimals = 2
+  useEffect(() => {
+    if (!sdk) return
+
+    let active = true
+    setDecimalsLoading(true)
+
+    const loadDecimals = async () => {
+      try {
+        const gdToken = sdk.getGoodDollarAddress()
+        const [stable, gd] = await Promise.all([
+          sdk.getTokenDecimals(stableToken),
+          sdk.getTokenDecimals(gdToken),
+        ])
+
+        if (!active) return
+        setStableDecimals(stable)
+        setGdDecimals(gd)
+      } catch (err) {
+        if (!active) return
+        setQuoteError(
+          err instanceof Error
+            ? `Failed to read token decimals: ${err.message}`
+            : "Failed to read token decimals",
+        )
+      } finally {
+        if (active) setDecimalsLoading(false)
+      }
+    }
+
+    void loadDecimals()
+
+    return () => {
+      active = false
+    }
+  }, [sdk, stableToken])
 
   const fetchQuote = useCallback(async () => {
-    if (!sdk || !amountIn || isNaN(Number(amountIn))) return
+    if (!sdk || decimalsLoading || !amountIn || isNaN(Number(amountIn))) return
 
     setQuoteLoading(true)
     setQuoteError(null)
@@ -52,7 +88,7 @@ export function ReserveSwap() {
     } finally {
       setQuoteLoading(false)
     }
-  }, [sdk, amountIn, direction, stableToken])
+  }, [sdk, decimalsLoading, amountIn, direction, stableToken, stableDecimals, gdDecimals])
 
   useEffect(() => {
     const timer = setTimeout(fetchQuote, 400)

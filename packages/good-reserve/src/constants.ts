@@ -39,9 +39,9 @@ export type ReserveChainConfig =
 export const RESERVE_CONTRACT_ADDRESSES = {
   production: {
     celo: {
-      mode: "exchange-helper",
-      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D",
-      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2",
+      mode: "mento-broker",
+      broker: "0x88de45906D4F5a57315c133620cfa484cB297541",
+      exchangeProvider: "0x2fFBB49055d487DdBBb0C052Cd7c2a02A7971e41",
       goodDollar: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
       stableToken: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
     },
@@ -55,9 +55,9 @@ export const RESERVE_CONTRACT_ADDRESSES = {
   },
   staging: {
     celo: {
-      mode: "exchange-helper",
-      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D",
-      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2",
+      mode: "mento-broker",
+      broker: "0xAb075a5275EF8aCb906016382Cd65F15f312940C",
+      exchangeProvider: "0xc04C2585917bFA5A37f452Ac838AeacA4d1C99Ce",
       goodDollar: "0x61FA0fB802fd8345C06da558240E0651886fec69",
       stableToken: "0xeed145D8d962146AFc568E9579948576f63D5Dc2",
     },
@@ -71,9 +71,9 @@ export const RESERVE_CONTRACT_ADDRESSES = {
   },
   development: {
     celo: {
-      mode: "exchange-helper",
-      exchangeHelper: "0xE45CaB86609a16dFaDec112FDd61E4EA80EdaA8D",
-      buyGDFactory: "0x1F60C4C7037C6766924A43666B781ED1479587a2",
+      mode: "mento-broker",
+      broker: "0xE60cf1cb6a56131CE135c604D0BD67e84B57CA3C",
+      exchangeProvider: "0x558eC7E55855FAC9403De3ADB3aa1e588234A92C",
       goodDollar: "0xFa51eFDc0910CCdA91732e6806912Fa12e2FD475",
       stableToken: "0xeed145D8d962146AFc568E9579948576f63D5Dc2",
     },

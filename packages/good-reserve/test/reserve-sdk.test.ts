@@ -8,6 +8,7 @@ import {
 import type { PublicClient } from "viem"
 
 const CELO_PROD_STABLE = RESERVE_CONTRACT_ADDRESSES.production.celo.stableToken
+const CELO_PROD_GD = RESERVE_CONTRACT_ADDRESSES.production.celo.goodDollar
 const XDC_DEV_STABLE = RESERVE_CONTRACT_ADDRESSES.development.xdc.stableToken
 const XDC_DEV_GD = RESERVE_CONTRACT_ADDRESSES.development.xdc.goodDollar
 
@@ -46,7 +47,15 @@ describe("GoodReserveSDK", () => {
     let mockReadContract: ReturnType<typeof vi.fn>
 
     beforeEach(() => {
-      mockReadContract = vi.fn().mockResolvedValue(500n)
+      mockReadContract = vi.fn().mockImplementation((req: any) => {
+        const fn = String(req.functionName)
+        if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+        if (fn === "getPoolExchange") {
+          return [CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1]
+        }
+        if (fn === "getAmountOut") return 500n
+        return 0n
+      })
       const client = makeMockClient({ readContract: mockReadContract } as any)
       sdk = new GoodReserveSDK(client)
     })
@@ -59,11 +68,12 @@ describe("GoodReserveSDK", () => {
 
     it("returns quoted amount on XDC via Mento broker", async () => {
       const mockReadContract = vi.fn().mockImplementation((req: any) => {
-        if (req.functionName === "getExchangeIds") return [MOCK_EXCHANGE_ID]
-        if (req.functionName === "getPoolExchange") {
+        const fn = String(req.functionName)
+        if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+        if (fn === "getPoolExchange") {
           return [XDC_DEV_STABLE, XDC_DEV_GD, 0n, 0n, 1, 1]
         }
-        if (req.functionName === "getAmountOut") return 700n
+        if (fn === "getAmountOut") return 700n
         return 0n
       })
 
@@ -114,7 +124,15 @@ describe("GoodReserveSDK", () => {
 
   describe("getTransactionHistory", () => {
     it("returns empty array when no events found", async () => {
-      const sdk = new GoodReserveSDK(makeMockClient())
+      const mockReadContract = vi.fn().mockImplementation((req: any) => {
+        const fn = String(req.functionName)
+        if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+        if (fn === "getPoolExchange") {
+          return [CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1]
+        }
+        return 0n
+      })
+      const sdk = new GoodReserveSDK(makeMockClient({ readContract: mockReadContract } as any))
       const result = await sdk.getTransactionHistory(
         "0x0000000000000000000000000000000000000001",
       )
@@ -123,8 +141,9 @@ describe("GoodReserveSDK", () => {
 
     it("decodes XDC broker swap events", async () => {
       const mockReadContract = vi.fn().mockImplementation((req: any) => {
-        if (req.functionName === "getExchangeIds") return [MOCK_EXCHANGE_ID]
-        if (req.functionName === "getPoolExchange") {
+        const fn = String(req.functionName)
+        if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+        if (fn === "getPoolExchange") {
           return [XDC_DEV_STABLE, XDC_DEV_GD, 0n, 0n, 1, 1]
         }
         return 0n
