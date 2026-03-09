@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
-import { useAccount } from "wagmi"
+import { useAccount, usePublicClient } from "wagmi"
 import { useGoodReserve } from "@goodsdks/react-hooks"
+import { erc20ABI } from "@goodsdks/good-reserve"
 import { formatUnits, parseUnits } from "viem"
 
 type RouteInfo = {
@@ -35,6 +36,23 @@ const compactFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 })
 
+const formatUsd = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) return "$0"
+  const digits = value >= 1 ? 2 : 6
+  const formatted = value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: digits,
+  })
+  return `$${formatted}`
+}
+
+const trimDecimalString = (value: string, maxFractionDigits: number): string => {
+  const [integer, fraction = ""] = value.split(".")
+  if (!fraction) return integer
+  const trimmed = fraction.slice(0, maxFractionDigits).replace(/0+$/, "")
+  return trimmed.length > 0 ? `${integer}.${trimmed}` : integer
+}
+
 const mapFriendlyError = (err: unknown, fallback: string): string => {
   const message = err instanceof Error ? err.message : String(err ?? fallback)
   const lower = message.toLowerCase()
@@ -52,13 +70,43 @@ const mapFriendlyError = (err: unknown, fallback: string): string => {
 
 const formatTokenAmount = (value: bigint, decimals: number): { compact: string; precise: string } => {
   const precise = formatUnits(value, decimals)
-  const parsed = Number(precise)
-  if (!Number.isFinite(parsed)) return { compact: precise, precise }
-  return { compact: compactFormatter.format(parsed), precise }
+  if (value === 0n) return { compact: "0", precise }
+
+  const unit = 10n ** BigInt(decimals)
+  const oneToken = unit
+  const thousandTokens = unit * 1000n
+  const microToken = unit / 1_000_000n
+  const hundredMillionth = unit / 100_000_000n
+
+  if (value >= thousandTokens) {
+    const parsed = Number(precise)
+    if (Number.isFinite(parsed)) return { compact: compactFormatter.format(parsed), precise }
+    return { compact: precise, precise }
+  }
+
+  if (value >= oneToken) {
+    return { compact: trimDecimalString(precise, 4), precise }
+  }
+
+  if (value >= microToken) {
+    return { compact: trimDecimalString(precise, 8), precise }
+  }
+
+  if (value >= hundredMillionth) {
+    return { compact: trimDecimalString(precise, 10), precise }
+  }
+
+  return { compact: "<0.00000001", precise }
+}
+
+const formatAmountForInput = (value: bigint, decimals: number): string => {
+  const normalized = formatUnits(value, decimals).replace(/\.?0+$/, "")
+  return normalized.length > 0 ? normalized : "0"
 }
 
 export function ReserveSwap() {
   const { address, chain } = useAccount()
+  const publicClient = usePublicClient()
   const reserveEnv = chain?.id === 50 ? "development" : "production"
   const { sdk, loading: sdkLoading, error: sdkError } = useGoodReserve(reserveEnv)
 
@@ -75,6 +123,9 @@ export function ReserveSwap() {
   const [txError, setTxError] = useState<string | null>(null)
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null)
   const [reserveStats, setReserveStats] = useState<ReserveStatsState | null>(null)
+  const [stableBalance, setStableBalance] = useState<bigint | null>(null)
+  const [gdBalance, setGdBalance] = useState<bigint | null>(null)
+  const [balancesLoading, setBalancesLoading] = useState(false)
   const [stableDecimals, setStableDecimals] = useState(18)
   const [gdDecimals, setGdDecimals] = useState(18)
 
@@ -114,6 +165,44 @@ export function ReserveSwap() {
     void loadReserveContext()
   }, [loadReserveContext])
 
+  const loadBalances = useCallback(async () => {
+    if (!sdk || !address || !publicClient) {
+      setStableBalance(null)
+      setGdBalance(null)
+      return
+    }
+
+    setBalancesLoading(true)
+    try {
+      const stableAddress = sdk.getStableTokenAddress()
+      const goodDollarAddress = sdk.getGoodDollarAddress()
+      const [stable, gd] = await Promise.all([
+        publicClient.readContract({
+          address: stableAddress,
+          abi: erc20ABI,
+          functionName: "balanceOf",
+          args: [address],
+        }),
+        publicClient.readContract({
+          address: goodDollarAddress,
+          abi: erc20ABI,
+          functionName: "balanceOf",
+          args: [address],
+        }),
+      ])
+      setStableBalance(stable)
+      setGdBalance(gd)
+    } catch (err) {
+      console.warn("Failed to load balances", err)
+    } finally {
+      setBalancesLoading(false)
+    }
+  }, [sdk, address, publicClient])
+
+  useEffect(() => {
+    void loadBalances()
+  }, [loadBalances])
+
   const fetchQuote = useCallback(async () => {
     if (!sdk || decimalsLoading || !amountIn || isNaN(Number(amountIn))) return
 
@@ -145,7 +234,8 @@ export function ReserveSwap() {
   const handleRefresh = useCallback(async () => {
     await loadReserveContext()
     await fetchQuote()
-  }, [loadReserveContext, fetchQuote])
+    await loadBalances()
+  }, [loadReserveContext, fetchQuote, loadBalances])
 
   const handleExecute = async () => {
     if (!sdk || !amountIn || quote === null) return
@@ -200,6 +290,10 @@ export function ReserveSwap() {
 
   const inputLabel = direction === "buy" ? stableSymbol : "G$"
   const outputLabel = direction === "buy" ? "G$" : stableSymbol
+  const inputDecimals = direction === "buy" ? stableDecimals : gdDecimals
+  const inputBalance = direction === "buy" ? stableBalance : gdBalance
+  const inputBalanceDetails =
+    inputBalance !== null ? formatTokenAmount(inputBalance, inputDecimals) : null
   const outputDetails =
     quote === null
       ? null
@@ -207,6 +301,7 @@ export function ReserveSwap() {
         ? formatTokenAmount(quote, gdDecimals)
         : formatTokenAmount(quote, stableDecimals)
   let impliedPrice: string | null = null
+  let impliedPriceNumber: number | null = null
   if (quote !== null && amountIn && !isNaN(Number(amountIn))) {
     try {
       const inputParsed = parseUnits(
@@ -220,9 +315,12 @@ export function ReserveSwap() {
           (stableAmount * 10n ** BigInt(gdDecimals) * 10n ** 9n) /
           (gdAmount * 10n ** BigInt(stableDecimals))
         impliedPrice = formatUnits(scaled, 9)
+        const parsed = Number(impliedPrice)
+        impliedPriceNumber = Number.isFinite(parsed) ? parsed : null
       }
     } catch {
       impliedPrice = null
+      impliedPriceNumber = null
     }
   }
 
@@ -268,6 +366,40 @@ export function ReserveSwap() {
           9,
         )
       : null
+  const poolBackingPerGDNumber = poolBackingPerGD ? Number(poolBackingPerGD) : null
+  const sellUnitPrice =
+    impliedPriceNumber !== null
+      ? impliedPriceNumber
+      : poolBackingPerGDNumber !== null && Number.isFinite(poolBackingPerGDNumber)
+        ? poolBackingPerGDNumber
+        : null
+
+  const setPercentageAmount = (percent: number) => {
+    if (inputBalance === null) return
+    const nextAmount = (inputBalance * BigInt(percent)) / 100n
+    setAmountIn(formatAmountForInput(nextAmount, inputDecimals))
+  }
+
+  const inputStableEquivalent = (() => {
+    if (!amountIn || isNaN(Number(amountIn))) return null
+    const inputFloat = Number(amountIn)
+    if (!Number.isFinite(inputFloat) || inputFloat <= 0) return null
+    if (direction === "buy") return inputFloat
+    if (sellUnitPrice === null) return null
+    return inputFloat * sellUnitPrice
+  })()
+
+  const outputStableEquivalent = (() => {
+    if (quote === null) return null
+    if (direction === "sell") {
+      const stable = Number(formatUnits(quote, stableDecimals))
+      return Number.isFinite(stable) ? stable : null
+    }
+    if (sellUnitPrice === null) return null
+    const gdOut = Number(formatUnits(quote, gdDecimals))
+    if (!Number.isFinite(gdOut)) return null
+    return gdOut * sellUnitPrice
+  })()
 
   return (
     <div className="swap-card">
@@ -311,6 +443,30 @@ export function ReserveSwap() {
 
       <div className="input-group">
         <label className="input-label">You Pay ({inputLabel})</label>
+        <div className="input-meta">
+          <button
+            type="button"
+            className="balance-button"
+            onClick={() => setPercentageAmount(100)}
+            disabled={balancesLoading || inputBalance === null}
+          >
+            Balance:{" "}
+            {inputBalanceDetails ? `${inputBalanceDetails.compact} ${inputLabel}` : "..."}
+          </button>
+          <div className="quick-actions">
+            {[25, 50, 75, 100].map((percent) => (
+              <button
+                key={percent}
+                type="button"
+                className="quick-action-btn"
+                onClick={() => setPercentageAmount(percent)}
+                disabled={balancesLoading || inputBalance === null}
+              >
+                {percent}%
+              </button>
+            ))}
+          </div>
+        </div>
         <input
           type="number"
           placeholder="0.00"
@@ -318,6 +474,9 @@ export function ReserveSwap() {
           onChange={(e) => setAmountIn(e.target.value)}
           className="custom-input"
         />
+        {inputStableEquivalent !== null && (
+          <div className="value-note">{formatUsd(inputStableEquivalent)}</div>
+        )}
       </div>
 
       {quoteLoading && (
@@ -340,25 +499,33 @@ export function ReserveSwap() {
 
       {outputDetails !== null && !quoteLoading && (
         <div className="quote-view">
-          <span className="quote-label">Estimated Output</span>
+          <span className="quote-label">Estimated Output ({outputLabel})</span>
           <span className="quote-value" title={`${outputDetails.precise} ${outputLabel}`}>
             {outputDetails.compact} {outputLabel}
           </span>
-          <span style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
-            Included 5% slippage protection
-          </span>
-        </div>
-      )}
-
-      {impliedPrice && (
-        <div className="quote-view" style={{ gap: "8px" }}>
-          <span className="quote-label">Reserve Implied Price (Quote)</span>
-          <span className="quote-value" style={{ fontSize: "16px" }}>
-            1 G$ ≈ {impliedPrice} {stableSymbol}
-          </span>
-          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-            This is reserve-implied pricing, not external DEX market price.
-          </span>
+          {outputStableEquivalent !== null && (
+            <span className="value-note">
+              {(() => {
+                const pct =
+                  inputStableEquivalent && inputStableEquivalent > 0
+                    ? ((outputStableEquivalent - inputStableEquivalent) /
+                        inputStableEquivalent) *
+                      100
+                    : null
+                return pct === null
+                  ? formatUsd(outputStableEquivalent)
+                  : `${formatUsd(outputStableEquivalent)} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`
+              })()}
+            </span>
+          )}
+          <div className="summary-meta">
+            <span>Slippage guard: 5%</span>
+            {impliedPrice && (
+              <span title="Reserve implied price from current quote">
+                1 G$ ≈ {impliedPrice} {stableSymbol}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -368,98 +535,27 @@ export function ReserveSwap() {
         </div>
       )}
 
-      <div className="quote-view" style={{ gap: "8px" }}>
-        <span className="quote-label">Reserve Stats</span>
-        {statsLoading ? (
-          <span style={{ fontSize: "14px", color: "#64748b" }}>Loading stats...</span>
-        ) : (
-          <>
-            <span style={{ fontSize: "14px", color: "#334155" }}>
-              Pool collateral:{" "}
-              {poolCollateralDetails ? (
-                <span title={`${poolCollateralDetails.precise} ${stableSymbol}`}>
-                  {poolCollateralDetails.compact} {stableSymbol}
-                </span>
-              ) : (
-                "N/A"
-              )}
-            </span>
-            <span style={{ fontSize: "14px", color: "#334155" }}>
-              Total G$ supply:{" "}
-              {totalSupplyDetails ? (
-                <span title={`${totalSupplyDetails.precise} G$`}>
-                  {totalSupplyDetails.compact} G$
-                </span>
-              ) : (
-                "N/A"
-              )}
-            </span>
-            <span style={{ fontSize: "14px", color: "#334155" }}>
-              Reserve ratio: {reserveRatioPercent ? `${reserveRatioPercent}%` : "N/A"}
-            </span>
-            <span style={{ fontSize: "14px", color: "#334155" }}>
-              Backing floor: {poolBackingPerGD ? `${poolBackingPerGD} ${stableSymbol} / G$` : "N/A"}
-            </span>
-          </>
-        )}
+      <div className="action-row">
+        <button
+          onClick={handleExecute}
+          disabled={txStatus === "pending" || decimalsLoading || !quote || !amountIn}
+          className="primary-button"
+        >
+          {txStatus === "pending"
+            ? "Executing..."
+            : direction === "buy"
+              ? `Buy G$ with ${stableSymbol}`
+              : `Sell G$ for ${stableSymbol}`}
+        </button>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={handleRefresh}
+          disabled={statsLoading || quoteLoading}
+        >
+          Refresh
+        </button>
       </div>
-
-      {routeInfo && (
-        <div className="quote-view" style={{ gap: "6px" }}>
-          <span className="quote-label">Route Addresses</span>
-          <span style={{ fontSize: "12px", color: "#475569" }}>
-            env: {routeInfo.env} | chainId: {routeInfo.chainId} | mode: {routeInfo.mode}
-          </span>
-          <span style={{ fontSize: "12px", color: "#475569" }}>
-            stable: {routeInfo.stableToken}
-          </span>
-          <span style={{ fontSize: "12px", color: "#475569" }}>
-            gd: {routeInfo.goodDollar}
-          </span>
-          {routeInfo.broker && (
-            <span style={{ fontSize: "12px", color: "#475569" }}>
-              broker: {routeInfo.broker}
-            </span>
-          )}
-          {routeInfo.exchangeProvider && (
-            <span style={{ fontSize: "12px", color: "#475569" }}>
-              exchangeProvider: {routeInfo.exchangeProvider}
-            </span>
-          )}
-          {routeInfo.buyGDFactory && (
-            <span style={{ fontSize: "12px", color: "#475569" }}>
-              buyGDFactory: {routeInfo.buyGDFactory}
-            </span>
-          )}
-          <button
-            className="primary-button"
-            style={{ marginTop: "6px", padding: "10px", fontSize: "14px" }}
-            onClick={() => console.info("GoodReserve route info", routeInfo)}
-          >
-            Log Route To Console
-          </button>
-          <button
-            className="primary-button"
-            style={{ marginTop: "6px", padding: "10px", fontSize: "14px" }}
-            onClick={handleRefresh}
-            disabled={statsLoading || quoteLoading}
-          >
-            Refresh Quotes & Stats
-          </button>
-        </div>
-      )}
-
-      <button
-        onClick={handleExecute}
-        disabled={txStatus === "pending" || decimalsLoading || !quote || !amountIn}
-        className="primary-button"
-      >
-        {txStatus === "pending"
-          ? "Executing Transaction..."
-          : direction === "buy"
-            ? `Buy G$ with ${stableSymbol}`
-            : `Sell G$ for ${stableSymbol}`}
-      </button>
 
       {txStatus === "done" && txResult && (
         <div className="status-message status-success">
@@ -499,6 +595,84 @@ export function ReserveSwap() {
           {txError}
         </div>
       )}
+
+      <details className="advanced-panel">
+        <summary className="advanced-toggle">Advanced stats and route</summary>
+        <div className="advanced-content">
+          <div className="quote-view" style={{ gap: "8px" }}>
+            <span className="quote-label">Reserve Stats</span>
+            {statsLoading ? (
+              <span style={{ fontSize: "13px", color: "#64748b" }}>Loading stats...</span>
+            ) : (
+              <>
+                <span style={{ fontSize: "13px", color: "#334155" }}>
+                  Pool collateral:{" "}
+                  {poolCollateralDetails ? (
+                    <span title={`${poolCollateralDetails.precise} ${stableSymbol}`}>
+                      {poolCollateralDetails.compact} {stableSymbol}
+                    </span>
+                  ) : (
+                    "N/A"
+                  )}
+                </span>
+                <span style={{ fontSize: "13px", color: "#334155" }}>
+                  Total G$ supply:{" "}
+                  {totalSupplyDetails ? (
+                    <span title={`${totalSupplyDetails.precise} G$`}>
+                      {totalSupplyDetails.compact} G$
+                    </span>
+                  ) : (
+                    "N/A"
+                  )}
+                </span>
+                <span style={{ fontSize: "13px", color: "#334155" }}>
+                  Reserve ratio: {reserveRatioPercent ? `${reserveRatioPercent}%` : "N/A"}
+                </span>
+                <span style={{ fontSize: "13px", color: "#334155" }}>
+                  Backing floor: {poolBackingPerGD ? `${poolBackingPerGD} ${stableSymbol} / G$` : "N/A"}
+                </span>
+              </>
+            )}
+          </div>
+
+          {routeInfo && (
+            <div className="quote-view" style={{ gap: "6px" }}>
+              <span className="quote-label">Route Addresses</span>
+              <span style={{ fontSize: "12px", color: "#475569" }}>
+                env: {routeInfo.env} | chainId: {routeInfo.chainId} | mode: {routeInfo.mode}
+              </span>
+              <span style={{ fontSize: "12px", color: "#475569" }}>
+                stable: {routeInfo.stableToken}
+              </span>
+              <span style={{ fontSize: "12px", color: "#475569" }}>
+                gd: {routeInfo.goodDollar}
+              </span>
+              {routeInfo.broker && (
+                <span style={{ fontSize: "12px", color: "#475569" }}>
+                  broker: {routeInfo.broker}
+                </span>
+              )}
+              {routeInfo.exchangeProvider && (
+                <span style={{ fontSize: "12px", color: "#475569" }}>
+                  exchangeProvider: {routeInfo.exchangeProvider}
+                </span>
+              )}
+              {routeInfo.buyGDFactory && (
+                <span style={{ fontSize: "12px", color: "#475569" }}>
+                  buyGDFactory: {routeInfo.buyGDFactory}
+                </span>
+              )}
+              <button
+                className="secondary-button"
+                style={{ width: "100%" }}
+                onClick={() => console.info("GoodReserve route info", routeInfo)}
+              >
+                Log Route To Console
+              </button>
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   )
 }
