@@ -3,9 +3,58 @@ import { useAccount } from "wagmi"
 import { useGoodReserve } from "@goodsdks/react-hooks"
 import { formatUnits, parseUnits } from "viem"
 
+type RouteInfo = {
+  env: string
+  chainId: number
+  mode: "exchange-helper" | "mento-broker"
+  stableToken: `0x${string}`
+  goodDollar: `0x${string}`
+  exchangeHelper?: `0x${string}`
+  buyGDFactory?: `0x${string}`
+  broker?: `0x${string}`
+  exchangeProvider?: `0x${string}`
+}
+
+type ReserveStatsState = {
+  goodDollarTotalSupply: bigint
+  stableTokenDecimals: number
+  goodDollarDecimals: number
+  poolReserveBalance: bigint | null
+  poolTokenSupply: bigint | null
+  reserveRatio: number | null
+  exitContribution: number | null
+}
+
 const FALLBACK_STABLE_TOKENS = {
   celo: "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const,
   xdc: "0xCCE5f6B605164B7784b4719829d84b0f7493b906" as const,
+}
+
+const compactFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 2,
+})
+
+const mapFriendlyError = (err: unknown, fallback: string): string => {
+  const message = err instanceof Error ? err.message : String(err ?? fallback)
+  const lower = message.toLowerCase()
+
+  if (lower.includes("user rejected")) return "Transaction canceled in wallet."
+  if (lower.includes("insufficient funds"))
+    return "Insufficient funds for token amount or gas."
+  if (lower.includes("allowance")) return "Insufficient allowance. Approve and try again."
+  if (lower.includes("slippage")) return "Slippage too high. Increase tolerance or reduce trade size."
+  if (lower.includes("revert")) return "Quote or swap reverted on-chain. Try a smaller amount."
+  if (lower.includes("outflow")) return "Reserve limits may apply (for example, weekly outflow constraints)."
+
+  return message || fallback
+}
+
+const formatTokenAmount = (value: bigint, decimals: number): { compact: string; precise: string } => {
+  const precise = formatUnits(value, decimals)
+  const parsed = Number(precise)
+  if (!Number.isFinite(parsed)) return { compact: precise, precise }
+  return { compact: compactFormatter.format(parsed), precise }
 }
 
 export function ReserveSwap() {
@@ -17,11 +66,15 @@ export function ReserveSwap() {
   const [amountIn, setAmountIn] = useState("")
   const [quote, setQuote] = useState<bigint | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
+  const [statsLoading, setStatsLoading] = useState(false)
   const [decimalsLoading, setDecimalsLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [statsError, setStatsError] = useState<string | null>(null)
   const [txStatus, setTxStatus] = useState<"idle" | "pending" | "done" | "error">("idle")
   const [txResult, setTxResult] = useState<string | null>(null)
   const [txError, setTxError] = useState<string | null>(null)
+  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null)
+  const [reserveStats, setReserveStats] = useState<ReserveStatsState | null>(null)
   const [stableDecimals, setStableDecimals] = useState(18)
   const [gdDecimals, setGdDecimals] = useState(18)
 
@@ -31,41 +84,35 @@ export function ReserveSwap() {
   const fallbackStable = isXdc ? FALLBACK_STABLE_TOKENS.xdc : FALLBACK_STABLE_TOKENS.celo
   const stableToken = sdk?.getStableTokenAddress() ?? fallbackStable
 
-  useEffect(() => {
+  const loadReserveContext = useCallback(async () => {
     if (!sdk) return
 
-    let active = true
     setDecimalsLoading(true)
+    setStatsLoading(true)
+    setStatsError(null)
 
-    const loadDecimals = async () => {
-      try {
-        const gdToken = sdk.getGoodDollarAddress()
-        const [stable, gd] = await Promise.all([
-          sdk.getTokenDecimals(stableToken),
-          sdk.getTokenDecimals(gdToken),
-        ])
+    try {
+      const [stats, route] = await Promise.all([
+        sdk.getReserveStats(),
+        Promise.resolve(sdk.getRouteInfo()),
+      ])
 
-        if (!active) return
-        setStableDecimals(stable)
-        setGdDecimals(gd)
-      } catch (err) {
-        if (!active) return
-        setQuoteError(
-          err instanceof Error
-            ? `Failed to read token decimals: ${err.message}`
-            : "Failed to read token decimals",
-        )
-      } finally {
-        if (active) setDecimalsLoading(false)
-      }
+      setReserveStats(stats)
+      setRouteInfo(route as RouteInfo)
+      setStableDecimals(stats.stableTokenDecimals)
+      setGdDecimals(stats.goodDollarDecimals)
+      console.info("GoodReserve route info", route)
+    } catch (err) {
+      setStatsError(mapFriendlyError(err, "Failed to read reserve stats"))
+    } finally {
+      setDecimalsLoading(false)
+      setStatsLoading(false)
     }
+  }, [sdk])
 
-    void loadDecimals()
-
-    return () => {
-      active = false
-    }
-  }, [sdk, stableToken])
+  useEffect(() => {
+    void loadReserveContext()
+  }, [loadReserveContext])
 
   const fetchQuote = useCallback(async () => {
     if (!sdk || decimalsLoading || !amountIn || isNaN(Number(amountIn))) return
@@ -84,7 +131,7 @@ export function ReserveSwap() {
       }
     } catch (err: unknown) {
       setQuote(null)
-      setQuoteError(err instanceof Error ? err.message : "Failed to fetch quote")
+      setQuoteError(mapFriendlyError(err, "Failed to fetch quote"))
     } finally {
       setQuoteLoading(false)
     }
@@ -94,6 +141,11 @@ export function ReserveSwap() {
     const timer = setTimeout(fetchQuote, 400)
     return () => clearTimeout(timer)
   }, [fetchQuote])
+
+  const handleRefresh = useCallback(async () => {
+    await loadReserveContext()
+    await fetchQuote()
+  }, [loadReserveContext, fetchQuote])
 
   const handleExecute = async () => {
     if (!sdk || !amountIn || quote === null) return
@@ -124,7 +176,7 @@ export function ReserveSwap() {
       setQuote(null)
     } catch (err) {
       setTxStatus("error")
-      setTxError(err instanceof Error ? err.message : "Transaction failed")
+      setTxError(mapFriendlyError(err, "Transaction failed"))
     }
   }
 
@@ -148,12 +200,74 @@ export function ReserveSwap() {
 
   const inputLabel = direction === "buy" ? stableSymbol : "G$"
   const outputLabel = direction === "buy" ? "G$" : stableSymbol
-  const outputValue =
+  const outputDetails =
     quote === null
       ? null
       : direction === "buy"
-        ? formatUnits(quote, gdDecimals)
-        : formatUnits(quote, stableDecimals)
+        ? formatTokenAmount(quote, gdDecimals)
+        : formatTokenAmount(quote, stableDecimals)
+  let impliedPrice: string | null = null
+  if (quote !== null && amountIn && !isNaN(Number(amountIn))) {
+    try {
+      const inputParsed = parseUnits(
+        amountIn,
+        direction === "buy" ? stableDecimals : gdDecimals,
+      )
+      if (inputParsed > 0n && quote > 0n) {
+        const stableAmount = direction === "buy" ? inputParsed : quote
+        const gdAmount = direction === "buy" ? quote : inputParsed
+        const scaled =
+          (stableAmount * 10n ** BigInt(gdDecimals) * 10n ** 9n) /
+          (gdAmount * 10n ** BigInt(stableDecimals))
+        impliedPrice = formatUnits(scaled, 9)
+      }
+    } catch {
+      impliedPrice = null
+    }
+  }
+
+  let lowLiquidityWarning: string | null = null
+  if (direction === "buy" && quote !== null && amountIn && !isNaN(Number(amountIn))) {
+    try {
+      const parsedInput = parseUnits(amountIn, stableDecimals)
+      const smallInputThreshold = parseUnits("10", stableDecimals)
+      const highOutputThreshold = parseUnits("1000000", gdDecimals)
+
+      if (parsedInput <= smallInputThreshold && quote >= highOutputThreshold) {
+        lowLiquidityWarning =
+          "High mint volume due to current reserve building phase. Price rises with more collateral added."
+      }
+    } catch {
+      lowLiquidityWarning = null
+    }
+  }
+
+  const reserveRatioPercent =
+    reserveStats?.reserveRatio !== null && reserveStats?.reserveRatio !== undefined
+      ? (reserveStats.reserveRatio / 10000).toFixed(2)
+      : null
+  const poolCollateralDetails =
+    reserveStats?.poolReserveBalance !== null &&
+    reserveStats?.poolReserveBalance !== undefined
+      ? formatTokenAmount(reserveStats.poolReserveBalance, stableDecimals)
+      : null
+  const totalSupplyDetails = reserveStats
+    ? formatTokenAmount(reserveStats.goodDollarTotalSupply, gdDecimals)
+    : null
+  const poolBackingPerGD =
+    reserveStats?.poolReserveBalance !== null &&
+    reserveStats?.poolReserveBalance !== undefined &&
+    reserveStats?.poolTokenSupply !== null &&
+    reserveStats?.poolTokenSupply !== undefined &&
+    reserveStats.poolTokenSupply > 0n
+      ? formatUnits(
+          (reserveStats.poolReserveBalance *
+            10n ** BigInt(gdDecimals) *
+            10n ** 9n) /
+            (reserveStats.poolTokenSupply * 10n ** BigInt(stableDecimals)),
+          9,
+        )
+      : null
 
   return (
     <div className="swap-card">
@@ -163,6 +277,11 @@ export function ReserveSwap() {
         {isXdc && (
           <p style={{ fontSize: "12px", color: "#64748b", marginTop: "6px" }}>
             XDC demo uses the current development deployment addresses.
+          </p>
+        )}
+        {!isXdc && (
+          <p style={{ fontSize: "12px", color: "#64748b", marginTop: "6px" }}>
+            Multi-chain hint: XDC (USDC-backed) is available in parallel when you switch network.
           </p>
         )}
       </div>
@@ -213,11 +332,17 @@ export function ReserveSwap() {
         </div>
       )}
 
-      {outputValue !== null && !quoteLoading && (
+      {statsError && (
+        <div className="status-message status-error" style={{ fontSize: "12px" }}>
+          {statsError}
+        </div>
+      )}
+
+      {outputDetails !== null && !quoteLoading && (
         <div className="quote-view">
           <span className="quote-label">Estimated Output</span>
-          <span className="quote-value">
-            {outputValue} {outputLabel}
+          <span className="quote-value" title={`${outputDetails.precise} ${outputLabel}`}>
+            {outputDetails.compact} {outputLabel}
           </span>
           <span style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
             Included 5% slippage protection
@@ -225,9 +350,108 @@ export function ReserveSwap() {
         </div>
       )}
 
+      {impliedPrice && (
+        <div className="quote-view" style={{ gap: "8px" }}>
+          <span className="quote-label">Reserve Implied Price (Quote)</span>
+          <span className="quote-value" style={{ fontSize: "16px" }}>
+            1 G$ ≈ {impliedPrice} {stableSymbol}
+          </span>
+          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+            This is reserve-implied pricing, not external DEX market price.
+          </span>
+        </div>
+      )}
+
+      {lowLiquidityWarning && (
+        <div className="status-message" style={{ background: "#fefce8", border: "1px solid #fde68a", color: "#92400e" }}>
+          {lowLiquidityWarning}
+        </div>
+      )}
+
+      <div className="quote-view" style={{ gap: "8px" }}>
+        <span className="quote-label">Reserve Stats</span>
+        {statsLoading ? (
+          <span style={{ fontSize: "14px", color: "#64748b" }}>Loading stats...</span>
+        ) : (
+          <>
+            <span style={{ fontSize: "14px", color: "#334155" }}>
+              Pool collateral:{" "}
+              {poolCollateralDetails ? (
+                <span title={`${poolCollateralDetails.precise} ${stableSymbol}`}>
+                  {poolCollateralDetails.compact} {stableSymbol}
+                </span>
+              ) : (
+                "N/A"
+              )}
+            </span>
+            <span style={{ fontSize: "14px", color: "#334155" }}>
+              Total G$ supply:{" "}
+              {totalSupplyDetails ? (
+                <span title={`${totalSupplyDetails.precise} G$`}>
+                  {totalSupplyDetails.compact} G$
+                </span>
+              ) : (
+                "N/A"
+              )}
+            </span>
+            <span style={{ fontSize: "14px", color: "#334155" }}>
+              Reserve ratio: {reserveRatioPercent ? `${reserveRatioPercent}%` : "N/A"}
+            </span>
+            <span style={{ fontSize: "14px", color: "#334155" }}>
+              Backing floor: {poolBackingPerGD ? `${poolBackingPerGD} ${stableSymbol} / G$` : "N/A"}
+            </span>
+          </>
+        )}
+      </div>
+
+      {routeInfo && (
+        <div className="quote-view" style={{ gap: "6px" }}>
+          <span className="quote-label">Route Addresses</span>
+          <span style={{ fontSize: "12px", color: "#475569" }}>
+            env: {routeInfo.env} | chainId: {routeInfo.chainId} | mode: {routeInfo.mode}
+          </span>
+          <span style={{ fontSize: "12px", color: "#475569" }}>
+            stable: {routeInfo.stableToken}
+          </span>
+          <span style={{ fontSize: "12px", color: "#475569" }}>
+            gd: {routeInfo.goodDollar}
+          </span>
+          {routeInfo.broker && (
+            <span style={{ fontSize: "12px", color: "#475569" }}>
+              broker: {routeInfo.broker}
+            </span>
+          )}
+          {routeInfo.exchangeProvider && (
+            <span style={{ fontSize: "12px", color: "#475569" }}>
+              exchangeProvider: {routeInfo.exchangeProvider}
+            </span>
+          )}
+          {routeInfo.buyGDFactory && (
+            <span style={{ fontSize: "12px", color: "#475569" }}>
+              buyGDFactory: {routeInfo.buyGDFactory}
+            </span>
+          )}
+          <button
+            className="primary-button"
+            style={{ marginTop: "6px", padding: "10px", fontSize: "14px" }}
+            onClick={() => console.info("GoodReserve route info", routeInfo)}
+          >
+            Log Route To Console
+          </button>
+          <button
+            className="primary-button"
+            style={{ marginTop: "6px", padding: "10px", fontSize: "14px" }}
+            onClick={handleRefresh}
+            disabled={statsLoading || quoteLoading}
+          >
+            Refresh Quotes & Stats
+          </button>
+        </div>
+      )}
+
       <button
         onClick={handleExecute}
-        disabled={txStatus === "pending" || !quote || !amountIn}
+        disabled={txStatus === "pending" || decimalsLoading || !quote || !amountIn}
         className="primary-button"
       >
         {txStatus === "pending"

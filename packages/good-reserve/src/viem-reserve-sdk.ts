@@ -42,11 +42,35 @@ export interface GetReserveEventsOptions {
   blocksAgo?: bigint
 }
 
+export type ReserveRouteInfo = {
+  env: ReserveEnv
+  chainId: number
+  mode: "exchange-helper" | "mento-broker"
+  stableToken: Address
+  goodDollar: Address
+  exchangeHelper?: Address
+  buyGDFactory?: Address
+  broker?: Address
+  exchangeProvider?: Address
+}
+
+export interface ReserveStats {
+  goodDollarTotalSupply: bigint
+  stableTokenDecimals: number
+  goodDollarDecimals: number
+  poolReserveBalance: bigint | null
+  poolTokenSupply: bigint | null
+  reserveRatio: number | null
+  exitContribution: number | null
+}
+
 export class GoodReserveSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient | null
   private contracts: Exclude<ReserveChainConfig, { mode: "unavailable" }>
   private mentoExchangeId: `0x${string}` | null = null
+  private chainId: number
+  private env: ReserveEnv
 
   constructor(
     publicClient: PublicClient,
@@ -75,6 +99,8 @@ export class GoodReserveSDK {
     this.publicClient = publicClient
     this.walletClient = walletClient ?? null
     this.contracts = contracts
+    this.chainId = chainId
+    this.env = env
   }
 
   // Read methods.
@@ -179,6 +205,84 @@ export class GoodReserveSDK {
    */
   getGoodDollarAddress(): Address {
     return this.contracts.goodDollar
+  }
+
+  /**
+   * Returns active route info including chain/env and contract addresses in use.
+   */
+  getRouteInfo(): ReserveRouteInfo {
+    if (this.contracts.mode === "exchange-helper") {
+      return {
+        env: this.env,
+        chainId: this.chainId,
+        mode: "exchange-helper",
+        stableToken: this.contracts.stableToken,
+        goodDollar: this.contracts.goodDollar,
+        exchangeHelper: this.contracts.exchangeHelper,
+        buyGDFactory: this.contracts.buyGDFactory,
+      }
+    }
+
+    return {
+      env: this.env,
+      chainId: this.chainId,
+      mode: "mento-broker",
+      stableToken: this.contracts.stableToken,
+      goodDollar: this.contracts.goodDollar,
+      broker: this.contracts.broker,
+      exchangeProvider: this.contracts.exchangeProvider,
+    }
+  }
+
+  /**
+   * Returns reserve-related stats useful for UI diagnostics.
+   */
+  async getReserveStats(): Promise<ReserveStats> {
+    const [goodDollarTotalSupply, stableTokenDecimals, goodDollarDecimals] =
+      await Promise.all([
+        this.publicClient.readContract({
+          address: this.contracts.goodDollar,
+          abi: erc20ABI,
+          functionName: "totalSupply",
+        }),
+        this.getTokenDecimals(this.contracts.stableToken),
+        this.getTokenDecimals(this.contracts.goodDollar),
+      ])
+
+    if (this.contracts.mode === "exchange-helper") {
+      return {
+        goodDollarTotalSupply,
+        stableTokenDecimals,
+        goodDollarDecimals,
+        poolReserveBalance: null,
+        poolTokenSupply: null,
+        reserveRatio: null,
+        exitContribution: null,
+      }
+    }
+
+    const exchangeId = await this.getMentoExchangeId()
+    const pool = await this.publicClient.readContract({
+      address: this.contracts.exchangeProvider,
+      abi: mentoExchangeProviderABI,
+      functionName: "getPoolExchange",
+      args: [exchangeId],
+    })
+
+    const tokenSupply = this.getPoolField(pool, 2)
+    const reserveBalance = this.getPoolField(pool, 3)
+    const reserveRatio = this.getPoolFieldNumber(pool, 4)
+    const exitContribution = this.getPoolFieldNumber(pool, 5)
+
+    return {
+      goodDollarTotalSupply,
+      stableTokenDecimals,
+      goodDollarDecimals,
+      poolReserveBalance: reserveBalance,
+      poolTokenSupply: tokenSupply,
+      reserveRatio,
+      exitContribution,
+    }
   }
 
   /**
@@ -457,6 +561,22 @@ export class GoodReserveSDK {
 
   private sameAddress(a: Address, b: Address): boolean {
     return a.toLowerCase() === b.toLowerCase()
+  }
+
+  private getPoolField(pool: unknown, index: number): bigint | null {
+    if (!Array.isArray(pool)) return null
+    const value = pool[index]
+    if (typeof value === "bigint") return value
+    if (typeof value === "number") return BigInt(value)
+    return null
+  }
+
+  private getPoolFieldNumber(pool: unknown, index: number): number | null {
+    if (!Array.isArray(pool)) return null
+    const value = pool[index]
+    if (typeof value === "number") return value
+    if (typeof value === "bigint") return Number(value)
+    return null
   }
 
   private async ensureAllowance(

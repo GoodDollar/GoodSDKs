@@ -184,4 +184,41 @@ describe("GoodReserveSDK", () => {
       expect(result[0]?.amountOut).toBe(250n)
     })
   })
+
+  describe("reserve diagnostics", () => {
+    it("returns route info with active mento addresses", () => {
+      const sdk = new GoodReserveSDK(makeMockClient())
+      const info = sdk.getRouteInfo()
+
+      expect(info.chainId).toBe(CELO_CHAIN_ID)
+      expect(info.mode).toBe("mento-broker")
+      expect(info.broker).toBe(RESERVE_CONTRACT_ADDRESSES.production.celo.broker)
+      expect(info.exchangeProvider).toBe(
+        RESERVE_CONTRACT_ADDRESSES.production.celo.exchangeProvider,
+      )
+    })
+
+    it("returns reserve stats from broker pool", async () => {
+      const mockReadContract = vi.fn().mockImplementation((req: any) => {
+        const fn = String(req.functionName)
+        if (fn === "totalSupply") return 123456789n
+        if (fn === "decimals") return 18
+        if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+        if (fn === "getPoolExchange") {
+          return [CELO_PROD_STABLE, CELO_PROD_GD, 2000000n, 350000n, 500000, 0]
+        }
+        return 0n
+      })
+
+      const sdk = new GoodReserveSDK(makeMockClient({ readContract: mockReadContract } as any))
+      const stats = await sdk.getReserveStats()
+
+      expect(stats.goodDollarTotalSupply).toBe(123456789n)
+      expect(stats.stableTokenDecimals).toBe(18)
+      expect(stats.goodDollarDecimals).toBe(18)
+      expect(stats.poolTokenSupply).toBe(2000000n)
+      expect(stats.poolReserveBalance).toBe(350000n)
+      expect(stats.reserveRatio).toBe(500000)
+    })
+  })
 })
