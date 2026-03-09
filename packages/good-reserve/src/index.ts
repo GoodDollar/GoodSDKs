@@ -6,6 +6,7 @@ export type {
   GetReserveEventsOptions,
   ReserveRouteInfo,
   ReserveStats,
+  GoodReserveSDKOptions,
 } from "./viem-reserve-sdk"
 export {
   RESERVE_CONTRACT_ADDRESSES,

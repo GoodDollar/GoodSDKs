@@ -65,6 +65,15 @@ export interface ReserveStats {
   exitContribution: number | null
 }
 
+export interface GoodReserveSDKOptions {
+  /**
+   * When true, approval transactions use the exact `amount` required instead of
+   * `maxUint256`. Defaults to false (approve max) to reduce future approval tx
+   * overhead at the cost of a slightly less conservative approval model.
+   */
+  exactApproval?: boolean
+}
+
 export class GoodReserveSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient | null
@@ -72,11 +81,13 @@ export class GoodReserveSDK {
   private mentoExchangeId: `0x${string}` | null = null
   private chainId: number
   private env: ReserveEnv
+  private exactApproval: boolean
 
   constructor(
     publicClient: PublicClient,
     walletClient?: WalletClient,
     env: ReserveEnv = "production",
+    options: GoodReserveSDKOptions = {},
   ) {
     if (!publicClient) throw new Error("Public client is required")
 
@@ -102,6 +113,7 @@ export class GoodReserveSDK {
     this.contracts = contracts
     this.chainId = chainId
     this.env = env
+    this.exactApproval = options.exactApproval ?? false
   }
 
   // Read methods.
@@ -270,10 +282,8 @@ export class GoodReserveSDK {
       args: [exchangeId],
     })
 
-    const tokenSupply = this.getPoolField(pool, 2)
-    const reserveBalance = this.getPoolField(pool, 3)
-    const reserveRatio = this.getPoolFieldNumber(pool, 4)
-    const exitContribution = this.getPoolFieldNumber(pool, 5)
+    const { tokenSupply, reserveBalance, reserveRatio, exitContribution } =
+      this.extractPoolStats(pool)
 
     return {
       goodDollarTotalSupply,
@@ -526,30 +536,33 @@ export class GoodReserveSDK {
       functionName: "getExchangeIds",
     })
 
-    for (const exchangeId of exchangeIds) {
-      const pool = await this.publicClient.readContract({
-        address: this.contracts.exchangeProvider,
-        abi: mentoExchangeProviderABI,
-        functionName: "getPoolExchange",
-        args: [exchangeId],
-      })
+    // Fan out pool reads in parallel instead of serially to reduce latency
+    // when the exchange provider has multiple pools.
+    // Captured into a local const so TypeScript narrowing is preserved inside
+    // the arrow-function closure (mode was already guarded above).
+    const exchangeProvider = this.contracts.exchangeProvider
+    const pools = await Promise.all(
+      exchangeIds.map((exchangeId) =>
+        this.publicClient
+          .readContract({
+            address: exchangeProvider,
+            abi: mentoExchangeProviderABI,
+            functionName: "getPoolExchange",
+            args: [exchangeId],
+          })
+          .then((pool) => ({ exchangeId, pool })),
+      ),
+    )
 
-      const reserveAsset = Array.isArray(pool)
-        ? (pool[0] as Address | undefined)
-        : (pool as { reserveAsset?: Address }).reserveAsset
-      const tokenAddress = Array.isArray(pool)
-        ? (pool[1] as Address | undefined)
-        : (pool as { tokenAddress?: Address }).tokenAddress
+    for (const { exchangeId, pool } of pools) {
+      const { reserveAsset, tokenAddress } = this.extractPoolAddresses(pool)
 
-      if (!reserveAsset || !tokenAddress) {
-        continue
-      }
+      if (!reserveAsset || !tokenAddress) continue
 
-      const matchesPool =
+      if (
         this.sameAddress(reserveAsset, this.contracts.stableToken) &&
         this.sameAddress(tokenAddress, this.contracts.goodDollar)
-
-      if (matchesPool) {
+      ) {
         this.mentoExchangeId = exchangeId
         return exchangeId
       }
@@ -564,20 +577,60 @@ export class GoodReserveSDK {
     return a.toLowerCase() === b.toLowerCase()
   }
 
-  private getPoolField(pool: unknown, index: number): bigint | null {
-    if (!Array.isArray(pool)) return null
-    const value = pool[index]
-    if (typeof value === "bigint") return value
-    if (typeof value === "number") return BigInt(value)
-    return null
+  /**
+   * Normalises the return of `getPoolExchange` which viem may decode as a
+   * named-field object or a positional tuple depending on ABI shape.
+   * Fields (by position): reserveAsset, tokenAddress, tokenSupply,
+   *                       reserveBalance, reserveRatio, exitContribution
+   */
+  private extractPoolAddresses(pool: unknown): {
+    reserveAsset: Address | undefined
+    tokenAddress: Address | undefined
+  } {
+    if (Array.isArray(pool)) {
+      return {
+        reserveAsset: pool[0] as Address | undefined,
+        tokenAddress: pool[1] as Address | undefined,
+      }
+    }
+    const p = pool as { reserveAsset?: Address; tokenAddress?: Address }
+    return { reserveAsset: p.reserveAsset, tokenAddress: p.tokenAddress }
   }
 
-  private getPoolFieldNumber(pool: unknown, index: number): number | null {
-    if (!Array.isArray(pool)) return null
-    const value = pool[index]
-    if (typeof value === "number") return value
-    if (typeof value === "bigint") return Number(value)
-    return null
+  private extractPoolStats(pool: unknown): {
+    tokenSupply: bigint | null
+    reserveBalance: bigint | null
+    reserveRatio: number | null
+    exitContribution: number | null
+  } {
+    if (Array.isArray(pool)) {
+      const toBigint = (v: unknown): bigint | null =>
+        typeof v === "bigint" ? v : typeof v === "number" ? BigInt(v) : null
+      const toNumber = (v: unknown): number | null =>
+        typeof v === "number" ? v : typeof v === "bigint" ? Number(v) : null
+      return {
+        tokenSupply: toBigint(pool[2]),
+        reserveBalance: toBigint(pool[3]),
+        reserveRatio: toNumber(pool[4]),
+        exitContribution: toNumber(pool[5]),
+      }
+    }
+    const p = pool as {
+      tokenSupply?: bigint | number
+      reserveBalance?: bigint | number
+      reserveRatio?: bigint | number
+      exitContribution?: bigint | number
+    }
+    const toBigint = (v: bigint | number | undefined): bigint | null =>
+      v === undefined ? null : typeof v === "bigint" ? v : BigInt(v)
+    const toNumber = (v: bigint | number | undefined): number | null =>
+      v === undefined ? null : typeof v === "bigint" ? Number(v) : v
+    return {
+      tokenSupply: toBigint(p.tokenSupply),
+      reserveBalance: toBigint(p.reserveBalance),
+      reserveRatio: toNumber(p.reserveRatio),
+      exitContribution: toNumber(p.exitContribution),
+    }
   }
 
   private async ensureAllowance(
@@ -596,12 +649,16 @@ export class GoodReserveSDK {
 
     if (allowance >= amount) return
 
+    // With exactApproval=false (default) we approve maxUint256 to avoid
+    // repeated approval transactions on subsequent swaps. Set exactApproval=true
+    // in the constructor options for a more conservative approval model.
+    const approvalAmount = this.exactApproval ? amount : maxUint256
     await this.submitAndWait(
       {
         address: token,
         abi: erc20ABI,
         functionName: "approve",
-        args: [spender, maxUint256],
+        args: [spender, approvalAmount],
       },
       onHash,
     )
