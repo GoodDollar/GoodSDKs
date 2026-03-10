@@ -27,7 +27,9 @@ createAppKit({
   metadata: {
     name: "GoodDollar Reserve Demo",
     description: "GoodDollar Reserve Swap Integration",
-    url: "https://gooddollar.org",
+    // AppKit relay strictly enforces origin matching. While testing locally, it requires
+    // either the exact local origin or a valid https domain.
+    url: window.location.hostname === "localhost" ? "http://localhost:5173" : "https://gooddollar.org",
     icons: ["https://gooddollar.org/favicon.ico"],
   },
   features: {
