@@ -695,17 +695,21 @@ export class GoodReserveSDK {
     const uniqueBlocks = [...new Set(events.map((event) => event.block.toString()))]
     const blockTimestamps = new Map<string, number>()
 
-    await Promise.all(
-      uniqueBlocks.map(async (blockKey) => {
-        const blockNumber = BigInt(blockKey)
-        const block = await this.publicClient.getBlock({ blockNumber })
-        const timestamp = Number(block.timestamp)
+    const chunkSize = 10
+    for (let i = 0; i < uniqueBlocks.length; i += chunkSize) {
+      const chunk = uniqueBlocks.slice(i, i + chunkSize)
+      await Promise.all(
+        chunk.map(async (blockKey) => {
+          const blockNumber = BigInt(blockKey)
+          const block = await this.publicClient.getBlock({ blockNumber })
+          const timestamp = Number(block.timestamp)
 
-        if (!Number.isNaN(timestamp)) {
-          blockTimestamps.set(blockKey, timestamp)
-        }
-      }),
-    )
+          if (!Number.isNaN(timestamp)) {
+            blockTimestamps.set(blockKey, timestamp)
+          }
+        }),
+      )
+    }
 
     return events.map((event) => {
       const timestamp = blockTimestamps.get(event.block.toString())
