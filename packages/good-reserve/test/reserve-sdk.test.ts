@@ -94,9 +94,10 @@ const MOCK_STABLE =
 const makeExchangeHelperSdk = (
   readContract: ReturnType<typeof vi.fn>,
   overridePublicClient?: PublicClient,
+  walletClient?: WalletClient,
 ) => {
   const client = overridePublicClient ?? makeMockClient({ readContract } as any)
-  const sdk = new GoodReserveSDK(client)
+  const sdk = new GoodReserveSDK(client, walletClient)
   const anySDK = sdk as any
   anySDK.contracts = {
     mode: "exchange-helper",
@@ -127,6 +128,15 @@ describe("GoodReserveSDK", () => {
       expect(() =>
         new GoodReserveSDK(client, undefined, "development"),
       ).not.toThrow()
+    })
+
+    it("throws with configured reason on unavailable chain/env (XDC production)", () => {
+      const client = makeMockClient({ chain: { id: XDC_CHAIN_ID } } as any)
+      const config = RESERVE_CONTRACT_ADDRESSES.production.xdc
+      const reason = (config as any).reason ?? "Reserve not available"
+      expect(() =>
+        new GoodReserveSDK(client, undefined, "production"),
+      ).toThrow(reason)
     })
   })
 
@@ -253,6 +263,42 @@ describe("GoodReserveSDK", () => {
       // args[1] must be the exact amount (100n), not maxUint256
       expect(approveCall![0].args[1]).toBe(100n)
     })
+    it("throws for negative minReturn", async () => {
+      const wc = makeMockWallet()
+      const sdk = new GoodReserveSDK(makeMockClient(), wc)
+      await expect(sdk.buy(CELO_PROD_STABLE, 100n, -1n)).rejects.toThrow(
+        "minReturn cannot be negative",
+      )
+    })
+
+    it("does not approve when allowance is already sufficient", async () => {
+      const rc = vi.fn().mockImplementation(
+        makeAsyncFn((req) => {
+          const fn = String(req.functionName)
+          if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+          if (fn === "getPoolExchange") return [CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1]
+          if (fn === "getAmountOut") return 500n
+          // Return a large allowance so no approval should fire
+          if (fn === "allowance") return 10_000_000n
+          return 0n
+        }),
+      )
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({ readContract: rc, simulateContract } as any)
+
+      const result = await new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n)
+
+      expect(result.hash).toBe(MOCK_TX_HASH)
+      // Only swapIn — no approve
+      expect(simulateContract).toHaveBeenCalledTimes(1)
+      expect(simulateContract).toHaveBeenCalledWith(
+        expect.objectContaining({ functionName: "swapIn" }),
+      )
+      for (const [args] of simulateContract.mock.calls as any[]) {
+        expect((args as any).functionName).not.toBe("approve")
+      }
+    })
   })
 
   // ── sell ─────────────────────────────────────────────────────────────────────
@@ -294,6 +340,13 @@ describe("GoodReserveSDK", () => {
       )
       expect(approveCall).toBeDefined()
       expect(approveCall![0].args[1]).toBeGreaterThan(100n)
+    })
+    it("throws for negative minReturn", async () => {
+      const wc = makeMockWallet()
+      const sdk = new GoodReserveSDK(makeMockClient(), wc)
+      await expect(sdk.sell(CELO_PROD_STABLE, 100n, -1n)).rejects.toThrow(
+        "minReturn cannot be negative",
+      )
     })
   })
 
@@ -415,6 +468,65 @@ describe("GoodReserveSDK", () => {
       expect(result[0]?.amountIn).toBe(20n)
       expect(result[0]?.amountOut).toBe(15n)
     })
+    it("enriches events with timestamps and sorts chronologically", async () => {
+      const rc = makeMentoReadContract(CELO_PROD_STABLE, CELO_PROD_GD)
+
+      const getContractEvents = vi.fn().mockResolvedValue([
+        {
+          args: {
+            exchangeId: MOCK_EXCHANGE_ID,
+            trader: "0x0000000000000000000000000000000000000001",
+            tokenIn: CELO_PROD_STABLE,
+            tokenOut: CELO_PROD_GD,
+            amountIn: 10n,
+            amountOut: 50n,
+          },
+          transactionHash: "0x0000000000000000000000000000000000000000000000000000000000000003" as `0x${string}`,
+          blockNumber: 12n,
+        },
+        {
+          args: {
+            exchangeId: MOCK_EXCHANGE_ID,
+            trader: "0x0000000000000000000000000000000000000001",
+            tokenIn: CELO_PROD_STABLE,
+            tokenOut: CELO_PROD_GD,
+            amountIn: 5n,
+            amountOut: 25n,
+          },
+          transactionHash: "0x0000000000000000000000000000000000000000000000000000000000000001" as `0x${string}`,
+          blockNumber: 10n,
+        },
+        {
+          args: {
+            exchangeId: MOCK_EXCHANGE_ID,
+            trader: "0x0000000000000000000000000000000000000001",
+            tokenIn: CELO_PROD_STABLE,
+            tokenOut: CELO_PROD_GD,
+            amountIn: 7n,
+            amountOut: 35n,
+          },
+          transactionHash: "0x0000000000000000000000000000000000000000000000000000000000000002" as `0x${string}`,
+          blockNumber: 11n,
+        },
+      ])
+
+      const getBlock = vi.fn(async ({ blockNumber }: { blockNumber: bigint }) => ({
+        number: blockNumber,
+        timestamp: blockNumber === 10n ? 1000n : blockNumber === 11n ? 2000n : 3000n,
+      }))
+
+      const sdk = new GoodReserveSDK(
+        makeMockClient({ readContract: rc, getContractEvents, getBlock } as any),
+      )
+      const result = await sdk.getTransactionHistory(
+        "0x0000000000000000000000000000000000000001",
+      )
+
+      // Should be sorted ascending by block
+      expect(result.map((e) => e.block)).toEqual([10n, 11n, 12n])
+      // Timestamps should match the per-block mock values
+      expect(result.map((e) => (e as any).timestamp)).toEqual([1000, 2000, 3000])
+    })
   })
 
   // ── reserve diagnostics ───────────────────────────────────────────────────────
@@ -479,6 +591,78 @@ describe("GoodReserveSDK", () => {
       expect(info.mode).toBe("exchange-helper")
       expect(info.exchangeHelper).toBe(MOCK_EXCHANGE_HELPER)
       expect(info.buyGDFactory).toBe(MOCK_BUY_GD_FACTORY)
+    })
+  })
+
+  // ── exchange-helper write paths ───────────────────────────────────────────────
+  describe("exchange-helper buy and sell write paths", () => {
+    it("calls exchangeHelper.buy via simulateContract with correct args", async () => {
+      const rc = vi.fn().mockImplementation(
+        makeAsyncFn((req) => {
+          if (req.functionName === "allowance") return 0n
+          return 0n
+        }),
+      )
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({ readContract: rc, simulateContract } as any)
+      const sdk = makeExchangeHelperSdk(rc, publicClient, wc)
+
+      const result = await sdk.buy(MOCK_STABLE, 100n, 90n)
+
+      expect(result.hash).toBe(MOCK_TX_HASH)
+      const swapCall = simulateContract.mock.calls
+        .map(([args]: any[]) => args)
+        .find((args: any) => args?.functionName === "buy")
+      expect(swapCall).toBeDefined()
+      expect(swapCall.address).toBe(MOCK_EXCHANGE_HELPER)
+      expect(swapCall.args).toEqual([MOCK_STABLE, 100n, 90n])
+    })
+
+    it("calls exchangeHelper.sell via simulateContract with correct args", async () => {
+      const rc = vi.fn().mockImplementation(
+        makeAsyncFn((req) => {
+          if (req.functionName === "allowance") return 0n
+          return 0n
+        }),
+      )
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({ readContract: rc, simulateContract } as any)
+      const sdk = makeExchangeHelperSdk(rc, publicClient, wc)
+
+      const result = await sdk.sell(MOCK_STABLE, 200n, 180n)
+
+      expect(result.hash).toBe(MOCK_TX_HASH)
+      const swapCall = simulateContract.mock.calls
+        .map(([args]: any[]) => args)
+        .find((args: any) => args?.functionName === "sell")
+      expect(swapCall).toBeDefined()
+      expect(swapCall.address).toBe(MOCK_EXCHANGE_HELPER)
+      expect(swapCall.args).toEqual([MOCK_STABLE, 200n, 180n])
+    })
+
+    it("approves exchangeHelper as spender before calling buy", async () => {
+      const rc = vi.fn().mockImplementation(
+        makeAsyncFn((req) => {
+          // Return 0 allowance so approval is required
+          if (req.functionName === "allowance") return 0n
+          return 0n
+        }),
+      )
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({ readContract: rc, simulateContract } as any)
+      const sdk = makeExchangeHelperSdk(rc, publicClient, wc)
+
+      await sdk.buy(MOCK_STABLE, 100n, 90n)
+
+      // Two calls: approve + buy
+      expect(simulateContract).toHaveBeenCalledTimes(2)
+      const approvalCall = rc.mock.calls
+        .map(([args]: any[]) => args)
+        .find((args: any) => args?.functionName === "allowance" && args?.args?.[1] === MOCK_EXCHANGE_HELPER)
+      expect(approvalCall).toBeDefined()
     })
   })
 

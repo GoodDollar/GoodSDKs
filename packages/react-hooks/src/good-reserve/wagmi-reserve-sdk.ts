@@ -29,7 +29,7 @@ export function useGoodReserve(env: ReserveEnv = "production", options?: GoodRes
 
   return useMemo(() => {
     if (!publicClient) {
-      return { sdk: null, loading: false, error: "Public client not initialized" }
+      return { sdk: null, loading: true, error: null }
     }
 
     try {

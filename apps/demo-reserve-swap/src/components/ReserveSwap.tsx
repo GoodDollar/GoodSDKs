@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAccount, usePublicClient } from "wagmi"
 import { useGoodReserve } from "@goodsdks/react-hooks"
-import { erc20ABI } from "@goodsdks/good-reserve"
+import { erc20ABI, XDC_CHAIN_ID } from "@goodsdks/good-reserve"
 import { formatUnits, parseUnits } from "viem"
+import { useReserveSwapQuote } from "./useReserveSwapQuote"
+import { useReserveSwapTx } from "./useReserveSwapTx"
 
 type RouteInfo = {
   env: string
@@ -107,20 +109,14 @@ const formatAmountForInput = (value: bigint, decimals: number): string => {
 export function ReserveSwap() {
   const { address, chain } = useAccount()
   const publicClient = usePublicClient()
-  const reserveEnv = chain?.id === 50 ? "development" : "production"
+  const reserveEnv = chain?.id === XDC_CHAIN_ID ? "development" : "production"
   const { sdk, loading: sdkLoading, error: sdkError } = useGoodReserve(reserveEnv)
 
   const [direction, setDirection] = useState<"buy" | "sell">("buy")
   const [amountIn, setAmountIn] = useState("")
-  const [quote, setQuote] = useState<bigint | null>(null)
-  const [quoteLoading, setQuoteLoading] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
   const [decimalsLoading, setDecimalsLoading] = useState(false)
-  const [quoteError, setQuoteError] = useState<string | null>(null)
   const [statsError, setStatsError] = useState<string | null>(null)
-  const [txStatus, setTxStatus] = useState<"idle" | "pending" | "done" | "error">("idle")
-  const [txResult, setTxResult] = useState<string | null>(null)
-  const [txError, setTxError] = useState<string | null>(null)
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null)
   const [reserveStats, setReserveStats] = useState<ReserveStatsState | null>(null)
   const [stableBalance, setStableBalance] = useState<bigint | null>(null)
@@ -129,11 +125,38 @@ export function ReserveSwap() {
   const [stableDecimals, setStableDecimals] = useState(18)
   const [gdDecimals, setGdDecimals] = useState(18)
 
-  const isXdc = chain?.id === 50
+  const isXdc = chain?.id === XDC_CHAIN_ID
   const chainLabel = isXdc ? "XDC" : "Celo"
   const stableSymbol = isXdc ? "USDC" : "cUSD"
   const fallbackStable = isXdc ? FALLBACK_STABLE_TOKENS.xdc : FALLBACK_STABLE_TOKENS.celo
   const stableToken = sdk?.getStableTokenAddress() ?? fallbackStable
+
+  // ── Quote hook (owns quote state + derived values) ──────────────────────────
+  const {
+    quote,
+    quoteLoading,
+    quoteError,
+    impliedPrice,
+    impliedPriceNumber,
+    lowLiquidityWarning,
+    refetchQuote,
+  } = useReserveSwapQuote({
+    sdk,
+    direction,
+    amountIn,
+    stableToken,
+    stableDecimals,
+    gdDecimals,
+    decimalsLoading,
+  })
+
+  // ── Transaction hook (owns tx state + execute logic) ──────────────────────
+  const { execute: executeSwap, txStatus, txResult, txError } = useReserveSwapTx(sdk, {
+    direction,
+    stableToken,
+    stableDecimals,
+    gdDecimals,
+  })
 
   const loadReserveContext = useCallback(async () => {
     if (!sdk) return
@@ -203,70 +226,17 @@ export function ReserveSwap() {
     void loadBalances()
   }, [loadBalances])
 
-  const fetchQuote = useCallback(async () => {
-    if (!sdk || decimalsLoading || !amountIn || isNaN(Number(amountIn))) return
-
-    setQuoteLoading(true)
-    setQuoteError(null)
-    try {
-      if (direction === "buy") {
-        const parsed = parseUnits(amountIn, stableDecimals)
-        const result = await sdk.getBuyQuote(stableToken, parsed)
-        setQuote(result)
-      } else {
-        const parsed = parseUnits(amountIn, gdDecimals)
-        const result = await sdk.getSellQuote(parsed, stableToken)
-        setQuote(result)
-      }
-    } catch (err: unknown) {
-      setQuote(null)
-      setQuoteError(mapFriendlyError(err, "Failed to fetch quote"))
-    } finally {
-      setQuoteLoading(false)
-    }
-  }, [sdk, decimalsLoading, amountIn, direction, stableToken, stableDecimals, gdDecimals])
-
-  useEffect(() => {
-    const timer = setTimeout(fetchQuote, 400)
-    return () => clearTimeout(timer)
-  }, [fetchQuote])
 
   const handleRefresh = useCallback(async () => {
     await loadReserveContext()
-    await fetchQuote()
+    await refetchQuote()
     await loadBalances()
-  }, [loadReserveContext, fetchQuote, loadBalances])
+  }, [loadReserveContext, refetchQuote, loadBalances])
 
   const handleExecute = async () => {
-    if (!sdk || !amountIn || quote === null) return
-
-    setTxStatus("pending")
-    setTxResult(null)
-    setTxError(null)
-
-    try {
-      const minReturn = (quote * 95n) / 100n
-
-      if (direction === "buy") {
-        const parsed = parseUnits(amountIn, stableDecimals)
-        const result = await sdk.buy(stableToken, parsed, minReturn, (hash: `0x${string}`) => {
-          console.log("buy tx sent:", hash)
-        })
-        setTxResult(`Buy succeeded. Tx: ${result.receipt.transactionHash}`)
-      } else {
-        const parsed = parseUnits(amountIn, gdDecimals)
-        const result = await sdk.sell(stableToken, parsed, minReturn, (hash: `0x${string}`) => {
-          console.log("sell tx sent:", hash)
-        })
-        setTxResult(`Sell succeeded. Tx: ${result.receipt.transactionHash}`)
-      }
-
-      setTxStatus("done")
+    await executeSwap(amountIn, quote)
+    if (txStatus === "done") {
       setAmountIn("")
-      setQuote(null)
-    } catch (err) {
-      setTxStatus("error")
-      setTxError(mapFriendlyError(err, "Transaction failed"))
     }
   }
 
@@ -300,45 +270,6 @@ export function ReserveSwap() {
       : direction === "buy"
         ? formatTokenAmount(quote, gdDecimals)
         : formatTokenAmount(quote, stableDecimals)
-  let impliedPrice: string | null = null
-  let impliedPriceNumber: number | null = null
-  if (quote !== null && amountIn && !isNaN(Number(amountIn))) {
-    try {
-      const inputParsed = parseUnits(
-        amountIn,
-        direction === "buy" ? stableDecimals : gdDecimals,
-      )
-      if (inputParsed > 0n && quote > 0n) {
-        const stableAmount = direction === "buy" ? inputParsed : quote
-        const gdAmount = direction === "buy" ? quote : inputParsed
-        const scaled =
-          (stableAmount * 10n ** BigInt(gdDecimals) * 10n ** 9n) /
-          (gdAmount * 10n ** BigInt(stableDecimals))
-        impliedPrice = formatUnits(scaled, 9)
-        const parsed = Number(impliedPrice)
-        impliedPriceNumber = Number.isFinite(parsed) ? parsed : null
-      }
-    } catch {
-      impliedPrice = null
-      impliedPriceNumber = null
-    }
-  }
-
-  let lowLiquidityWarning: string | null = null
-  if (direction === "buy" && quote !== null && amountIn && !isNaN(Number(amountIn))) {
-    try {
-      const parsedInput = parseUnits(amountIn, stableDecimals)
-      const smallInputThreshold = parseUnits("10", stableDecimals)
-      const highOutputThreshold = parseUnits("1000000", gdDecimals)
-
-      if (parsedInput <= smallInputThreshold && quote >= highOutputThreshold) {
-        lowLiquidityWarning =
-          "High mint volume due to current reserve building phase. Price rises with more collateral added."
-      }
-    } catch {
-      lowLiquidityWarning = null
-    }
-  }
 
   const reserveRatioPercent =
     reserveStats?.reserveRatio !== null && reserveStats?.reserveRatio !== undefined
