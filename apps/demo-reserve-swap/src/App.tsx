@@ -7,7 +7,11 @@ import { ReserveSwap } from "./components/ReserveSwap"
 
 const queryClient = new QueryClient()
 
-const projectId = "15372338f22e84803d4a413143c7b822" // GoodDollar public project ID
+// Prefer configuring via env (Vite exposes VITE_* vars). Keep a fallback so the
+// demo works out-of-the-box in local dev.
+const projectId =
+  (import.meta.env.VITE_APPKIT_PROJECT_ID as string | undefined) ??
+  "15372338f22e84803d4a413143c7b822" // GoodDollar public project ID
 
 const networks: [AppKitNetwork, ...AppKitNetwork[]] = [celo, xdc]
 

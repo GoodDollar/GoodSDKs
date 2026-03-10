@@ -2188,10 +2188,8 @@ __metadata:
     typescript: "npm:latest"
     viem: "npm:latest"
     vitest: "npm:^4.0.18"
-    wagmi: "npm:latest"
   peerDependencies:
     viem: "*"
-    wagmi: "*"
   languageName: unknown
   linkType: soft
 

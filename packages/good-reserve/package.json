@@ -28,17 +28,13 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@vitest/ui": "^4.0.18",
+    "tsup": "^8.3.5",
     "typescript": "latest",
     "viem": "latest",
-    "vitest": "^4.0.18",
-    "wagmi": "latest"
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
-    "viem": "*",
-    "wagmi": "*"
-  },
-  "dependencies": {
-    "tsup": "^8.3.5"
+    "viem": "*"
   },
   "keywords": [],
   "author": "",

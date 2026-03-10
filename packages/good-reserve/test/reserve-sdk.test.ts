@@ -257,6 +257,48 @@ describe("GoodReserveSDK", () => {
     })
   })
 
+  // ── sell ─────────────────────────────────────────────────────────────────────
+  describe("sell", () => {
+    it("throws when no wallet client is provided", async () => {
+      await expect(
+        new GoodReserveSDK(makeMockClient()).sell(CELO_PROD_STABLE, 100n, 90n),
+      ).rejects.toThrow("wallet client is required")
+    })
+
+    it("throws for zero gdAmount", async () => {
+      await expect(
+        new GoodReserveSDK(makeMockClient(), {} as any).sell(CELO_PROD_STABLE, 0n, 0n),
+      ).rejects.toThrow("gdAmount must be greater than zero")
+    })
+
+    it("approves then calls swapIn on Mento broker", async () => {
+      const rc = makeMentoReadContract(CELO_PROD_STABLE, CELO_PROD_GD)
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({ readContract: rc, simulateContract } as any)
+
+      const sdk = new GoodReserveSDK(publicClient, wc)
+      const result = await sdk.sell(CELO_PROD_STABLE, 100n, 90n)
+
+      expect(result.hash).toBe(MOCK_TX_HASH)
+      // Called at least twice: approve + swapIn
+      expect(simulateContract).toHaveBeenCalledTimes(2)
+      expect(simulateContract).toHaveBeenCalledWith(
+        expect.objectContaining({
+          functionName: "swapIn",
+          // tokenIn must be G$, tokenOut must be the sellTo token.
+          args: expect.arrayContaining([CELO_PROD_GD, CELO_PROD_STABLE]),
+        }),
+      )
+
+      const approveCall = simulateContract.mock.calls.find(
+        ([p]: any[]) => p?.functionName === "approve",
+      )
+      expect(approveCall).toBeDefined()
+      expect(approveCall![0].args[1]).toBeGreaterThan(100n)
+    })
+  })
+
   // ── getTransactionHistory ────────────────────────────────────────────────────
   describe("getTransactionHistory", () => {
     it("returns empty array when no events found", async () => {
