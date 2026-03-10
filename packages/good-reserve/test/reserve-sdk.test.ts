@@ -42,6 +42,7 @@ const makeMockClient = (overrides: Partial<PublicClient> = {}): PublicClient =>
     readContract: vi.fn().mockResolvedValue(0n),
     simulateContract: vi.fn().mockResolvedValue({ request: {} }),
     getBlockNumber: vi.fn().mockResolvedValue(1000n),
+    getBlock: vi.fn().mockResolvedValue({ timestamp: 1710000000n }),
     getContractEvents: vi.fn().mockResolvedValue([]),
     ...overrides,
   }) as unknown as PublicClient

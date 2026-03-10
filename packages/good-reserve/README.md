@@ -2,7 +2,7 @@
 
 SDK for buying and selling G$ through the GoodDollar reserve using viem.
 
-The reserve runs on **Celo mainnet** and **XDC mainnet** (development/testnet only for now). Contract addresses are sourced from the canonical [GoodProtocol deployment.json](https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json).
+The reserve runs on **Celo mainnet** and **XDC** (development environment currently has active swap endpoints; production-xdc currently does not expose reserve swap endpoints in deployment metadata).
 
 ## Installation
 
@@ -84,6 +84,6 @@ function ReserveButton() {
 
 ## ABI / Address source
 
-Addresses and ABIs pinned to GoodProtocol:
-`https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json`
-`https://github.com/GoodDollar/GoodProtocol` (commit: `master`)
+Addresses and ABIs are pinned to this GoodProtocol snapshot:
+`https://github.com/GoodDollar/GoodProtocol/blob/04b5d250bc2802c7b04b7c4d87bc00222ea81e2b/releases/deployment.json`
+`https://github.com/GoodDollar/GoodProtocol/blob/04b5d250bc2802c7b04b7c4d87bc00222ea81e2b/releases/deploy-settings.json`

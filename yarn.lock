@@ -2195,7 +2195,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
+"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
   dependencies:
@@ -10592,7 +10592,7 @@ __metadata:
   dependencies:
     "@eslint/js": "npm:^9.17.0"
     "@goodsdks/good-reserve": "workspace:*"
-    "@goodsdks/react-hooks": "npm:*"
+    "@goodsdks/react-hooks": "workspace:*"
     "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
     "@tanstack/react-query": "npm:^5.64.2"

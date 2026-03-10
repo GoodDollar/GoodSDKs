@@ -1460,7 +1460,7 @@ describe("EngagementRewards", function () {
       const { engagementRewards, mockApp, user, inviter } =
         await loadFixture(deployFixture)
       const currentBlock = await ethers.provider.getBlockNumber()
-      const farFutureBlock = currentBlock + 55
+      const farFutureBlock = currentBlock + 1000
 
       const domain = {
         name: "EngagementRewards",

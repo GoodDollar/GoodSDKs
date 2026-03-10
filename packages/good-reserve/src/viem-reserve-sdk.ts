@@ -31,6 +31,7 @@ export interface ReserveEvent {
   type: "buy" | "sell"
   account: Address
   tokenIn: Address
+  tokenOut: Address
   amountIn: bigint
   amountOut: bigint
   tx: `0x${string}`
@@ -333,6 +334,7 @@ export class GoodReserveSDK {
         type: "buy",
         account,
         tokenIn: log.args.inputToken as Address,
+        tokenOut: this.contracts.goodDollar,
         amountIn: log.args.inputAmount as bigint,
         amountOut: log.args.actualReturn as bigint,
         tx: log.transactionHash,
@@ -343,15 +345,17 @@ export class GoodReserveSDK {
         type: "sell",
         account,
         tokenIn: this.contracts.goodDollar,
+        tokenOut: log.args.outputToken as Address,
         amountIn: log.args.gdAmount as bigint,
         amountOut: log.args.actualReturn as bigint,
         tx: log.transactionHash,
         block: log.blockNumber,
       }))
 
-      return [...buys, ...sells].sort((a, b) =>
+      const sortedEvents = [...buys, ...sells].sort((a, b) =>
         a.block < b.block ? -1 : a.block > b.block ? 1 : 0,
       )
+      return this.attachTimestamps(sortedEvents)
     }
 
     const exchangeId = await this.getMentoExchangeId()
@@ -375,6 +379,7 @@ export class GoodReserveSDK {
         type: isBuy ? "buy" : "sell",
         account,
         tokenIn,
+        tokenOut,
         amountIn,
         amountOut,
         tx: log.transactionHash,
@@ -382,9 +387,10 @@ export class GoodReserveSDK {
       }
     })
 
-    return events.sort((a, b) =>
+    const sortedEvents = events.sort((a, b) =>
       a.block < b.block ? -1 : a.block > b.block ? 1 : 0,
     )
+    return this.attachTimestamps(sortedEvents)
   }
 
   // Write methods.
@@ -681,5 +687,29 @@ export class GoodReserveSDK {
 
     const receipt = await waitForTransactionReceipt(this.publicClient, { hash })
     return { hash, receipt }
+  }
+
+  private async attachTimestamps(events: ReserveEvent[]): Promise<ReserveEvent[]> {
+    if (events.length === 0) return events
+
+    const uniqueBlocks = [...new Set(events.map((event) => event.block.toString()))]
+    const blockTimestamps = new Map<string, number>()
+
+    await Promise.all(
+      uniqueBlocks.map(async (blockKey) => {
+        const blockNumber = BigInt(blockKey)
+        const block = await this.publicClient.getBlock({ blockNumber })
+        const timestamp = Number(block.timestamp)
+
+        if (!Number.isNaN(timestamp)) {
+          blockTimestamps.set(blockKey, timestamp)
+        }
+      }),
+    )
+
+    return events.map((event) => {
+      const timestamp = blockTimestamps.get(event.block.toString())
+      return timestamp === undefined ? event : { ...event, timestamp }
+    })
   }
 }

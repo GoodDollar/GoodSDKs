@@ -1,8 +1,8 @@
 import { parseAbi, type Address } from "viem"
 
 // Sources:
-// - https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deployment.json
-// - https://github.com/GoodDollar/GoodProtocol/blob/master/releases/deploy-settings.json
+// - https://github.com/GoodDollar/GoodProtocol/blob/04b5d250bc2802c7b04b7c4d87bc00222ea81e2b/releases/deployment.json
+// - https://github.com/GoodDollar/GoodProtocol/blob/04b5d250bc2802c7b04b7c4d87bc00222ea81e2b/releases/deploy-settings.json
 export const CELO_CHAIN_ID = 42220
 export const XDC_CHAIN_ID = 50
 
