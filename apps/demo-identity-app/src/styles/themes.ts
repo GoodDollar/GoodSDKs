@@ -13,4 +13,4 @@ export const themes = {
     success: "#27ae60",
     error: "#c0392b",
   },
-}
+};

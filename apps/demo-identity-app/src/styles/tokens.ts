@@ -11,4 +11,4 @@ export const tokens = {
     medium: 16,
     large: 24,
   },
-}
+};

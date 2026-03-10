@@ -29,6 +29,7 @@ const STAKING_CONTRACT_ADDRESS =
 const GDOLLAR_CONTRACT_ADDRESS =
   "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const
 
+
 const stakingContract = {
   address: STAKING_CONTRACT_ADDRESS,
   abi: STAKING_CONTRACT_ABI,
@@ -57,7 +58,10 @@ export class GooddollarSavingsSDK {
   private totalStaked: bigint = BigInt(0)
   private cachedRewardRate: bigint = BigInt(0)
 
-  constructor(publicClient: PublicClient, walletClient?: WalletClient) {
+  constructor(
+    publicClient: PublicClient,
+    walletClient?: WalletClient,
+  ) {
     if (!publicClient) throw new Error("Public client is required")
     if (!(publicClient.chain?.id === 42220)) {
       throw new Error("Public client must be connected to Celo mainnet")

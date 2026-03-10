@@ -1,20 +1,20 @@
-import React, { useEffect } from "react"
-import { useEngagementRewards } from "@goodsdks/engagement-sdk"
-import { useToast } from "@/hooks/use-toast"
+import React, { useEffect } from "react";
+import { useEngagementRewards } from "@goodsdks/engagement-sdk";
+import { useToast } from "@/hooks/use-toast";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/ui/card"
-import { Form } from "@/components/ui/form"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
-import env from "@/env"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/card";
+import { Form } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import env from "@/env";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   FormControl,
   FormDescription,
@@ -22,41 +22,41 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { useSigningModal } from "@/hooks/useSigningModal"
-import { SigningModal } from "./SigningModal"
-import { useParams } from "react-router-dom"
+} from "@/components/ui/form";
+import { useSigningModal } from "@/hooks/useSigningModal";
+import { SigningModal } from "./SigningModal";
+import { useParams } from "react-router-dom";
 
 const formSchema = z.object({
   rewardReceiver: z.string().startsWith("0x"),
   userInviterPercentage: z.number().min(0).max(100),
   userPercentage: z.number().min(0).max(100),
-})
+});
 
 export const UpdateAppSettingsForm: React.FC = () => {
-  const { appAddress: app } = useParams<{ appAddress: string }>()
+  const { appAddress: app } = useParams<{ appAddress: string }>();
 
-  const engagementRewards = useEngagementRewards(env.rewardsContract)
-  const { toast } = useToast()
+  const engagementRewards = useEngagementRewards(env.rewardsContract);
+  const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-  })
+  });
   const { isSigningModalOpen, setIsSigningModalOpen, wrapWithSigningModal } =
-    useSigningModal()
+    useSigningModal();
 
   useEffect(() => {
     const loadAppSettings = async () => {
-      const appInfo = await engagementRewards?.getAppInfo(app as `0x${string}`)
+      const appInfo = await engagementRewards?.getAppInfo(app as `0x${string}`);
       if (appInfo) {
         form.reset({
           rewardReceiver: appInfo[1], // array index for rewardReceiver
           userInviterPercentage: Number(appInfo[5]), // array index for userAndInviterPercentage
           userPercentage: Number(appInfo[6]), // array index for userPercentage
-        })
+        });
       }
-    }
-    loadAppSettings()
-  }, [app, !!engagementRewards])
+    };
+    loadAppSettings();
+  }, [app, !!engagementRewards]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     await wrapWithSigningModal(async () => {
@@ -69,12 +69,12 @@ export const UpdateAppSettingsForm: React.FC = () => {
           toast({
             title: "Transaction Submitted",
             description: `Transaction hash: ${hash}`,
-          })
+          });
         },
-      )
-      return receipt
-    }, "App settings have been successfully updated.")
-  }
+      );
+      return receipt;
+    }, "App settings have been successfully updated.");
+  };
 
   return (
     <>
@@ -156,5 +156,5 @@ export const UpdateAppSettingsForm: React.FC = () => {
         onOpenChange={setIsSigningModalOpen}
       />
     </>
-  )
-}
+  );
+};

@@ -1,7 +1,7 @@
-import { buildModule } from "@nomicfoundation/hardhat-ignition/modules"
-import { parseEther } from "ethers"
-import EngagementRewards from "./EngagementRewards"
-import hre from "hardhat"
+import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
+import { parseEther } from "ethers";
+import EngagementRewards from "./EngagementRewards";
+import hre from "hardhat";
 
 const deployArgs: { [key: string]: any } = {
   default: [
@@ -22,10 +22,10 @@ const deployArgs: { [key: string]: any } = {
     parseEther((50e6).toString()),
     parseEther("5000"),
   ],
-}
+};
 
 export default buildModule("EngagementRewardsProxy", (builder) => {
-  const implementation = builder.useModule(EngagementRewards).implementation
+  const implementation = builder.useModule(EngagementRewards).implementation;
   // Encode the initialize function call for the contract.
   //   IERC20 _rewardToken,
   //         IIdentity _identityContract,
@@ -35,9 +35,9 @@ export default buildModule("EngagementRewardsProxy", (builder) => {
     implementation,
     "initialize",
     deployArgs[hre.network.name] || deployArgs.default,
-  )
+  );
 
   // Deploy the ERC1967 Proxy, pointing to the implementation
-  const proxy = builder.contract("ERC1967Proxy", [implementation, initialize])
-  return { proxy }
-})
+  const proxy = builder.contract("ERC1967Proxy", [implementation, initialize]);
+  return { proxy };
+});
