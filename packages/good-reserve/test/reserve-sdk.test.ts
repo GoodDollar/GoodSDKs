@@ -7,11 +7,11 @@ import {
 } from "../src/constants"
 import type { PublicClient, WalletClient } from "viem"
 
-// Mock viem/actions so waitForTransactionReceipt is interceptable.
+// Mock viem/actions so we can intercept waitForTransactionReceipt.
 vi.mock("viem/actions", () => ({
   waitForTransactionReceipt: vi.fn().mockResolvedValue({
     transactionHash:
-      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "0x0000000000000000000000000000000000000000000000000000000000001234",
   }),
 }))
 
@@ -21,15 +21,15 @@ const XDC_DEV_STABLE = RESERVE_CONTRACT_ADDRESSES.development.xdc.stableToken
 const XDC_DEV_GD = RESERVE_CONTRACT_ADDRESSES.development.xdc.goodDollar
 
 const MOCK_EXCHANGE_ID =
-  "0x1111111111111111111111111111111111111111111111111111111111111111" as `0x${string}`
+  "0x0000000000000000000000000000000000000000000000000000000000001111" as `0x${string}`
 const MOCK_TX_HASH =
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as `0x${string}`
+  "0x0000000000000000000000000000000000000000000000000000000000001234" as `0x${string}`
 
 // ─── Mock factories ────────────────────────────────────────────────────────────
 
 /**
- * All readContract mocks must return Promises because getMentoExchangeId now
- * calls .then() on each result when fanning out pool reads in parallel.
+ * These mocks have to return hard Promises because getMentoExchangeId chains
+ * .then() on them for the parallel pool fan-out.
  */
 const makeAsyncFn =
   (impl: (req: any) => unknown) =>
@@ -51,14 +51,13 @@ const makeMockWallet = (): WalletClient =>
   ({
     getAddresses: vi
       .fn()
-      .mockResolvedValue(["0x1111111111111111111111111111111111111111"]),
+      .mockResolvedValue(["0x0000000000000000000000000000000000000001"]),
     writeContract: vi.fn().mockResolvedValue(MOCK_TX_HASH),
   }) as unknown as WalletClient
 
 /**
- * Returns a readContract mock that simulates the Mento broker path with a
- * matching pool for the provided stableToken / goodDollar pair.
- * Uses Promise.resolve so that .then() in getMentoExchangeId works correctly.
+ * Builds a readContract mock that acts like a Mento broker with a matching
+ * pool for our token pair.
  */
 const makeMentoReadContract = (
   stable: `0x${string}`,
@@ -79,20 +78,19 @@ const makeMentoReadContract = (
   )
 
 /**
- * Fake addresses for the exchange-helper path.
- * NOTE: No current production/staging address map uses exchange-helper mode.
- * These tests cover the branch logic that is reserved for a future XDC
- * production deployment.
+ * Fake addresses for the exchange-helper fallback path.
+ * We don't have this in prod/staging yet, but these tests cover the
+ * branches we'll need for the future XDC deployment.
  */
 const MOCK_EXCHANGE_HELPER =
-  "0xEEEE000000000000000000000000000000000001" as `0x${string}`
+  "0x00000000000000000000000000000000000000a1" as `0x${string}`
 const MOCK_BUY_GD_FACTORY =
-  "0xEEEE000000000000000000000000000000000002" as `0x${string}`
-const MOCK_GD = "0xEEEE000000000000000000000000000000000003" as `0x${string}`
+  "0x00000000000000000000000000000000000000a2" as `0x${string}`
+const MOCK_GD = "0x00000000000000000000000000000000000000a3" as `0x${string}`
 const MOCK_STABLE =
-  "0xEEEE000000000000000000000000000000000004" as `0x${string}`
+  "0x00000000000000000000000000000000000000a4" as `0x${string}`
 
-/** Creates an SDK internally overridden to use a fake exchange-helper config. */
+/** Wires up a test SDK forced into exchange-helper mode. */
 const makeExchangeHelperSdk = (
   readContract: ReturnType<typeof vi.fn>,
   overridePublicClient?: PublicClient,
@@ -230,7 +228,7 @@ describe("GoodReserveSDK", () => {
       const result = await sdk.buy(CELO_PROD_STABLE, 100n, 90n)
 
       expect(result.hash).toBe(MOCK_TX_HASH)
-      // Called at least twice: approve + swapIn
+      // Should fire twice: once for the approval, once for swapIn
       expect(simulateContract).toHaveBeenCalledTimes(2)
       expect(simulateContract).toHaveBeenCalledWith(
         expect.objectContaining({ functionName: "swapIn" }),
@@ -281,7 +279,7 @@ describe("GoodReserveSDK", () => {
       const result = await sdk.sell(CELO_PROD_STABLE, 100n, 90n)
 
       expect(result.hash).toBe(MOCK_TX_HASH)
-      // Called at least twice: approve + swapIn
+      // Should fire twice: once for the approval, once for swapIn
       expect(simulateContract).toHaveBeenCalledTimes(2)
       expect(simulateContract).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -488,7 +486,7 @@ describe("GoodReserveSDK", () => {
   describe("parallel pool discovery", () => {
     it("fans out getPoolExchange calls for multiple exchange ids", async () => {
       const EXCHANGE_ID_2 =
-        "0x2222222222222222222222222222222222222222222222222222222222222222" as `0x${string}`
+        "0x0000000000000000000000000000000000000000000000000000000000002222" as `0x${string}`
       const poolCallIds: string[] = []
 
       const rc = vi.fn().mockImplementation(
@@ -519,10 +517,80 @@ describe("GoodReserveSDK", () => {
         makeMockClient({ readContract: rc } as any),
       ).getBuyQuote(CELO_PROD_STABLE, 10n)
 
-      // Both pool reads must have been initiated (confirming concurrent fan-out)
+      // Make sure both pool reads were kicked off (proves the concurrent fan-out works)
       expect(poolCallIds).toContain(MOCK_EXCHANGE_ID)
       expect(poolCallIds).toContain(EXCHANGE_ID_2)
       expect(result).toBe(123n)
+    })
+  })
+
+  // ── isChainEnvSupported ───────────────────────────────────────────────────────
+  describe("isChainEnvSupported", () => {
+    it("returns true for Celo production", () => {
+      expect(GoodReserveSDK.isChainEnvSupported(CELO_CHAIN_ID, "production")).toBe(true)
+    })
+
+    it("returns true for XDC development (Mento broker active)", () => {
+      expect(GoodReserveSDK.isChainEnvSupported(XDC_CHAIN_ID, "development")).toBe(true)
+    })
+
+    it("returns false for XDC production (unavailable)", () => {
+      expect(GoodReserveSDK.isChainEnvSupported(XDC_CHAIN_ID, "production")).toBe(false)
+    })
+
+    it("returns false for an unsupported chain id", () => {
+      expect(GoodReserveSDK.isChainEnvSupported(1, "production")).toBe(false)
+    })
+  })
+
+  // ── read helpers ──────────────────────────────────────────────────────────────
+  describe("read helpers", () => {
+    it("getGDBalance calls balanceOf on the goodDollar contract", async () => {
+      const rc = vi.fn().mockResolvedValue(9999n)
+      const sdk = new GoodReserveSDK(makeMockClient({ readContract: rc } as any))
+      const balance = await sdk.getGDBalance(
+        "0x0000000000000000000000000000000000000001",
+      )
+      expect(balance).toBe(9999n)
+      expect(rc).toHaveBeenCalledWith(
+        expect.objectContaining({ functionName: "balanceOf" }),
+      )
+    })
+
+    it("getTokenDecimals returns the numeric decimals value", async () => {
+      const rc = vi.fn().mockResolvedValue(6)
+      const sdk = new GoodReserveSDK(makeMockClient({ readContract: rc } as any))
+      const decimals = await sdk.getTokenDecimals(CELO_PROD_STABLE)
+      expect(decimals).toBe(6)
+    })
+
+    it("getStableTokenAddress returns the configured stable token", () => {
+      const sdk = new GoodReserveSDK(makeMockClient())
+      expect(sdk.getStableTokenAddress()).toBe(CELO_PROD_STABLE)
+    })
+
+    it("getGoodDollarAddress returns the configured G$ token", () => {
+      const sdk = new GoodReserveSDK(makeMockClient())
+      expect(sdk.getGoodDollarAddress()).toBe(CELO_PROD_GD)
+    })
+  })
+
+  // ── no-account edge case ──────────────────────────────────────────────────────
+  describe("no-account edge case", () => {
+    it("throws 'No account found' when wallet returns an empty address list", async () => {
+      const rc = makeMentoReadContract(CELO_PROD_STABLE, CELO_PROD_GD)
+      const wc = {
+        getAddresses: vi.fn().mockResolvedValue([]),
+        writeContract: vi.fn(),
+      } as unknown as import("viem").WalletClient
+
+      const sdk = new GoodReserveSDK(
+        makeMockClient({ readContract: rc } as any),
+        wc,
+      )
+      await expect(sdk.buy(CELO_PROD_STABLE, 100n, 90n)).rejects.toThrow(
+        "No account found in wallet client",
+      )
     })
   })
 })

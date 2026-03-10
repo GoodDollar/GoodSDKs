@@ -13,6 +13,7 @@ import {
   XDC_CHAIN_ID,
   getReserveChainFromId,
   type ReserveChainConfig,
+  type SupportedReserveChain,
   exchangeHelperABI,
   buyGDFactoryABI,
   mentoBrokerABI,
@@ -84,6 +85,26 @@ export class GoodReserveSDK {
   private env: ReserveEnv
   private exactApproval: boolean
 
+  /**
+   * Quick check to see if a given chain + env actually has reserve swap
+   * endpoints deployed. Call this before constructing the SDK to avoid
+   * catching a constructor error in your UI — e.g. XDC production has no
+   * published endpoints yet, so it will always return false there.
+   *
+   * @example
+   * if (!GoodReserveSDK.isChainEnvSupported(chainId, 'production')) {
+   *   return <p>Reserve swaps not available on this network.</p>
+   * }
+   */
+  static isChainEnvSupported(
+    chainId: number,
+    env: ReserveEnv = "production",
+  ): boolean {
+    const reserveChain = getReserveChainFromId(chainId)
+    if (!reserveChain) return false
+    return RESERVE_CONTRACT_ADDRESSES[env][reserveChain as SupportedReserveChain].mode !== "unavailable"
+  }
+
   constructor(
     publicClient: PublicClient,
     walletClient?: WalletClient,
@@ -120,9 +141,9 @@ export class GoodReserveSDK {
   // Read methods.
 
   /**
-   * Returns how much G$ you'd receive for a given input token amount.
-   * @param tokenIn - Address of the token to spend (for example cUSD/USDC)
-   * @param amountIn - Amount in token wei
+   * Figures out how much G$ you can buy with a specific amount of an input token.
+   * @param tokenIn - Address of the token to spend (e.g. cUSD)
+   * @param amountIn - How much you're spending in wei
    */
   async getBuyQuote(tokenIn: Address, amountIn: bigint): Promise<bigint> {
     if (amountIn <= 0n) throw new Error("amountIn must be greater than zero")
@@ -152,9 +173,9 @@ export class GoodReserveSDK {
   }
 
   /**
-   * Returns how much of the output token you'd receive for selling a given G$ amount.
-   * @param gdAmount - G$ amount in wei
-   * @param sellTo - Address of the token to receive
+   * Figures out how much of your chosen token you'll get for selling your G$.
+   * @param gdAmount - How much G$ you're selling in wei
+   * @param sellTo - Address of the token you want back
    */
   async getSellQuote(gdAmount: bigint, sellTo: Address): Promise<bigint> {
     if (gdAmount <= 0n) throw new Error("gdAmount must be greater than zero")
@@ -249,21 +270,26 @@ export class GoodReserveSDK {
   }
 
   /**
-   * Returns reserve-related stats useful for UI diagnostics.
+   * Pulls together the numbers you'd want to show in a reserve dashboard —
+   * total G$ supply, token decimals, and (for Mento pools) the live reserve
+   * balance, token supply, reserve ratio, and exit contribution.
+   *
+   * Everything is fetched in one Promise.all so we only need a single
+   * round-trip, even on the Mento path where pool discovery is async.
    */
   async getReserveStats(): Promise<ReserveStats> {
-    const [goodDollarTotalSupply, stableTokenDecimals, goodDollarDecimals] =
-      await Promise.all([
-        this.publicClient.readContract({
-          address: this.contracts.goodDollar,
-          abi: erc20ABI,
-          functionName: "totalSupply",
-        }),
-        this.getTokenDecimals(this.contracts.stableToken),
-        this.getTokenDecimals(this.contracts.goodDollar),
-      ])
-
     if (this.contracts.mode === "exchange-helper") {
+      const [goodDollarTotalSupply, stableTokenDecimals, goodDollarDecimals] =
+        await Promise.all([
+          this.publicClient.readContract({
+            address: this.contracts.goodDollar,
+            abi: erc20ABI,
+            functionName: "totalSupply",
+          }),
+          this.getTokenDecimals(this.contracts.stableToken),
+          this.getTokenDecimals(this.contracts.goodDollar),
+        ])
+
       return {
         goodDollarTotalSupply,
         stableTokenDecimals,
@@ -275,13 +301,28 @@ export class GoodReserveSDK {
       }
     }
 
-    const exchangeId = await this.getMentoExchangeId()
-    const pool = await this.publicClient.readContract({
-      address: this.contracts.exchangeProvider,
-      abi: mentoExchangeProviderABI,
-      functionName: "getPoolExchange",
-      args: [exchangeId],
-    })
+    // Pull this out into a local so the arrow function inside Promise.all
+    // doesn't need to re-read `this.contracts` after the await.
+    const exchangeProvider = this.contracts.exchangeProvider
+
+    const [goodDollarTotalSupply, stableTokenDecimals, goodDollarDecimals, pool] =
+      await Promise.all([
+        this.publicClient.readContract({
+          address: this.contracts.goodDollar,
+          abi: erc20ABI,
+          functionName: "totalSupply",
+        }),
+        this.getTokenDecimals(this.contracts.stableToken),
+        this.getTokenDecimals(this.contracts.goodDollar),
+        this.getMentoExchangeId().then((exchangeId) =>
+          this.publicClient.readContract({
+            address: exchangeProvider,
+            abi: mentoExchangeProviderABI,
+            functionName: "getPoolExchange",
+            args: [exchangeId],
+          }),
+        ),
+      ])
 
     const { tokenSupply, reserveBalance, reserveRatio, exitContribution } =
       this.extractPoolStats(pool)
@@ -396,12 +437,13 @@ export class GoodReserveSDK {
   // Write methods.
 
   /**
-   * Buys G$ by spending the given input token.
-   * Approves spender if needed, then executes the swap.
-   * @param tokenIn - Token to spend
-   * @param amountIn - Amount in token wei
-   * @param minReturn - Minimum G$ to receive (slippage guard)
-   * @param onHash - Optional callback for the tx hash
+   * Executes a buy swap. If we haven't approved the spender yet, it fires off
+   * the approval first.
+   *
+   * @param tokenIn - Token you're spending
+   * @param amountIn - Amount to spend in wei
+   * @param minReturn - Minimum G$ you'll accept before it reverts (slippage)
+   * @param onHash - Hook to get the tx hash immediately while waiting for receipt
    */
   async buy(
     tokenIn: Address,
@@ -451,12 +493,13 @@ export class GoodReserveSDK {
   }
 
   /**
-   * Sells G$ in exchange for the given output token.
-   * Approves spender if needed, then executes the swap.
-   * @param sellTo - Token to receive
+   * Dumps G$ into the reserve for your chosen stable token. Handles approval
+   * automatically just like the buy method.
+   *
+   * @param sellTo - Token you want back
    * @param gdAmount - G$ to sell in wei
-   * @param minReturn - Minimum output tokens expected (slippage guard)
-   * @param onHash - Optional callback for the tx hash
+   * @param minReturn - Your slippage cut-off
+   * @param onHash - Hook to grab the tx hash early
    */
   async sell(
     sellTo: Address,
@@ -542,10 +585,9 @@ export class GoodReserveSDK {
       functionName: "getExchangeIds",
     })
 
-    // Fan out pool reads in parallel instead of serially to reduce latency
-    // when the exchange provider has multiple pools.
-    // Captured into a local const so TypeScript narrowing is preserved inside
-    // the arrow-function closure (mode was already guarded above).
+    // Fire off all the pool reads concurrently so we don't pay a serial latency
+    // penalty when the provider has lots of pools.
+    // Pulled exchangeProvider out to make TS narrowing happy inside the closure.
     const exchangeProvider = this.contracts.exchangeProvider
     const pools = await Promise.all(
       exchangeIds.map((exchangeId) =>
@@ -584,10 +626,9 @@ export class GoodReserveSDK {
   }
 
   /**
-   * Normalises the return of `getPoolExchange` which viem may decode as a
-   * named-field object or a positional tuple depending on ABI shape.
-   * Fields (by position): reserveAsset, tokenAddress, tokenSupply,
-   *                       reserveBalance, reserveRatio, exitContribution
+   * Normalizes the return value of `getPoolExchange` because viem gives us
+   * either a named-field object or a positional tuple, depending on the ABI.
+   * (Fields by position: reserveAsset, tokenAddress, tokenSupply, reserveBalance...)
    */
   private extractPoolAddresses(pool: unknown): {
     reserveAsset: Address | undefined
@@ -655,9 +696,9 @@ export class GoodReserveSDK {
 
     if (allowance >= amount) return
 
-    // With exactApproval=false (default) we approve maxUint256 to avoid
-    // repeated approval transactions on subsequent swaps. Set exactApproval=true
-    // in the constructor options for a more conservative approval model.
+    // We default to maxUint256 so users don't have to eat the gas cost of
+    // another approval on their next swap. If they passed exactApproval=true in
+    // the config, we respect it and just approve what they need.
     const approvalAmount = this.exactApproval ? amount : maxUint256
     await this.submitAndWait(
       {
