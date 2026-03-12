@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { useWalletLink } from "@goodsdks/react-hooks";
-import { Address } from "viem";
+import { Address, isAddress } from "viem";
 
 export const WalletLinkWidget = () => {
-  
   const [targetAddress, setTargetAddress] = useState<string>("");
-
-  
   const { connectAccount, disconnectAccount, connectedStatus } = useWalletLink("development", targetAddress as Address);
 
   const handleConnect = async () => {
     if (!targetAddress) return;
+    if (!isAddress(targetAddress)) {
+      alert("Invalid Ethereum Address format!");
+      return;
+    }
     try {
       await connectAccount.connect(targetAddress as Address);
       connectedStatus.refetch();
@@ -21,6 +22,10 @@ export const WalletLinkWidget = () => {
 
   const handleDisconnect = async () => {
     if (!targetAddress) return;
+    if (!isAddress(targetAddress)) {
+      alert("Invalid Ethereum Address format!");
+      return;
+    }
     try {
       await disconnectAccount.disconnect(targetAddress as Address);
       connectedStatus.refetch();
@@ -30,13 +35,14 @@ export const WalletLinkWidget = () => {
   };
 
   const handleCheckStatus = () => {
-    if (targetAddress) {
-      
-      connectedStatus.refetch();
+    if (!targetAddress) return;
+    if (!isAddress(targetAddress)) {
+      alert("Invalid Ethereum Address format!");
+      return;
     }
+    connectedStatus.refetch();
   };
 
-  // If the SDK is waiting for the user to confirm the security notice, show this UI
   if (connectAccount.pendingSecurityConfirm || disconnectAccount.pendingSecurityConfirm) {
     const pending = connectAccount.pendingSecurityConfirm || disconnectAccount.pendingSecurityConfirm;
     const confirmFn = connectAccount.pendingSecurityConfirm 
@@ -88,7 +94,6 @@ export const WalletLinkWidget = () => {
         <p style={{ color: "green" }}>Tx Hash: {connectAccount.txHash || disconnectAccount.txHash}</p>
       )}
 
-      {/* Status Display */}
       <div style={{ background: "#f5f5f5", padding: "10px", marginTop: "1rem", fontSize: "14px" }}>
         <h4>Status for {targetAddress || "..."}</h4>
         {connectedStatus.loading ? (
