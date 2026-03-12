@@ -7,6 +7,8 @@ import {
   SimulateContractParameters,
   WalletActions,
   zeroAddress,
+  createPublicClient,
+  http,
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
@@ -20,6 +22,7 @@ import {
   identityV2ABI,
   SupportedChains,
   isSupportedChain,
+  WALLET_LINK_SECURITY_MESSAGES,
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
@@ -28,14 +31,11 @@ import type {
   IdentityContract,
   IdentityExpiryData,
   IdentityExpiry,
+  WalletLinkOptions,
+  ConnectedAccountStatus,
+  ChainConnectedStatus,
 } from "../types"
 
-/**
- * Initializes the Identity Contract.
- * @param publicClient - The PublicClient instance.
- * @param contractAddress - The contract address.
- * @returns An IdentityContract instance.
- */
 export const initializeIdentityContract = (
   publicClient: PublicClient,
   contractAddress: Address,
@@ -51,9 +51,6 @@ export interface IdentitySDKOptions {
   env: contractEnv
 }
 
-/**
- * Handles interactions with the Identity Contract.
- */
 export class IdentitySDK {
   public account: Address
   publicClient: PublicClient
@@ -62,13 +59,10 @@ export class IdentitySDK {
   public env: contractEnv = "production"
   private readonly chainId: SupportedChains
   private readonly fvDefaultChain: SupportedChains
+  
+  // Cache for cross-chain public clients
+  private publicClientCache: Map<string, PublicClient> = new Map()
 
-  /**
-   * Initializes the IdentitySDK.
-   * @param publicClient - The PublicClient instance.
-   * @param walletClient - The WalletClient with WalletActions.
-   * @param env - The environment to use ("production" | "staging" | "development").
-   */
   constructor({
     account,
     publicClient,
@@ -106,13 +100,40 @@ export class IdentitySDK {
     return new IdentitySDK({ account, ...props })
   }
 
-  /**
-   * Submits a transaction and waits for its receipt.
-   * @param params - Parameters for simulating the contract call.
-   * @param onHash - Optional callback to receive the transaction hash.
-   * @returns The transaction receipt.
-   * @throws If submission fails or no active wallet address is found.
-   */
+  private getOrCreatePublicClient(config: any): PublicClient {
+    const key = `${config.id}:${this.env}`
+    const cached = this.publicClientCache.get(key)
+    if (cached) return cached
+
+    const publicClient = createPublicClient({
+      transport: http(config.rpcUrls[0]),
+    })
+
+    this.publicClientCache.set(key, publicClient)
+    return publicClient
+  }
+
+  private async runSecurityCheck(
+    action: keyof typeof WALLET_LINK_SECURITY_MESSAGES,
+    options?: WalletLinkOptions,
+  ): Promise<void> {
+    if (options?.skipSecurityMessage) return
+
+    const message = WALLET_LINK_SECURITY_MESSAGES[action]
+
+    if (options?.onSecurityMessage) {
+      const confirmed = await options.onSecurityMessage(message)
+      if (!confirmed) {
+        throw new Error(
+          `Wallet ${action} cancelled: user did not confirm security notice.`,
+        )
+      }
+      return
+    }
+
+    console.info(`[IdentitySDK] ${message}`)
+  }
+
   async submitAndWait(
     params: SimulateContractParameters,
     onHash?: (hash: `0x${string}`) => void,
@@ -130,17 +151,12 @@ export class IdentitySDK {
 
       return waitForTransactionReceipt(this.publicClient, { hash })
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("submitAndWait Error:", error)
-      throw new Error(`Failed to submit transaction: ${error.message}`)
+      throw new Error(`Failed to submit transaction: ${message}`)
     }
   }
 
-  /**
-   * Returns whitelist status of main account or any connected account.
-   * @param account - The account address to check.
-   * @returns An object containing whitelist status and root address.
-   * @reference: https://docs.gooddollar.org/user-guides/connect-another-wallet-address-to-identity
-   */
   async getWhitelistedRoot(
     account: Address,
   ): Promise<{ isWhitelisted: boolean; root: Address }> {
@@ -157,16 +173,87 @@ export class IdentitySDK {
         root,
       }
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("getWhitelistedRoot Error:", error)
-      throw new Error(`Failed to get whitelisted root: ${error.message}`)
+      throw new Error(`Failed to get whitelisted root: ${message}`)
     }
   }
 
-  /**
-   * Retrieves identity expiry data for a given account.
-   * @param account - The account address.
-   * @returns The identity expiry data.
-   */
+  async getConnectedAccounts(account: Address): Promise<ConnectedAccountStatus> {
+    try {
+      const root = await this.publicClient.readContract({
+        address: this.contract.contractAddress,
+        abi: identityV2ABI,
+        functionName: "connectedAccounts",
+        args: [account],
+      }) as Address
+
+      return {
+        isConnected: root !== zeroAddress,
+        root,
+      }
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("getConnectedAccounts Error:", error)
+      throw new Error(`Failed to get connected accounts: ${message}`)
+    }
+  }
+
+  async isAccountConnected(account: Address): Promise<boolean> {
+    const { isConnected } = await this.getConnectedAccounts(account)
+    return isConnected
+  }
+
+  async checkConnectedStatusAllChains(
+    account: Address,
+  ): Promise<ChainConnectedStatus[]> {
+    const entries = Object.values(chainConfigs)
+
+    const settled = await Promise.allSettled(
+      entries.map(async (config) => {
+        const contracts = config.contracts[this.env]
+
+        if (!contracts) {
+          return {
+            chainId: config.id,
+            chainName: config.label,
+            isConnected: false,
+            root: zeroAddress as Address,
+            error: `No contract configured for env "${this.env}" on ${config.label}`,
+          } satisfies ChainConnectedStatus
+        }
+
+        const client = this.getOrCreatePublicClient(config)
+
+        const root = (await client.readContract({
+          address: contracts.identityContract,
+          abi: identityV2ABI,
+          functionName: "connectedAccounts",
+          args: [account],
+        })) as Address
+
+        return {
+          chainId: config.id,
+          chainName: config.label,
+          isConnected: root !== zeroAddress,
+          root,
+        } satisfies ChainConnectedStatus
+      }),
+    )
+
+    return settled.map((result, i) => {
+      const config = entries[i]
+      if (result.status === "fulfilled") return result.value
+      return {
+        chainId: config.id,
+        chainName: config.label,
+        isConnected: false,
+        root: zeroAddress as Address,
+        error: (result.reason as Error)?.message ?? "Unknown RPC error",
+      }
+    })
+  }
+
   async getIdentityExpiryData(account: Address): Promise<IdentityExpiryData> {
     try {
       const [lastAuthenticated, authPeriod] = await Promise.all([
@@ -186,20 +273,60 @@ export class IdentitySDK {
 
       return { lastAuthenticated, authPeriod }
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("getIdentityExpiryData Error:", error)
       throw new Error(
-        `Failed to retrieve identity expiry data: ${error.message}`,
+        `Failed to retrieve identity expiry data: ${message}`,
       )
     }
   }
 
-  /**
-   * Generates a Face Verification Link.
-   * @param popupMode - Whether to generate a popup link.
-   * @param callbackUrl - The URL to callback after verification.
-   * @param chainId - The blockchain network ID.
-   * @returns The generated Face Verification link.
-   */
+  async connectAccount(
+    account: Address,
+    options?: WalletLinkOptions,
+  ): Promise<any> {
+    try {
+      await this.runSecurityCheck("connect", options)
+
+      return this.submitAndWait(
+        {
+          address: this.contract.contractAddress,
+          abi: identityV2ABI,
+          functionName: "connectAccount",
+          args: [account],
+        },
+        options?.onHash,
+      )
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("connectAccount Error:", error)
+      throw new Error(`Failed to connect account: ${message}`)
+    }
+  }
+
+  async disconnectAccount(
+    account: Address,
+    options?: WalletLinkOptions,
+  ): Promise<any> {
+    try {
+      await this.runSecurityCheck("disconnect", options)
+
+      return this.submitAndWait(
+        {
+          address: this.contract.contractAddress,
+          abi: identityV2ABI,
+          functionName: "disconnectAccount",
+          args: [account],
+        },
+        options?.onHash,
+      )
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("disconnectAccount Error:", error)
+      throw new Error(`Failed to disconnect account: ${message}`)
+    }
+  }
+
   async generateFVLink(
     popupMode: boolean = false,
     callbackUrl?: string,
@@ -255,19 +382,14 @@ export class IdentitySDK {
       )
       return url.toString()
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("generateFVLink Error:", error)
       throw new Error(
-        `Failed to generate Face Verification link: ${error.message}`,
+        `Failed to generate Face Verification link: ${message}`,
       )
     }
   }
 
-  /**
-   * Calculates the identity expiry timestamp.
-   * @param lastAuthenticated - The timestamp of last authentication.
-   * @param authPeriod - The authentication period.
-   * @returns The identity expiry data.
-   */
   calculateIdentityExpiry(
     lastAuthenticated: bigint,
     authPeriod: bigint,
@@ -279,8 +401,6 @@ export class IdentitySDK {
     const expiryTimestamp =
       lastAuthenticated * BigInt(MS_IN_A_SECOND) + periodInMs
 
-    return {
-      expiryTimestamp,
-    }
+    return { expiryTimestamp }
   }
 }
