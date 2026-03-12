@@ -46,31 +46,24 @@ export const useIdentitySDK = (
   return { sdk, loading, error }
 }
 
-// ─── Wallet Link Hooks ────────────────────────────────────────────────────────
 
-export interface UseConnectAccountReturn {
-  /**
-   * Call to connect a secondary wallet to the root identity.
-   * If `skipSecurityMessage` is not set the hook will surface a security
-   * confirmation via `pendingSecurityConfirm` for the UI to render.
-   */
-  connect: (account: Address, options?: WalletLinkOptions) => Promise<void>
+
+type WalletLinkAction = (sdk: IdentitySDK, account: Address, options?: WalletLinkOptions) => Promise<void>
+
+interface UseWalletLinkActionReturn {
+  run: (account: Address, options?: WalletLinkOptions) => Promise<void>
   loading: boolean
   error: string | null
   txHash: `0x${string}` | null
-  /**
-   * Non-null when the SDK is waiting for user confirmation of the security
-   * notice. The UI should display `pendingSecurityConfirm.message` and call
-   * `confirmSecurity(true | false)` to proceed or cancel.
-   */
-  pendingSecurityConfirm: { message: string } | null
+  pendingSecurityConfirm: { message: string; resolve: (confirmed: boolean) => void } | null
   confirmSecurity: (confirmed: boolean) => void
   reset: () => void
 }
 
-export const useConnectAccount = (
+const useWalletLinkAction = (
   sdk: IdentitySDK | null,
-): UseConnectAccountReturn => {
+  action: WalletLinkAction,
+): UseWalletLinkActionReturn => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
@@ -80,6 +73,7 @@ export const useConnectAccount = (
   } | null>(null)
 
   const reset = useCallback(() => {
+    setLoading(false)
     setError(null)
     setTxHash(null)
     setPendingSecurityConfirm(null)
@@ -93,7 +87,7 @@ export const useConnectAccount = (
     [pendingSecurityConfirm],
   )
 
-  const connect = useCallback(
+  const run = useCallback(
     async (account: Address, options?: WalletLinkOptions) => {
       if (!sdk) {
         setError("IdentitySDK not initialized")
@@ -105,14 +99,12 @@ export const useConnectAccount = (
       setTxHash(null)
 
       try {
-        await sdk.connectAccount(account, {
+        await action(sdk, account, {
           ...options,
           onHash: (hash) => {
             setTxHash(hash)
             options?.onHash?.(hash)
           },
-          // Only inject the confirmation dialog when the caller hasn't
-          // already provided their own callback and hasn't opted out.
           onSecurityMessage:
             options?.onSecurityMessage ??
             (options?.skipSecurityMessage
@@ -128,110 +120,55 @@ export const useConnectAccount = (
         setLoading(false)
       }
     },
-    [sdk],
+    [sdk, action],
   )
 
   return {
-    connect,
+    run,
     loading,
     error,
     txHash,
-    pendingSecurityConfirm: pendingSecurityConfirm
-      ? { message: pendingSecurityConfirm.message }
-      : null,
+    pendingSecurityConfirm,
     confirmSecurity,
     reset,
   }
 }
 
-export interface UseDisconnectAccountReturn {
-  disconnect: (account: Address, options?: WalletLinkOptions) => Promise<void>
-  loading: boolean
-  error: string | null
-  txHash: `0x${string}` | null
+
+export interface UseConnectAccountReturn extends Omit<UseWalletLinkActionReturn, "run" | "pendingSecurityConfirm"> {
+  connect: UseWalletLinkActionReturn["run"]
   pendingSecurityConfirm: { message: string } | null
-  confirmSecurity: (confirmed: boolean) => void
-  reset: () => void
 }
 
-export const useDisconnectAccount = (
-  sdk: IdentitySDK | null,
-): UseDisconnectAccountReturn => {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
-  const [pendingSecurityConfirm, setPendingSecurityConfirm] = useState<{
-    message: string
-    resolve: (confirmed: boolean) => void
-  } | null>(null)
-
-  const reset = useCallback(() => {
-    setError(null)
-    setTxHash(null)
-    setPendingSecurityConfirm(null)
-  }, [])
-
-  const confirmSecurity = useCallback(
-    (confirmed: boolean) => {
-      pendingSecurityConfirm?.resolve(confirmed)
-      setPendingSecurityConfirm(null)
-    },
-    [pendingSecurityConfirm],
+export const useConnectAccount = (sdk: IdentitySDK | null): UseConnectAccountReturn => {
+  const base = useWalletLinkAction(sdk, (s, account, options) =>
+    s.connectAccount(account, options),
   )
+  return { 
+    ...base, 
+    connect: base.run,
+    pendingSecurityConfirm: base.pendingSecurityConfirm ? { message: base.pendingSecurityConfirm.message } : null
+  }
+}
 
-  const disconnect = useCallback(
-    async (account: Address, options?: WalletLinkOptions) => {
-      if (!sdk) {
-        setError("IdentitySDK not initialized")
-        return
-      }
+export interface UseDisconnectAccountReturn extends Omit<UseWalletLinkActionReturn, "run" | "pendingSecurityConfirm"> {
+  disconnect: UseWalletLinkActionReturn["run"]
+  pendingSecurityConfirm: { message: string } | null
+}
 
-      setLoading(true)
-      setError(null)
-      setTxHash(null)
-
-      try {
-        await sdk.disconnectAccount(account, {
-          ...options,
-          onHash: (hash) => {
-            setTxHash(hash)
-            options?.onHash?.(hash)
-          },
-          onSecurityMessage:
-            options?.onSecurityMessage ??
-            (options?.skipSecurityMessage
-              ? undefined
-              : (message) =>
-                  new Promise((resolve) => {
-                    setPendingSecurityConfirm({ message, resolve })
-                  })),
-        })
-      } catch (err: any) {
-        setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        setLoading(false)
-      }
-    },
-    [sdk],
+export const useDisconnectAccount = (sdk: IdentitySDK | null): UseDisconnectAccountReturn => {
+  const base = useWalletLinkAction(sdk, (s, account, options) =>
+    s.disconnectAccount(account, options),
   )
-
-  return {
-    disconnect,
-    loading,
-    error,
-    txHash,
-    pendingSecurityConfirm: pendingSecurityConfirm
-      ? { message: pendingSecurityConfirm.message }
-      : null,
-    confirmSecurity,
-    reset,
+  return { 
+    ...base, 
+    disconnect: base.run,
+    pendingSecurityConfirm: base.pendingSecurityConfirm ? { message: base.pendingSecurityConfirm.message } : null 
   }
 }
 
 export interface UseConnectedStatusReturn {
-  /** Per-current-chain status */
   status: ConnectedAccountStatus | null
-  /** Status across all supported chains */
   allChainStatuses: ChainConnectedStatus[]
   loading: boolean
   error: string | null
@@ -295,47 +232,15 @@ export interface UseWalletLinkReturn {
   connectedStatus: UseConnectedStatusReturn
 }
 
-/**
- * All-in-one hook that initialises the IdentitySDK and exposes connect,
- * disconnect and status sub-hooks.
- *
- * @param env - Contract environment ("production" | "staging" | "development").
- * @param watchAccount - Address to monitor connection status for.
- */
 export const useWalletLink = (
   env: contractEnv = "production",
   watchAccount?: Address,
 ): UseWalletLinkReturn => {
-  const publicClient = usePublicClient() as PublicClient
-  const { data: walletClient } = useWalletClient()
-
-  const [sdk, setSdk] = useState<IdentitySDK | null>(null)
-  const [sdkError, setSdkError] = useState<string | null>(null)
-  const [sdkLoading, setSdkLoading] = useState(false)
-
-  useEffect(() => {
-    if (!publicClient || !walletClient) {
-      setSdk(null)
-      setSdkError("Wallet or Public client not initialized")
-      return
-    }
-
-    setSdkLoading(true)
-    IdentitySDK.init({ publicClient, walletClient, env })
-      .then((instance) => {
-        setSdk(instance)
-        setSdkError(null)
-      })
-      .catch((err) => {
-        setSdk(null)
-        setSdkError(err instanceof Error ? err.message : String(err))
-      })
-      .finally(() => setSdkLoading(false))
-  }, [publicClient, walletClient, env])
-
+  const { sdk, loading, error } = useIdentitySDK(env)
+  
   const connectAccount = useConnectAccount(sdk)
   const disconnectAccount = useDisconnectAccount(sdk)
   const connectedStatus = useConnectedStatus(sdk, watchAccount)
 
-  return { sdk, sdkLoading, sdkError, connectAccount, disconnectAccount, connectedStatus }
+  return { sdk, sdkLoading: loading, sdkError: error, connectAccount, disconnectAccount, connectedStatus }
 }
