@@ -132,10 +132,6 @@ export class GdaSDK {
         return pools.find((p) => p.id.toLowerCase() === poolId.toLowerCase()) ?? null
     }
 
-    async querySUPReserves() {
-        return this.subgraphClient.querySUPReserves()
-    }
-
     /**
      * Submit transaction and wait for receipt
      */

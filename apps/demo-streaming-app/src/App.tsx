@@ -304,6 +304,7 @@ export default function App() {
     })
 
     const { data: supReserves, isLoading: supLoading } = useSupReserves({
+        account: address,
         apiKey,
         enabled: isConnected && environment === "production" && hasGraphApiKey,
     })

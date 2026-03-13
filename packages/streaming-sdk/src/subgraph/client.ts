@@ -132,17 +132,19 @@ const GET_MEMBER_POOLS = gql`
       poolMembers(where: { account: $account }) {
         isConnected
         units
+        totalAmountClaimed
       }
     }
   }
 `
 
 const GET_SUP_RESERVES = gql`
-  query GetSUPReserves($first: Int = 10, $skip: Int = 0) {
+  query GetSUPReserves($account: String!, $first: Int = 10, $skip: Int = 0) {
     lockers(
+      where: { lockerOwner: $account }
       first: $first
       skip: $skip
-      orderBy: blockTimestamp 
+      orderBy: blockTimestamp
       orderDirection: desc
     ) {
       id
@@ -177,7 +179,7 @@ interface SubgraphPool {
   totalAmountDistributedUntilUpdatedAt: string
   flowRate: string
   admin: SubgraphAccount
-  poolMembers?: { isConnected: boolean; units: string }[]
+  poolMembers?: { isConnected: boolean; units: string; totalAmountClaimed: string }[]
 }
 interface SubgraphPoolMembership { pool: SubgraphPool; units: string; isConnected: boolean; totalAmountClaimed: string }
 interface SubgraphLocker { id: string; lockerOwner: SubgraphAccount; blockNumber: string; blockTimestamp: string }
@@ -329,7 +331,8 @@ export class SubgraphClient {
       id: p.id as Address,
       token: p.token.id as Address,
       totalUnits: BigInt(p.totalUnits),
-      totalAmountClaimed: BigInt(p.totalAmountDistributedUntilUpdatedAt),
+      // Use the per-member claimed amount, not the pool-wide distributed total
+      totalAmountClaimed: BigInt(p.poolMembers?.[0]?.totalAmountClaimed ?? "0"),
       flowRate: BigInt(p.flowRate),
       admin: p.admin.id as Address,
       // Surface per-member connection status returned by the filtered query
@@ -337,7 +340,11 @@ export class SubgraphClient {
     }))
   }
 
-  async querySUPReserves(options: { first?: number; skip?: number } = {}): Promise<SUPReserveLocker[]> {
+  /**
+   * Fetch SUP reserve lockers owned by the given account.
+   * Requires an apiKey for The Graph Gateway endpoint.
+   */
+  async querySUPReserves(account: Address, options: { first?: number; skip?: number } = {}): Promise<SUPReserveLocker[]> {
     const { first = 10, skip = 0 } = options
     if (!this.apiKey) {
       throw new Error(
@@ -348,7 +355,10 @@ export class SubgraphClient {
     const headers: Record<string, string> = {}
     if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`
     const supClient = new GraphQLClient(SUBGRAPH_URLS.supReserve, { headers })
-    const data = await supClient.request<{ lockers: SubgraphLocker[] }>(GET_SUP_RESERVES, { first, skip })
+    const data = await supClient.request<{ lockers: SubgraphLocker[] }>(
+      GET_SUP_RESERVES,
+      { account: account.toLowerCase(), first, skip }
+    )
 
     return data.lockers.map((l) => ({
       id: l.id,

@@ -69,6 +69,7 @@ export interface UseDisconnectFromPoolParams {
 }
 
 export interface UseSupReservesParams {
+    account?: Address
     apiKey?: string
     enabled?: boolean
 }
@@ -293,11 +294,12 @@ export function useDisconnectFromPool() {
 }
 
 export function useSupReserves({
+    account,
     apiKey,
     enabled = true
 }: UseSupReservesParams = {}) {
     return useQuery<SUPReserveLocker[]>({
-        queryKey: ["sup-reserves", SupportedChains.BASE, apiKey],
+        queryKey: ["sup-reserves", SupportedChains.BASE, account, apiKey],
         queryFn: async () => {
             if (!apiKey) {
                 throw new Error(
@@ -305,9 +307,10 @@ export function useSupReserves({
                     "Provide `apiKey` (in the demo app, set `VITE_GRAPH_API_KEY`)."
                 )
             }
+            if (!account) throw new Error("account is required to fetch SUP reserves")
             const client = new SubgraphClient(SupportedChains.BASE, { apiKey })
-            return client.querySUPReserves()
+            return client.querySUPReserves(account)
         },
-        enabled: enabled && !!apiKey,
+        enabled: enabled && !!apiKey && !!account,
     })
 }

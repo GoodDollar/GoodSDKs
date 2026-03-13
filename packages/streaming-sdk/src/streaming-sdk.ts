@@ -210,8 +210,8 @@ export class StreamingSDK {
         return this.subgraphClient.queryBalanceHistory(options)
     }
 
-    async querySUPReserves(options: { first?: number; skip?: number } = {}) {
-        return this.subgraphClient.querySUPReserves(options)
+    async querySUPReserves(account: Address, options: { first?: number; skip?: number } = {}) {
+        return this.subgraphClient.querySUPReserves(account, options)
     }
 
     getSubgraphClient(): SubgraphClient {
