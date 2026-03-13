@@ -34,7 +34,8 @@
     "@vitest/coverage-v8": "^4.0.18",
     "typescript": "latest",
     "viem": "latest",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "tsup": "^8.3.5"
   },
   "peerDependencies": {
     "viem": "*"
@@ -42,7 +43,6 @@
   "dependencies": {
     "@sfpro/sdk": "^0.1.0",
     "graphql": "^16.9.0",
-    "graphql-request": "^7.1.2",
-    "tsup": "^8.3.5"
+    "graphql-request": "^7.1.2"
   }
 }
