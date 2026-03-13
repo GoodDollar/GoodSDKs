@@ -1,0 +1,8 @@
+# Gitleaks ignore file
+# Used to ignore false positives (like contract addresses flagging as generic API keys)
+
+# Problematic commits containing the G$ contract address in documentation
+3d5802f57bbb5e443526e614c36adb878d7cfa70
+ec1871fcd04e7fcc098f99cf8befe797b0503339
+7a3ce6e98211b40974f26b5e8654c8612ca204e3
+2e0353c7c7f5367a86847c21043c7b80a184e9c7

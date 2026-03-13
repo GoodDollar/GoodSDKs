@@ -66,6 +66,21 @@ export const App = () => (
   - Builds on `useIdentitySDK` and returns a ready `ClaimSDK` once identity checks resolve.
   - Surfaces entitlement errors via the returned `error` string.
 
+### Streaming Hooks
+
+- `useStreamList({ account, environment, enabled })`
+  - Fetches all active streams for an account (subgraph query is chain-based; `environment` only affects SDK token resolution for write operations).
+- `usePoolMemberships({ account, enabled })`
+  - Fetches GDA pool memberships for an account, including `isConnected` status (recommended for most UIs).
+- `useGDAPools({ account, enabled })`
+  - Lists distribution pools where `account` is a member, including `isConnected` status per pool.
+- `useSupReserves({ apiKey, enabled })`
+  - Fetches SUP reserve holdings. **Requires `apiKey`** (The Graph Gateway) on Base mainnet.
+- `useCreateStream()`, `useUpdateStream()`, `useDeleteStream()`
+  - Mutators for managing 1-to-1 streams. Supports `token` as `TokenSymbol` ('G$' | 'SUP') or `Address`.
+- `useConnectToPool()`, `useDisconnectFromPool()`
+  - Mutators for GDA pool memberships.
+
 Both hooks re-run whenever the connected wallet, public client, or environment changes.
 
 ## Demo & Further Reading
