@@ -143,7 +143,7 @@ async function testSubgraph() {
 
   // Test querying SUP reserves (Base) - requires The Graph Gateway apiKey
   const supClient = new SubgraphClient(SupportedChains.BASE, { apiKey: process.env.GRAPH_API_KEY })
-  const reserves = await supClient.querySUPReserves()
+  const reserves = await supClient.querySUPReserves('0x...')
   console.log('SUP reserves:', reserves)
 }
 

@@ -346,6 +346,9 @@ export class SubgraphClient {
    */
   async querySUPReserves(account: Address, options: { first?: number; skip?: number } = {}): Promise<SUPReserveLocker[]> {
     const { first = 10, skip = 0 } = options
+    if (!account) {
+      throw new Error("account is required to fetch SUP reserves")
+    }
     if (!this.apiKey) {
       throw new Error(
         "Missing apiKey for SUP reserves subgraph (The Graph Gateway). " +
