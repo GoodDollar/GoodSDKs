@@ -29,22 +29,6 @@ export default defineConfig({
   plugins: [react()],
   define: {
     "process.browser": true,
-    "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV ?? "development"),
-  },
-  build: {
-    chunkSizeWarningLimit: 2500,
-    rollupOptions: {
-      onwarn(warning, warn) {
-        if (
-          warning.code === "INVALID_ANNOTATION" ||
-          warning.code === "PURE_ANNOTATION" ||
-          (typeof warning.message === "string" &&
-            warning.message.includes("annotation that Rollup cannot interpret"))
-        ) {
-          return;
-        }
-        warn(warning);
-      },
-    },
+    "process.env": process.env,
   },
 });
