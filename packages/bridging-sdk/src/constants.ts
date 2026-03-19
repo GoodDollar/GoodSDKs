@@ -84,18 +84,8 @@ export const BRIDGE_CONTRACT_ADDRESSES: Record<number, string> = {
 }
 
 
-export const DEFAULT_DECIMALS = 18
-
 export const NORMALIZED_DECIMALS = 18
 
 export const FEE_MULTIPLIER = 1.1 // 10% buffer for fee estimation
 
-export const MAX_RETRIES = 3
-
-export const RETRY_DELAY = 2000 // 2 seconds
-
 export const EVENT_QUERY_BATCH_SIZE = 1000
-
-export const BRIDGE_STATUS_POLL_INTERVAL = 30000 // 30 seconds
-
-export const BRIDGE_STATUS_TIMEOUT = 300000 // 5 minutes
