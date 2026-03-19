@@ -20,15 +20,7 @@ export type {
 } from "./types"
 
 // Utilities
-export {
-  normalizeAmount,
-  denormalizeAmount,
-  formatAmount,
-  parseAmount,
-  getChainDecimals,
-  validateAmountDecimals,
-  roundAmount,
-} from "./utils/decimals"
+export { normalizeAmount, formatAmount, parseAmount } from "./utils/decimals"
 
 export {
   fetchFeeEstimates,
@@ -49,6 +41,5 @@ export {
   API_ENDPOINTS,
   EXPLORER_URLS,
   BRIDGE_CONTRACT_ADDRESSES,
-  DEFAULT_DECIMALS,
   NORMALIZED_DECIMALS,
 } from "./constants"

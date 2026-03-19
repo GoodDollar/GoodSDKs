@@ -11,7 +11,6 @@ import { normalizeAmount } from "./utils/decimals"
 import {
   fetchFeeEstimates,
   getFeeEstimate,
-  validateFeeCoverage,
 } from "./utils/fees"
 import {
   SUPPORTED_CHAINS,
@@ -156,7 +155,7 @@ export class BridgingSDK {
     
     // Protocol support validation
     if (protocol === "AXELAR" && (sourceChain === 50 || sourceChain === 122 || targetChainId === 50 || targetChainId === 122)) {
-      throw new Error(`Axelar bridging is not supported for ${SUPPORTED_CHAINS[sourceChain].name} or ${SUPPORTED_CHAINS[targetChainId].name}`)
+      throw new Error(`Axelar bridging is not supported for ${SUPPORTED_CHAINS[sourceChain]?.name} or ${SUPPORTED_CHAINS[targetChainId]?.name}`)
     }
 
     const now = Date.now()
@@ -180,12 +179,10 @@ export class BridgingSDK {
     targetChainId: ChainId,
     amount: bigint,
     protocol: BridgeProtocol,
-    msgValue?: bigint,
   ): Promise<TransactionReceipt> {
     return this.bridgeInternal({
       targetChainId,
       protocol,
-      msgValue,
       fn: "bridgeTo",
       args: [target, targetChainId, amount, protocol === "AXELAR" ? 0 : 1],
     })
@@ -257,12 +254,10 @@ export class BridgingSDK {
     targetChainId: ChainId,
     amount: bigint,
     adapterParams?: `0x${string}`,
-    msgValue?: bigint,
   ): Promise<TransactionReceipt> {
     return this.bridgeInternal({
       targetChainId,
       protocol: "LAYERZERO",
-      msgValue,
       fn: "bridgeToWithLzAdapterParams",
       args: [target, targetChainId, amount, adapterParams || "0x"],
     })
@@ -275,13 +270,10 @@ export class BridgingSDK {
     target: Address,
     targetChainId: ChainId,
     amount: bigint,
-    _gasRefundAddress?: Address,
-    msgValue?: bigint,
   ): Promise<TransactionReceipt> {
     return this.bridgeInternal({
       targetChainId,
       protocol: "AXELAR",
-      msgValue,
       fn: "bridgeToWithAxelar",
       args: [target, targetChainId, amount],
     })
@@ -293,7 +285,6 @@ export class BridgingSDK {
   private async bridgeInternal<TArgs extends any[]>(opts: {
     targetChainId: ChainId
     protocol: BridgeProtocol
-    msgValue?: bigint
     fn: "bridgeTo" | "bridgeToWithLzAdapterParams" | "bridgeToWithAxelar"
     args: TArgs
   }): Promise<TransactionReceipt> {
@@ -301,16 +292,7 @@ export class BridgingSDK {
       throw new Error("Wallet client not initialized")
     }
 
-    const feeEstimate = await this.estimateFee(
-      opts.targetChainId,
-      opts.protocol,
-    )
-
-    const providedValue = opts.msgValue ?? 0n
-    const feeValidation = validateFeeCoverage(providedValue, feeEstimate.fee)
-    if (!feeValidation.isValid) {
-      throw new Error(feeValidation.error)
-    }
+    const feeEstimate = await this.estimateFee(opts.targetChainId, opts.protocol)
 
     const contractAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
     if (!contractAddress) {
@@ -457,8 +439,10 @@ export class BridgingSDK {
 
   private async getLayerZeroStatus(txHash: Hash): Promise<TransactionStatus> {
     const response = await fetch(`${API_ENDPOINTS.LAYERZERO_SCAN}/messages/tx/${txHash}`)
-    const json = await response.json()
-    const data: LayerZeroScanResponse = json
+    if (!response.ok) {
+      throw new Error(`LayerZero API error: ${response.statusText}`)
+    }
+    const data: LayerZeroScanResponse = await response.json()
     if (!data.data || data.data.length === 0) return { status: "pending" }
     
     const message = data.data[0]

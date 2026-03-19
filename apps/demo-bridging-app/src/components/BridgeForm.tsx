@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react"
-import { useAccount, useBalance } from "wagmi"
-import { formatUnits } from "viem"
+import { useAccount, useBalance, useChainId } from "wagmi"
+import { parseUnits } from "viem"
 import { useBridgingSDK, useBridgeFee } from "@goodsdks/react-hooks"
-import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS, parseAmount } from "@goodsdks/bridging-sdk"
+import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
 import type { BridgeProtocol, ChainId } from "@goodsdks/bridging-sdk"
 
 interface BridgeFormProps {
@@ -12,17 +12,29 @@ interface BridgeFormProps {
 export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   const { address } = useAccount()
   const { sdk, loading: sdkLoading } = useBridgingSDK()
-  
-  const [fromChain, setFromChain] = useState<ChainId>(42220) // Celo
-  const [toChain, setToChain] = useState<ChainId>(1) // Ethereum
+  const walletChainId = useChainId() as ChainId
+
+  // fromChain always tracks the wallet's actual connected chain
+  const fromChain: ChainId = SUPPORTED_CHAINS[walletChainId] ? walletChainId : 42220
+  const [toChain, setToChain] = useState<ChainId>(() => {
+    return (Object.keys(SUPPORTED_CHAINS).map(Number).find((id) => id !== fromChain) as ChainId) ?? 1
+  })
   const [amount, setAmount] = useState("")
   const [recipient, setRecipient] = useState("")
   const [isBridging, setIsBridging] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [allowance, setAllowance] = useState<bigint>(0n)
-  const [fromBalanceStr, setFromBalanceStr] = useState("0")
+  const [_fromBalanceStr, setFromBalanceStr] = useState("0")
   const [toBalanceStr, setToBalanceStr] = useState("0")
   const [error, setError] = useState<string | null>(null)
+
+  // Reset toChain if it matches the (new) fromChain after wallet network switch
+  useEffect(() => {
+    if (toChain === fromChain) {
+      const fallback = (Object.keys(SUPPORTED_CHAINS).map(Number).find((id) => id !== fromChain) as ChainId) ?? 1
+      setToChain(fallback)
+    }
+  }, [fromChain])
 
   // Fetch allowance
   useEffect(() => {
@@ -89,7 +101,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       setIsApproving(true)
       setError(null)
       const decimals = SUPPORTED_CHAINS[fromChain].decimals
-      const amountInWei = parseAmount(amount, decimals)
+      const amountInWei = parseUnits(amount, decimals)
       await sdk.approve(amountInWei)
       
       // Refresh allowance
@@ -112,7 +124,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       setError(null)
 
       const decimals = SUPPORTED_CHAINS[fromChain].decimals
-      const amountInWei = parseAmount(amount, decimals)
+      const amountInWei = parseUnits(amount, decimals)
 
       if (amountInWei <= 0n) {
         throw new Error("Amount must be greater than 0")
@@ -121,7 +133,6 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       const canBridgeResult = await sdk.canBridge(address, amountInWei, toChain)
       if (!canBridgeResult.isWithinLimit) {
         let errMsg = canBridgeResult.error || "Bridge limit exceeded"
-        // Friendly parsing for common custom errors
         if (errMsg.includes("BRIDGE_LIMITS")) {
           errMsg = "Amount is outside the allowed bridge limits (check minimum amount or daily limit)."
         }
@@ -133,7 +144,6 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
         toChain,
         amountInWei,
         defaultProtocol,
-        fee?.amount
       )
 
       setAmount("")
@@ -151,7 +161,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   }
 
   const handleSwapChains = () => {
-    setFromChain(toChain)
+    // fromChain is locked to the connected wallet chain — swap only affects toChain display
     setToChain(fromChain)
   }
 
@@ -164,7 +174,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   }
 
   const decimals = SUPPORTED_CHAINS[fromChain].decimals
-  const amountInWei = parseAmount(amount, decimals)
+  const amountInWei = amount ? parseUnits(amount, decimals) : 0n
   const needsApproval = amountInWei > allowance
 
   return (
@@ -172,8 +182,8 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       {/* Chain Selection Row */}
       <div className="flex flex-col md:flex-row items-center gap-4 relative">
         <div className="flex-1 w-full">
-          <label className="block text-slate-400 text-sm font-semibold mb-3 ml-1">From</label>
-          <div className="premium-card !p-4 !bg-slate-50 flex items-center justify-between cursor-pointer hover:!bg-slate-100 transition-colors">
+          <label className="block text-slate-400 text-sm font-semibold mb-3 ml-1">From (connected chain)</label>
+          <div className="premium-card !p-4 !bg-slate-50 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-white shadow-sm">
                 {SUPPORTED_CHAINS[fromChain].name[0]}
@@ -182,24 +192,6 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
                 <span className="font-bold text-slate-900">G$ {SUPPORTED_CHAINS[fromChain].name}</span>
               </div>
             </div>
-            <select 
-              value={fromChain} 
-              onChange={(e) => {
-                const newFromChain = Number(e.target.value) as ChainId
-                if (newFromChain === toChain) {
-                  setToChain(fromChain)
-                }
-                setFromChain(newFromChain)
-              }}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            >
-              {Object.entries(SUPPORTED_CHAINS).map(([id, chain]) => (
-                <option key={id} value={id}>{chain.name}</option>
-              ))}
-            </select>
-            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
           </div>
         </div>
 

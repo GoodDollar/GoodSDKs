@@ -1,5 +1,5 @@
+import { formatUnits, parseUnits } from "viem"
 import { API_ENDPOINTS, FEE_MULTIPLIER, SUPPORTED_CHAINS } from "../constants"
-import { parseAmount, formatAmount } from "./decimals"
 import type {
   BridgeProtocol,
   ChainId,
@@ -36,7 +36,7 @@ export function parseNativeFee(feeString: string, chainId: ChainId): bigint {
   }
 
   const decimals = SUPPORTED_CHAINS[chainId]?.decimals || 18
-  return parseAmount(amountStr, decimals)
+  return parseUnits(amountStr, decimals)
 }
 
 /**
@@ -134,7 +134,7 @@ export function validateFeeCoverage(
  */
 export function formatFee(fee: bigint, chainId: ChainId): string {
   const decimals = SUPPORTED_CHAINS[chainId]?.decimals || 18
-  return formatAmount(fee, decimals)
+  return formatUnits(fee, decimals)
 }
 
 /**
