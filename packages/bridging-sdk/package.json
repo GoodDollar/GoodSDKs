@@ -1,6 +1,6 @@
 {
-  "name": "@goodsdks/react-hooks",
-  "version": "1.0.3",
+  "name": "@goodsdks/bridging-sdk",
+  "version": "1.0.5",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
@@ -16,7 +16,7 @@
       "import": "./dist/index.js"
     },
     "require": {
-      "types": "./dist/index.cts",
+      "types": "./dist/index.d.cts",
       "require": "./dist/index.cjs"
     }
   },
@@ -26,24 +26,13 @@
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "@types/react": "^19",
     "typescript": "latest",
-    "viem": "latest",
-    "wagmi": "latest"
+    "viem": "latest"
   },
   "peerDependencies": {
-    "viem": "*",
-    "wagmi": "*"
+    "viem": "*"
   },
   "dependencies": {
-    "@goodsdks/bridging-sdk": "workspace:*",
-    "@goodsdks/citizen-sdk": "*",
-    "lz-string": "^1.5.0",
-    "react": "^19.1.1",
-    "tsup": "^8.4.0"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+    "tsup": "^8.3.5"
+  }
 }
