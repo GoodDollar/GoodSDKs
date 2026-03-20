@@ -38,6 +38,7 @@ yarn-error.log*
 *.pem
 .yarn/install-state.gz
 apps/engagement-app/tsconfig.tsbuildinfo
+apps/demo-reserve-swap/tsconfig.tsbuildinfo
 .vscode/settings.json
 e2e.log 
 .bounties
