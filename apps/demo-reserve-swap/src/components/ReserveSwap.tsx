@@ -95,8 +95,10 @@ const formatTokenAmount = (
 }
 
 const formatAmountForInput = (value: bigint, decimals: number): string => {
-  const normalized = formatUnits(value, decimals).replace(/\.?0+$/, "")
-  return normalized.length > 0 ? normalized : "0"
+  const normalized = formatUnits(value, decimals)
+  if (!normalized.includes(".")) return normalized
+  const trimmed = normalized.replace(/\.?0+$/, "")
+  return trimmed.length > 0 ? trimmed : "0"
 }
 
 export function ReserveSwap() {
