@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react"
 import { useAccount, usePublicClient } from "wagmi"
 import { useGoodReserve } from "@goodsdks/react-hooks"
 import { erc20ABI, XDC_CHAIN_ID } from "@goodsdks/good-reserve"
-import { formatUnits, parseUnits } from "viem"
+import { formatUnits } from "viem"
 import { useReserveSwapQuote } from "./useReserveSwapQuote"
 import { useReserveSwapTx } from "./useReserveSwapTx"
+import { mapFriendlyError } from "../utils/errors"
 
 type RouteInfo = {
   env: string
@@ -48,29 +49,20 @@ const formatUsd = (value: number): string => {
   return `$${formatted}`
 }
 
-const trimDecimalString = (value: string, maxFractionDigits: number): string => {
+const trimDecimalString = (
+  value: string,
+  maxFractionDigits: number,
+): string => {
   const [integer, fraction = ""] = value.split(".")
   if (!fraction) return integer
   const trimmed = fraction.slice(0, maxFractionDigits).replace(/0+$/, "")
   return trimmed.length > 0 ? `${integer}.${trimmed}` : integer
 }
 
-const mapFriendlyError = (err: unknown, fallback: string): string => {
-  const message = err instanceof Error ? err.message : String(err ?? fallback)
-  const lower = message.toLowerCase()
-
-  if (lower.includes("user rejected")) return "Transaction canceled in wallet."
-  if (lower.includes("insufficient funds"))
-    return "Insufficient funds for token amount or gas."
-  if (lower.includes("allowance")) return "Insufficient allowance. Approve and try again."
-  if (lower.includes("slippage")) return "Slippage too high. Increase tolerance or reduce trade size."
-  if (lower.includes("revert")) return "Quote or swap reverted on-chain. Try a smaller amount."
-  if (lower.includes("outflow")) return "Reserve limits may apply (for example, weekly outflow constraints)."
-
-  return message || fallback
-}
-
-const formatTokenAmount = (value: bigint, decimals: number): { compact: string; precise: string } => {
+const formatTokenAmount = (
+  value: bigint,
+  decimals: number,
+): { compact: string; precise: string } => {
   const precise = formatUnits(value, decimals)
   if (value === 0n) return { compact: "0", precise }
 
@@ -82,7 +74,8 @@ const formatTokenAmount = (value: bigint, decimals: number): { compact: string; 
 
   if (value >= thousandTokens) {
     const parsed = Number(precise)
-    if (Number.isFinite(parsed)) return { compact: compactFormatter.format(parsed), precise }
+    if (Number.isFinite(parsed))
+      return { compact: compactFormatter.format(parsed), precise }
     return { compact: precise, precise }
   }
 
@@ -110,7 +103,11 @@ export function ReserveSwap() {
   const { address, chain } = useAccount()
   const publicClient = usePublicClient()
   const reserveEnv = chain?.id === XDC_CHAIN_ID ? "development" : "production"
-  const { sdk, loading: sdkLoading, error: sdkError } = useGoodReserve(reserveEnv)
+  const {
+    sdk,
+    loading: sdkLoading,
+    error: sdkError,
+  } = useGoodReserve(reserveEnv)
 
   const [direction, setDirection] = useState<"buy" | "sell">("buy")
   const [amountIn, setAmountIn] = useState("")
@@ -118,7 +115,9 @@ export function ReserveSwap() {
   const [decimalsLoading, setDecimalsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null)
-  const [reserveStats, setReserveStats] = useState<ReserveStatsState | null>(null)
+  const [reserveStats, setReserveStats] = useState<ReserveStatsState | null>(
+    null,
+  )
   const [stableBalance, setStableBalance] = useState<bigint | null>(null)
   const [gdBalance, setGdBalance] = useState<bigint | null>(null)
   const [balancesLoading, setBalancesLoading] = useState(false)
@@ -128,7 +127,9 @@ export function ReserveSwap() {
   const isXdc = chain?.id === XDC_CHAIN_ID
   const chainLabel = isXdc ? "XDC" : "Celo"
   const stableSymbol = isXdc ? "USDC" : "cUSD"
-  const fallbackStable = isXdc ? FALLBACK_STABLE_TOKENS.xdc : FALLBACK_STABLE_TOKENS.celo
+  const fallbackStable = isXdc
+    ? FALLBACK_STABLE_TOKENS.xdc
+    : FALLBACK_STABLE_TOKENS.celo
   const stableToken = sdk?.getStableTokenAddress() ?? fallbackStable
 
   // ── Quote hook (owns quote state + derived values) ──────────────────────────
@@ -140,6 +141,7 @@ export function ReserveSwap() {
     impliedPriceNumber,
     lowLiquidityWarning,
     refetchQuote,
+    clearQuote,
   } = useReserveSwapQuote({
     sdk,
     direction,
@@ -151,7 +153,12 @@ export function ReserveSwap() {
   })
 
   // ── Transaction hook (owns tx state + execute logic) ──────────────────────
-  const { execute: executeSwap, txStatus, txResult, txError } = useReserveSwapTx(sdk, {
+  const {
+    execute: executeSwap,
+    txStatus,
+    txResult,
+    txError,
+  } = useReserveSwapTx(sdk, {
     direction,
     stableToken,
     stableDecimals,
@@ -226,7 +233,6 @@ export function ReserveSwap() {
     void loadBalances()
   }, [loadBalances])
 
-
   const handleRefresh = useCallback(async () => {
     await loadReserveContext()
     await refetchQuote()
@@ -244,7 +250,14 @@ export function ReserveSwap() {
 
   if (sdkLoading) {
     return (
-      <div className="swap-card" style={{ alignItems: "center", justifyContent: "center", minHeight: "200px" }}>
+      <div
+        className="swap-card"
+        style={{
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "200px",
+        }}
+      >
         <p style={{ color: "#64748b", fontWeight: 500 }}>Initializing SDK...</p>
       </div>
     )
@@ -263,7 +276,9 @@ export function ReserveSwap() {
   const inputDecimals = direction === "buy" ? stableDecimals : gdDecimals
   const inputBalance = direction === "buy" ? stableBalance : gdBalance
   const inputBalanceDetails =
-    inputBalance !== null ? formatTokenAmount(inputBalance, inputDecimals) : null
+    inputBalance !== null
+      ? formatTokenAmount(inputBalance, inputDecimals)
+      : null
   const outputDetails =
     quote === null
       ? null
@@ -272,7 +287,8 @@ export function ReserveSwap() {
         : formatTokenAmount(quote, stableDecimals)
 
   const reserveRatioPercent =
-    reserveStats?.reserveRatio !== null && reserveStats?.reserveRatio !== undefined
+    reserveStats?.reserveRatio !== null &&
+    reserveStats?.reserveRatio !== undefined
       ? (reserveStats.reserveRatio / 10000).toFixed(2)
       : null
   const poolCollateralDetails =
@@ -297,11 +313,14 @@ export function ReserveSwap() {
           9,
         )
       : null
-  const poolBackingPerGDNumber = poolBackingPerGD ? Number(poolBackingPerGD) : null
+  const poolBackingPerGDNumber = poolBackingPerGD
+    ? Number(poolBackingPerGD)
+    : null
   const sellUnitPrice =
     impliedPriceNumber !== null
       ? impliedPriceNumber
-      : poolBackingPerGDNumber !== null && Number.isFinite(poolBackingPerGDNumber)
+      : poolBackingPerGDNumber !== null &&
+          Number.isFinite(poolBackingPerGDNumber)
         ? poolBackingPerGDNumber
         : null
 
@@ -344,7 +363,8 @@ export function ReserveSwap() {
         )}
         {!isXdc && (
           <p style={{ fontSize: "12px", color: "#64748b", marginTop: "6px" }}>
-            Multi-chain hint: XDC (USDC-backed) is available in parallel when you switch network.
+            Multi-chain hint: XDC (USDC-backed) is available in parallel when
+            you switch network.
           </p>
         )}
       </div>
@@ -354,7 +374,7 @@ export function ReserveSwap() {
           className={`control-btn ${direction === "buy" ? "active" : ""}`}
           onClick={() => {
             setDirection("buy")
-            setQuote(null)
+            clearQuote()
             setAmountIn("")
           }}
         >
@@ -364,7 +384,7 @@ export function ReserveSwap() {
           className={`control-btn ${direction === "sell" ? "active" : ""}`}
           onClick={() => {
             setDirection("sell")
-            setQuote(null)
+            clearQuote()
             setAmountIn("")
           }}
         >
@@ -382,7 +402,9 @@ export function ReserveSwap() {
             disabled={balancesLoading || inputBalance === null}
           >
             Balance:{" "}
-            {inputBalanceDetails ? `${inputBalanceDetails.compact} ${inputLabel}` : "..."}
+            {inputBalanceDetails
+              ? `${inputBalanceDetails.compact} ${inputLabel}`
+              : "..."}
           </button>
           <div className="quick-actions">
             {[25, 50, 75, 100].map((percent) => (
@@ -412,18 +434,26 @@ export function ReserveSwap() {
 
       {quoteLoading && (
         <div className="quote-view" style={{ alignItems: "center" }}>
-          <i style={{ fontSize: "14px", color: "#94a3b8" }}>Fetching live quote...</i>
+          <i style={{ fontSize: "14px", color: "#94a3b8" }}>
+            Fetching live quote...
+          </i>
         </div>
       )}
 
       {quoteError && (
-        <div className="status-message status-error" style={{ fontSize: "12px" }}>
+        <div
+          className="status-message status-error"
+          style={{ fontSize: "12px" }}
+        >
           {quoteError}
         </div>
       )}
 
       {statsError && (
-        <div className="status-message status-error" style={{ fontSize: "12px" }}>
+        <div
+          className="status-message status-error"
+          style={{ fontSize: "12px" }}
+        >
           {statsError}
         </div>
       )}
@@ -431,7 +461,10 @@ export function ReserveSwap() {
       {outputDetails !== null && !quoteLoading && (
         <div className="quote-view">
           <span className="quote-label">Estimated Output ({outputLabel})</span>
-          <span className="quote-value" title={`${outputDetails.precise} ${outputLabel}`}>
+          <span
+            className="quote-value"
+            title={`${outputDetails.precise} ${outputLabel}`}
+          >
             {outputDetails.compact} {outputLabel}
           </span>
           {outputStableEquivalent !== null && (
@@ -461,7 +494,14 @@ export function ReserveSwap() {
       )}
 
       {lowLiquidityWarning && (
-        <div className="status-message" style={{ background: "#fefce8", border: "1px solid #fde68a", color: "#92400e" }}>
+        <div
+          className="status-message"
+          style={{
+            background: "#fefce8",
+            border: "1px solid #fde68a",
+            color: "#92400e",
+          }}
+        >
           {lowLiquidityWarning}
         </div>
       )}
@@ -469,7 +509,9 @@ export function ReserveSwap() {
       <div className="action-row">
         <button
           onClick={handleExecute}
-          disabled={txStatus === "pending" || decimalsLoading || !quote || !amountIn}
+          disabled={
+            txStatus === "pending" || decimalsLoading || !quote || !amountIn
+          }
           className="primary-button"
         >
           {txStatus === "pending"
@@ -533,13 +575,17 @@ export function ReserveSwap() {
           <div className="quote-view" style={{ gap: "8px" }}>
             <span className="quote-label">Reserve Stats</span>
             {statsLoading ? (
-              <span style={{ fontSize: "13px", color: "#64748b" }}>Loading stats...</span>
+              <span style={{ fontSize: "13px", color: "#64748b" }}>
+                Loading stats...
+              </span>
             ) : (
               <>
                 <span style={{ fontSize: "13px", color: "#334155" }}>
                   Pool collateral:{" "}
                   {poolCollateralDetails ? (
-                    <span title={`${poolCollateralDetails.precise} ${stableSymbol}`}>
+                    <span
+                      title={`${poolCollateralDetails.precise} ${stableSymbol}`}
+                    >
                       {poolCollateralDetails.compact} {stableSymbol}
                     </span>
                   ) : (
@@ -557,10 +603,14 @@ export function ReserveSwap() {
                   )}
                 </span>
                 <span style={{ fontSize: "13px", color: "#334155" }}>
-                  Reserve ratio: {reserveRatioPercent ? `${reserveRatioPercent}%` : "N/A"}
+                  Reserve ratio:{" "}
+                  {reserveRatioPercent ? `${reserveRatioPercent}%` : "N/A"}
                 </span>
                 <span style={{ fontSize: "13px", color: "#334155" }}>
-                  Backing floor: {poolBackingPerGD ? `${poolBackingPerGD} ${stableSymbol} / G$` : "N/A"}
+                  Backing floor:{" "}
+                  {poolBackingPerGD
+                    ? `${poolBackingPerGD} ${stableSymbol} / G$`
+                    : "N/A"}
                 </span>
               </>
             )}
@@ -570,7 +620,8 @@ export function ReserveSwap() {
             <div className="quote-view" style={{ gap: "6px" }}>
               <span className="quote-label">Route Addresses</span>
               <span style={{ fontSize: "12px", color: "#475569" }}>
-                env: {routeInfo.env} | chainId: {routeInfo.chainId} | mode: {routeInfo.mode}
+                env: {routeInfo.env} | chainId: {routeInfo.chainId} | mode:{" "}
+                {routeInfo.mode}
               </span>
               <span style={{ fontSize: "12px", color: "#475569" }}>
                 stable: {routeInfo.stableToken}
@@ -596,7 +647,9 @@ export function ReserveSwap() {
               <button
                 className="secondary-button"
                 style={{ width: "100%" }}
-                onClick={() => console.info("GoodReserve route info", routeInfo)}
+                onClick={() =>
+                  console.info("GoodReserve route info", routeInfo)
+                }
               >
                 Log Route To Console
               </button>

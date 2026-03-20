@@ -67,6 +67,12 @@ function ReserveButton() {
 
 ## API
 
+### Initialization Options
+
+The `GoodReserveSDK` constructor accepts an `options` object as its fourth argument.
+
+- `exactApproval` (`boolean`, default: `true`): When `true`, buy/sell transactions approve only the exact token amount required for the swap. Set to `false` to approve an infinite amount (`maxUint256`). While `false` reduces gas costs on future swaps, it is less secure.
+
 ### `GoodReserveSDK`
 
 | Method                                       | Description                                         |

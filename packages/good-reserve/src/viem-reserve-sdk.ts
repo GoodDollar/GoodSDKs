@@ -70,8 +70,8 @@ export interface ReserveStats {
 export interface GoodReserveSDKOptions {
   /**
    * When true, approval transactions use the exact `amount` required instead of
-   * `maxUint256`. Defaults to false (approve max) to reduce future approval tx
-   * overhead at the cost of a slightly less conservative approval model.
+   * `maxUint256`. Defaults to true (approve exact) for better security,
+   * though `false` (approve maxUint256) reduces future approval tx overhead.
    */
   exactApproval?: boolean
 }
@@ -102,7 +102,10 @@ export class GoodReserveSDK {
   ): boolean {
     const reserveChain = getReserveChainFromId(chainId)
     if (!reserveChain) return false
-    return RESERVE_CONTRACT_ADDRESSES[env][reserveChain as SupportedReserveChain].mode !== "unavailable"
+    return (
+      RESERVE_CONTRACT_ADDRESSES[env][reserveChain as SupportedReserveChain]
+        .mode !== "unavailable"
+    )
   }
 
   constructor(
@@ -135,7 +138,7 @@ export class GoodReserveSDK {
     this.contracts = contracts
     this.chainId = chainId
     this.env = env
-    this.exactApproval = options.exactApproval ?? false
+    this.exactApproval = options.exactApproval ?? true
   }
 
   // Read methods.
@@ -305,24 +308,28 @@ export class GoodReserveSDK {
     // doesn't need to re-read `this.contracts` after the await.
     const exchangeProvider = this.contracts.exchangeProvider
 
-    const [goodDollarTotalSupply, stableTokenDecimals, goodDollarDecimals, pool] =
-      await Promise.all([
+    const [
+      goodDollarTotalSupply,
+      stableTokenDecimals,
+      goodDollarDecimals,
+      pool,
+    ] = await Promise.all([
+      this.publicClient.readContract({
+        address: this.contracts.goodDollar,
+        abi: erc20ABI,
+        functionName: "totalSupply",
+      }),
+      this.getTokenDecimals(this.contracts.stableToken),
+      this.getTokenDecimals(this.contracts.goodDollar),
+      this.getMentoExchangeId().then((exchangeId) =>
         this.publicClient.readContract({
-          address: this.contracts.goodDollar,
-          abi: erc20ABI,
-          functionName: "totalSupply",
+          address: exchangeProvider,
+          abi: mentoExchangeProviderABI,
+          functionName: "getPoolExchange",
+          args: [exchangeId],
         }),
-        this.getTokenDecimals(this.contracts.stableToken),
-        this.getTokenDecimals(this.contracts.goodDollar),
-        this.getMentoExchangeId().then((exchangeId) =>
-          this.publicClient.readContract({
-            address: exchangeProvider,
-            abi: mentoExchangeProviderABI,
-            functionName: "getPoolExchange",
-            args: [exchangeId],
-          }),
-        ),
-      ])
+      ),
+    ])
 
     const { tokenSupply, reserveBalance, reserveRatio, exitContribution } =
       this.extractPoolStats(pool)
@@ -454,12 +461,7 @@ export class GoodReserveSDK {
     if (amountIn <= 0n) throw new Error("amountIn must be greater than zero")
     if (minReturn < 0n) throw new Error("minReturn cannot be negative")
 
-    await this.ensureAllowance(
-      tokenIn,
-      this.getSwapSpender(),
-      amountIn,
-      onHash,
-    )
+    await this.ensureAllowance(tokenIn, this.getSwapSpender(), amountIn, onHash)
 
     if (this.contracts.mode === "exchange-helper") {
       return this.submitAndWait(
@@ -696,9 +698,9 @@ export class GoodReserveSDK {
 
     if (allowance >= amount) return
 
-    // We default to maxUint256 so users don't have to eat the gas cost of
-    // another approval on their next swap. If they passed exactApproval=true in
-    // the config, we respect it and just approve what they need.
+    // We default to exactApproval=true for better security, meaning we only approve
+    // the amount needed for this swap. If exactApproval=false, we approve maxUint256
+    // so users don't have to eat the gas cost of another approval next time.
     const approvalAmount = this.exactApproval ? amount : maxUint256
     await this.submitAndWait(
       {
@@ -730,10 +732,14 @@ export class GoodReserveSDK {
     return { hash, receipt }
   }
 
-  private async attachTimestamps(events: ReserveEvent[]): Promise<ReserveEvent[]> {
+  private async attachTimestamps(
+    events: ReserveEvent[],
+  ): Promise<ReserveEvent[]> {
     if (events.length === 0) return events
 
-    const uniqueBlocks = [...new Set(events.map((event) => event.block.toString()))]
+    const uniqueBlocks = [
+      ...new Set(events.map((event) => event.block.toString())),
+    ]
     const blockTimestamps = new Map<string, number>()
 
     const chunkSize = 10

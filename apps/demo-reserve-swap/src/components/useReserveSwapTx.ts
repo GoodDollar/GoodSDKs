@@ -1,24 +1,13 @@
 import { useState, useCallback } from "react"
 import { parseUnits } from "viem"
 import type { GoodReserveSDK } from "@goodsdks/good-reserve"
+import { mapFriendlyError } from "../utils/errors"
 
 type Direction = "buy" | "sell"
 type TxStatus = "idle" | "pending" | "done" | "error"
 
-const mapFriendlyError = (err: unknown, fallback: string): string => {
-  const message = err instanceof Error ? err.message : String(err ?? fallback)
-  const lower = message.toLowerCase()
-  if (lower.includes("user rejected")) return "Transaction canceled in wallet."
-  if (lower.includes("insufficient funds")) return "Insufficient funds for token amount or gas."
-  if (lower.includes("allowance")) return "Insufficient allowance. Approve and try again."
-  if (lower.includes("slippage")) return "Slippage too high. Increase tolerance or reduce trade size."
-  if (lower.includes("revert")) return "Quote or swap reverted on-chain. Try a smaller amount."
-  if (lower.includes("outflow")) return "Reserve limits may apply (for example, weekly outflow constraints)."
-  return message || fallback
-}
-
 export interface UseReserveSwapTxResult {
-  execute: (amountIn: string, quote: bigint | null) => Promise<void>
+  execute: (amountIn: string, quote: bigint | null) => Promise<boolean>
   txStatus: TxStatus
   txResult: string | null
   txError: string | null
@@ -46,8 +35,14 @@ export function useReserveSwapTx(
   const [txError, setTxError] = useState<string | null>(null)
 
   const execute = useCallback(
-    async (amountIn: string, quote: bigint | null) => {
-      if (!sdk || !amountIn || quote === null) return
+    async (amountIn: string, quote: bigint | null): Promise<boolean> => {
+      if (!sdk || !amountIn || quote === null) {
+        setTxStatus("error")
+        setTxError(
+          "Cannot execute swap: Missing input amount, quote, or SDK not initialized.",
+        )
+        return false
+      }
 
       setTxStatus("pending")
       setTxResult(null)
@@ -71,9 +66,11 @@ export function useReserveSwapTx(
         }
 
         setTxStatus("done")
+        return true
       } catch (err) {
         setTxStatus("error")
         setTxError(mapFriendlyError(err, "Transaction failed"))
+        return false
       }
     },
     [sdk, direction, stableToken, stableDecimals, gdDecimals],
