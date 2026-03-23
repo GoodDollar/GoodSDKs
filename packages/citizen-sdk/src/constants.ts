@@ -151,12 +151,11 @@ export const chainConfigs: Record<SupportedChains, ChainConfig> = {
     claimGasBuffer: 150000n,
     fvDefaultChain: SupportedChains.XDC,
     contracts: {
-      // Production identity contract sourced from reference-assets connect-a-wallet example
       production: {
         identityContract: "0x27a4a02C9ed591E1a86e2e5D05870292c34622C9",
-        ubiContract: "0x0000000000000000000000000000000000000000", // TODO: add when deployed
-        faucetContract: "0x0000000000000000000000000000000000000000", // TODO: add when deployed
-        g$Contract: "0x0000000000000000000000000000000000000000", // TODO: add when deployed
+        ubiContract: "0x22867567E2D80f2049200E25C6F31CB6Ec2F0faf",
+        faucetContract: "0x7344Da1Be296f03fbb8082aDaC5696058B5a9bd9",
+        g$Contract: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c",
       },
       development: {
         identityContract: "0xa6632e9551A340E8582cc797017fbA645695E29f",

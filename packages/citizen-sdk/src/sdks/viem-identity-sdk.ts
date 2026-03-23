@@ -7,8 +7,6 @@ import {
   SimulateContractParameters,
   WalletActions,
   zeroAddress,
-  createPublicClient,
-  http,
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
@@ -32,10 +30,15 @@ import type {
   IdentityExpiryData,
   IdentityExpiry,
   WalletLinkOptions,
-  ConnectedAccountStatus,
   ChainConnectedStatus,
 } from "../types"
 
+/**
+ * Initializes the Identity Contract.
+ * @param publicClient - The PublicClient instance.
+ * @param contractAddress - The contract address.
+ * @returns An IdentityContract instance.
+ */
 export const initializeIdentityContract = (
   publicClient: PublicClient,
   contractAddress: Address,
@@ -51,6 +54,9 @@ export interface IdentitySDKOptions {
   env: contractEnv
 }
 
+/**
+ * Handles interactions with the Identity Contract.
+ */
 export class IdentitySDK {
   public account: Address
   publicClient: PublicClient
@@ -59,10 +65,13 @@ export class IdentitySDK {
   public env: contractEnv = "production"
   private readonly chainId: SupportedChains
   private readonly fvDefaultChain: SupportedChains
-  
-  // Cache for cross-chain public clients
-  private publicClientCache: Map<string, PublicClient> = new Map()
 
+  /**
+   * Initializes the IdentitySDK.
+   * @param publicClient - The PublicClient instance.
+   * @param walletClient - The WalletClient with WalletActions.
+   * @param env - The environment to use ("production" | "staging" | "development").
+   */
   constructor({
     account,
     publicClient,
@@ -100,19 +109,15 @@ export class IdentitySDK {
     return new IdentitySDK({ account, ...props })
   }
 
-  private getOrCreatePublicClient(config: any): PublicClient {
-    const key = `${config.id}:${this.env}`
-    const cached = this.publicClientCache.get(key)
-    if (cached) return cached
-
-    const publicClient = createPublicClient({
-      transport: http(config.rpcUrls[0]),
-    })
-
-    this.publicClientCache.set(key, publicClient)
-    return publicClient
-  }
-
+  /**
+   * Evaluates security constraints and prompts the user with security messages if required.
+   * Custodial/automated flows can bypass this entirely via `skipSecurityMessage: true`.
+   * For native wallet flows, `onSecurityMessage` receives the notice and must resolve
+   * to `true` for the transaction to proceed. Without either option the message is
+   * logged to `console.info` as a headless default.
+   * @param action - The wallet link action being performed ("connect" or "disconnect").
+   * @param options - Additional wallet link options including security prompt handlers.
+   */
   private async runSecurityCheck(
     action: keyof typeof WALLET_LINK_SECURITY_MESSAGES,
     options?: WalletLinkOptions,
@@ -134,6 +139,13 @@ export class IdentitySDK {
     console.info(`[IdentitySDK] ${message}`)
   }
 
+  /**
+   * Submits a transaction and waits for its receipt.
+   * @param params - Parameters for simulating the contract call.
+   * @param onHash - Optional callback to receive the transaction hash.
+   * @returns The transaction receipt.
+   * @throws If submission fails or no active wallet address is found.
+   */
   async submitAndWait(
     params: SimulateContractParameters,
     onHash?: (hash: `0x${string}`) => void,
@@ -157,6 +169,12 @@ export class IdentitySDK {
     }
   }
 
+  /**
+   * Returns whitelist status of main account or any connected account.
+   * @param account - The account address to check.
+   * @returns An object containing whitelist status and root address.
+   * @reference: https://docs.gooddollar.org/user-guides/connect-another-wallet-address-to-identity
+   */
   async getWhitelistedRoot(
     account: Address,
   ): Promise<{ isWhitelisted: boolean; root: Address }> {
@@ -179,38 +197,37 @@ export class IdentitySDK {
     }
   }
 
-  async getConnectedAccounts(account: Address): Promise<ConnectedAccountStatus> {
-    try {
-      const root = await this.publicClient.readContract({
-        address: this.contract.contractAddress,
-        abi: identityV2ABI,
-        functionName: "connectedAccounts",
-        args: [account],
-      }) as Address
-
-      return {
-        isConnected: root !== zeroAddress,
-        root,
-      }
-    } catch (error: any) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error("getConnectedAccounts Error:", error)
-      throw new Error(`Failed to get connected accounts: ${message}`)
-    }
-  }
-
-  async isAccountConnected(account: Address): Promise<boolean> {
-    const { isConnected } = await this.getConnectedAccounts(account)
-    return isConnected
-  }
-
-  async checkConnectedStatusAllChains(
+  /**
+   * Checks the wallet-link connection status of the given account.
+   *
+   * When `chainId` is provided the query is scoped to that single chain only.
+   * When omitted, all supported chains are queried in parallel via Promise.allSettled
+   * and one ChainConnectedStatus entry is returned per chain.
+   *
+   * This SDK is headless: it never creates its own public clients internally.
+   * For the SDK's current chain `this.publicClient` is reused (preserving the
+   * app's transport config — custom headers, retry policy, authenticated RPCs, etc.).
+   * For all other chains the caller must supply app-configured clients via
+   * `publicClients`. Any chain without a supplied client returns an error entry
+   * rather than silently skipping.
+   *
+   * @param account - The account address to check.
+   * @param chainId - Optional. Restricts the query to this chain only.
+   * @param publicClients - Optional. App-level public clients keyed by SupportedChains ID.
+   * Required for any chain other than the SDK's current chain when querying all chains.
+   * @returns An array of ChainConnectedStatus (one entry per queried chain).
+   */
+  async checkConnectedStatus(
     account: Address,
+    chainId?: SupportedChains,
+    publicClients?: Record<SupportedChains, PublicClient>,
   ): Promise<ChainConnectedStatus[]> {
-    const entries = Object.values(chainConfigs)
+    const configs = chainId
+      ? Object.values(chainConfigs).filter((config) => config.id === chainId)
+      : Object.values(chainConfigs)
 
     const settled = await Promise.allSettled(
-      entries.map(async (config) => {
+      configs.map(async (config) => {
         const contracts = config.contracts[this.env]
 
         if (!contracts) {
@@ -223,7 +240,19 @@ export class IdentitySDK {
           } satisfies ChainConnectedStatus
         }
 
-        const client = this.getOrCreatePublicClient(config)
+        const client =
+          publicClients?.[config.id] ??
+          (this.chainId === config.id ? this.publicClient : undefined)
+
+        if (!client) {
+          return {
+            chainId: config.id,
+            chainName: config.label,
+            isConnected: false,
+            root: zeroAddress as Address,
+            error: `No public client provided for chain ${config.label}`,
+          } satisfies ChainConnectedStatus
+        }
 
         const root = (await client.readContract({
           address: contracts.identityContract,
@@ -242,7 +271,7 @@ export class IdentitySDK {
     )
 
     return settled.map((result, i) => {
-      const config = entries[i]
+      const config = configs[i]
       if (result.status === "fulfilled") return result.value
       return {
         chainId: config.id,
@@ -254,6 +283,11 @@ export class IdentitySDK {
     })
   }
 
+  /**
+   * Retrieves identity expiry data for a given account.
+   * @param account - The account address.
+   * @returns The identity expiry data.
+   */
   async getIdentityExpiryData(account: Address): Promise<IdentityExpiryData> {
     try {
       const [lastAuthenticated, authPeriod] = await Promise.all([
@@ -281,6 +315,17 @@ export class IdentitySDK {
     }
   }
 
+  /**
+   * Connects a new account to the identity.
+   * The whitelisted root identity must be the signer. No additional message
+   * signature is required beyond the transaction itself.
+   * Custodial flows can pass `skipSecurityMessage: true` to bypass the notice;
+   * the underlying transaction signing is handled by the app-provided walletClient
+   * (or IdentityCustodialSDK for LocalAccount signers).
+   * @param account - The account address to connect.
+   * @param options - Additional options, such as security prompts.
+   * @returns The transaction receipt.
+   */
   async connectAccount(
     account: Address,
     options?: WalletLinkOptions,
@@ -304,6 +349,13 @@ export class IdentitySDK {
     }
   }
 
+  /**
+   * Disconnects an account from the identity.
+   * Either the root identity or the connected account itself can call this.
+   * @param account - The account address to disconnect.
+   * @param options - Additional options, such as security prompts.
+   * @returns The transaction receipt.
+   */
   async disconnectAccount(
     account: Address,
     options?: WalletLinkOptions,
@@ -327,10 +379,17 @@ export class IdentitySDK {
     }
   }
 
+  /**
+   * Generates a Face Verification Link.
+   * @param popupMode - Whether to generate a popup link.
+   * @param callbackUrl - The URL to callback after verification.
+   * @param chainId - The blockchain network ID.
+   * @returns The generated Face Verification link.
+   */
   async generateFVLink(
     popupMode: boolean = false,
     callbackUrl?: string,
-    chainId?: number,
+    chainId?: SupportedChains,
   ): Promise<string> {
     try {
       const address = this.account
@@ -390,6 +449,12 @@ export class IdentitySDK {
     }
   }
 
+  /**
+   * Calculates the identity expiry timestamp.
+   * @param lastAuthenticated - The timestamp of last authentication.
+   * @param authPeriod - The authentication period.
+   * @returns The identity expiry data.
+   */
   calculateIdentityExpiry(
     lastAuthenticated: bigint,
     authPeriod: bigint,
