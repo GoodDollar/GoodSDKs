@@ -76,37 +76,6 @@ const makeMentoReadContract = (
     }),
   )
 
-/**
- * Fake addresses for the exchange-helper fallback path.
- * We don't have this in prod/staging yet, but these tests cover the
- * branches we'll need for the future XDC deployment.
- */
-const MOCK_EXCHANGE_HELPER =
-  "0x00000000000000000000000000000000000000a1" as `0x${string}`
-const MOCK_BUY_GD_FACTORY =
-  "0x00000000000000000000000000000000000000a2" as `0x${string}`
-const MOCK_GD = "0x00000000000000000000000000000000000000a3" as `0x${string}`
-const MOCK_STABLE =
-  "0x00000000000000000000000000000000000000a4" as `0x${string}`
-
-/** Wires up a test SDK forced into exchange-helper mode. */
-const makeExchangeHelperSdk = (
-  readContract: ReturnType<typeof vi.fn>,
-  overridePublicClient?: PublicClient,
-  walletClient?: WalletClient,
-) => {
-  const client = overridePublicClient ?? makeMockClient({ readContract } as any)
-  const sdk = new GoodReserveSDK(client, walletClient)
-  const anySDK = sdk as any
-  anySDK.contracts = {
-    mode: "exchange-helper",
-    exchangeHelper: MOCK_EXCHANGE_HELPER,
-    buyGDFactory: MOCK_BUY_GD_FACTORY,
-    goodDollar: MOCK_GD,
-    stableToken: MOCK_STABLE,
-  }
-  return sdk
-}
 
 // ─── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -176,23 +145,6 @@ describe("GoodReserveSDK", () => {
       )
     })
 
-    it("calls getBuyQuote on buyGDFactory in exchange-helper mode", async () => {
-      const rc = vi
-        .fn()
-        .mockImplementation(
-          makeAsyncFn((req) =>
-            req.functionName === "getBuyQuote" ? 300n : 0n,
-          ),
-        )
-      const result = await makeExchangeHelperSdk(rc).getBuyQuote(
-        MOCK_STABLE,
-        50n,
-      )
-      expect(result).toBe(300n)
-      expect(rc).toHaveBeenCalledWith(
-        expect.objectContaining({ functionName: "getBuyQuote" }),
-      )
-    })
   })
 
   // ── getSellQuote ─────────────────────────────────────────────────────────────
@@ -211,23 +163,6 @@ describe("GoodReserveSDK", () => {
       expect(await sdk.getSellQuote(100n, CELO_PROD_STABLE)).toBe(88n)
     })
 
-    it("calls getSellQuote on buyGDFactory in exchange-helper mode", async () => {
-      const rc = vi
-        .fn()
-        .mockImplementation(
-          makeAsyncFn((req) =>
-            req.functionName === "getSellQuote" ? 42n : 0n,
-          ),
-        )
-      const result = await makeExchangeHelperSdk(rc).getSellQuote(
-        100n,
-        MOCK_STABLE,
-      )
-      expect(result).toBe(42n)
-      expect(rc).toHaveBeenCalledWith(
-        expect.objectContaining({ functionName: "getSellQuote" }),
-      )
-    })
   })
 
   // ── buy ──────────────────────────────────────────────────────────────────────
@@ -438,79 +373,7 @@ describe("GoodReserveSDK", () => {
       expect(result[0]?.amountOut).toBe(250n)
     })
 
-    it("decodes exchange-helper TokenPurchased events as buy", async () => {
-      const mockGetContractEvents = vi.fn().mockImplementation((req: any) => {
-        if (req.eventName === "TokenPurchased") {
-          return Promise.resolve([
-            {
-              args: {
-                caller: "0x0000000000000000000000000000000000000002",
-                inputToken: MOCK_STABLE,
-                inputAmount: 10n,
-                actualReturn: 50n,
-                receiverAddress: "0x0000000000000000000000000000000000000002",
-              },
-              transactionHash: MOCK_TX_HASH,
-              blockNumber: 800n,
-            },
-          ])
-        }
-        return Promise.resolve([])
-      })
 
-      const xhSdk = makeExchangeHelperSdk(
-        vi.fn().mockResolvedValue(0n),
-        makeMockClient({
-          getBlockNumber: vi.fn().mockResolvedValue(1000n),
-          getContractEvents: mockGetContractEvents,
-        } as any),
-      )
-
-      const result = await xhSdk.getTransactionHistory(
-        "0x0000000000000000000000000000000000000002",
-      )
-      expect(result).toHaveLength(1)
-      expect(result[0]?.type).toBe("buy")
-      expect(result[0]?.amountOut).toBe(50n)
-    })
-
-    it("decodes exchange-helper TokenSold events as sell", async () => {
-      const mockGetContractEvents = vi.fn().mockImplementation((req: any) => {
-        if (req.eventName === "TokenSold") {
-          return Promise.resolve([
-            {
-              args: {
-                caller: "0x0000000000000000000000000000000000000002",
-                outputToken: MOCK_STABLE,
-                gdAmount: 20n,
-                contributionAmount: 1n,
-                actualReturn: 15n,
-                receiverAddress: "0x0000000000000000000000000000000000000002",
-              },
-              transactionHash: MOCK_TX_HASH,
-              blockNumber: 810n,
-            },
-          ])
-        }
-        return Promise.resolve([])
-      })
-
-      const xhSdk = makeExchangeHelperSdk(
-        vi.fn().mockResolvedValue(0n),
-        makeMockClient({
-          getBlockNumber: vi.fn().mockResolvedValue(1000n),
-          getContractEvents: mockGetContractEvents,
-        } as any),
-      )
-
-      const result = await xhSdk.getTransactionHistory(
-        "0x0000000000000000000000000000000000000002",
-      )
-      expect(result).toHaveLength(1)
-      expect(result[0]?.type).toBe("sell")
-      expect(result[0]?.amountIn).toBe(20n)
-      expect(result[0]?.amountOut).toBe(15n)
-    })
     it("enriches events with timestamps and sorts chronologically", async () => {
       const rc = makeMentoReadContract(CELO_PROD_STABLE, CELO_PROD_GD)
 
@@ -630,118 +493,8 @@ describe("GoodReserveSDK", () => {
       expect(stats.reserveRatio).toBe(500000)
     })
 
-    it("returns null pool fields for exchange-helper mode", async () => {
-      const rc = vi.fn().mockImplementation(
-        makeAsyncFn((req) => {
-          if (req.functionName === "totalSupply") return 999n
-          if (req.functionName === "decimals") return 2
-          return 0n
-        }),
-      )
-      const stats = await makeExchangeHelperSdk(
-        rc,
-        makeMockClient({ readContract: rc } as any),
-      ).getReserveStats()
-
-      expect(stats.goodDollarTotalSupply).toBe(999n)
-      expect(stats.poolReserveBalance).toBeNull()
-      expect(stats.poolTokenSupply).toBeNull()
-      expect(stats.reserveRatio).toBeNull()
-      expect(stats.exitContribution).toBeNull()
-    })
-
-    it("route info reflects exchange-helper contract addresses", () => {
-      const info = makeExchangeHelperSdk(vi.fn()).getRouteInfo()
-      expect(info.mode).toBe("exchange-helper")
-      expect(info.exchangeHelper).toBe(MOCK_EXCHANGE_HELPER)
-      expect(info.buyGDFactory).toBe(MOCK_BUY_GD_FACTORY)
-    })
   })
 
-  // ── exchange-helper write paths ───────────────────────────────────────────────
-  describe("exchange-helper buy and sell write paths", () => {
-    it("calls exchangeHelper.buy via simulateContract with correct args", async () => {
-      const rc = vi.fn().mockImplementation(
-        makeAsyncFn((req) => {
-          if (req.functionName === "allowance") return 0n
-          return 0n
-        }),
-      )
-      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
-      const wc = makeMockWallet()
-      const publicClient = makeMockClient({
-        readContract: rc,
-        simulateContract,
-      } as any)
-      const sdk = makeExchangeHelperSdk(rc, publicClient, wc)
-
-      const result = await sdk.buy(MOCK_STABLE, 100n, 90n)
-
-      expect(result.hash).toBe(MOCK_TX_HASH)
-      const swapCall = simulateContract.mock.calls
-        .map(([args]: any[]) => args)
-        .find((args: any) => args?.functionName === "buy")
-      expect(swapCall).toBeDefined()
-      expect(swapCall.address).toBe(MOCK_EXCHANGE_HELPER)
-      expect(swapCall.args).toEqual([MOCK_STABLE, 100n, 90n])
-    })
-
-    it("calls exchangeHelper.sell via simulateContract with correct args", async () => {
-      const rc = vi.fn().mockImplementation(
-        makeAsyncFn((req) => {
-          if (req.functionName === "allowance") return 0n
-          return 0n
-        }),
-      )
-      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
-      const wc = makeMockWallet()
-      const publicClient = makeMockClient({
-        readContract: rc,
-        simulateContract,
-      } as any)
-      const sdk = makeExchangeHelperSdk(rc, publicClient, wc)
-
-      const result = await sdk.sell(MOCK_STABLE, 200n, 180n)
-
-      expect(result.hash).toBe(MOCK_TX_HASH)
-      const swapCall = simulateContract.mock.calls
-        .map(([args]: any[]) => args)
-        .find((args: any) => args?.functionName === "sell")
-      expect(swapCall).toBeDefined()
-      expect(swapCall.address).toBe(MOCK_EXCHANGE_HELPER)
-      expect(swapCall.args).toEqual([MOCK_STABLE, 200n, 180n])
-    })
-
-    it("approves exchangeHelper as spender before calling buy", async () => {
-      const rc = vi.fn().mockImplementation(
-        makeAsyncFn((req) => {
-          // Return 0 allowance so approval is required
-          if (req.functionName === "allowance") return 0n
-          return 0n
-        }),
-      )
-      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
-      const wc = makeMockWallet()
-      const publicClient = makeMockClient({
-        readContract: rc,
-        simulateContract,
-      } as any)
-      const sdk = makeExchangeHelperSdk(rc, publicClient, wc)
-
-      await sdk.buy(MOCK_STABLE, 100n, 90n)
-
-      // Two calls: approve + buy
-      expect(simulateContract).toHaveBeenCalledTimes(2)
-      const approvalCall = rc.mock.calls
-        .map(([args]: any[]) => args)
-        .find(
-          (args: any) =>
-            args?.functionName === "allowance" &&
-            args?.args?.[1] === MOCK_EXCHANGE_HELPER,
-        )
-      expect(approvalCall).toBeDefined()
-    })
-  })
 
   // ── parallel pool discovery ───────────────────────────────────────────────────
   describe("parallel pool discovery", () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { useAccount, usePublicClient } from "wagmi"
+import { useAccount, usePublicClient, useSwitchChain } from "wagmi"
 import { useGoodReserve } from "@goodsdks/react-hooks"
 import { erc20ABI, XDC_CHAIN_ID } from "@goodsdks/good-reserve"
 import { formatUnits } from "viem"
@@ -10,11 +10,9 @@ import { mapFriendlyError } from "../utils/errors"
 type RouteInfo = {
   env: string
   chainId: number
-  mode: "exchange-helper" | "mento-broker"
+  mode: "mento-broker"
   stableToken: `0x${string}`
   goodDollar: `0x${string}`
-  exchangeHelper?: `0x${string}`
-  buyGDFactory?: `0x${string}`
   broker?: `0x${string}`
   exchangeProvider?: `0x${string}`
 }
@@ -28,6 +26,11 @@ type ReserveStatsState = {
   reserveRatio: number | null
   exitContribution: number | null
 }
+
+type SlippagePreset = "auto" | 1 | 3 | 5
+
+const AUTO_SLIPPAGE_PERCENT = 3
+const SLIPPAGE_PRESETS = [1, 3, 5] as const
 
 const FALLBACK_STABLE_TOKENS = {
   celo: "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const,
@@ -103,6 +106,7 @@ const formatAmountForInput = (value: bigint, decimals: number): string => {
 
 export function ReserveSwap() {
   const { address, chain } = useAccount()
+  const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient()
   const reserveEnv = chain?.id === XDC_CHAIN_ID ? "development" : "production"
   const {
@@ -125,6 +129,11 @@ export function ReserveSwap() {
   const [balancesLoading, setBalancesLoading] = useState(false)
   const [stableDecimals, setStableDecimals] = useState(18)
   const [gdDecimals, setGdDecimals] = useState(18)
+  const [slippagePreset, setSlippagePreset] =
+    useState<SlippagePreset>("auto")
+
+  const activeSlippagePercent =
+    slippagePreset === "auto" ? AUTO_SLIPPAGE_PERCENT : slippagePreset
 
   const isXdc = chain?.id === XDC_CHAIN_ID
   const chainLabel = isXdc ? "XDC" : "Celo"
@@ -165,6 +174,7 @@ export function ReserveSwap() {
     stableToken,
     stableDecimals,
     gdDecimals,
+    slippagePercent: activeSlippagePercent,
   })
 
   const loadReserveContext = useCallback(async () => {
@@ -175,16 +185,15 @@ export function ReserveSwap() {
     setStatsError(null)
 
     try {
-      const [stats, route] = await Promise.all([
-        sdk.getReserveStats(),
-        Promise.resolve(sdk.getRouteInfo()),
-      ])
+      const route = sdk.getRouteInfo()
+      setRouteInfo(route as RouteInfo)
+      console.info("GoodReserve route info", route)
+
+      const stats = await sdk.getReserveStats()
 
       setReserveStats(stats)
-      setRouteInfo(route as RouteInfo)
       setStableDecimals(stats.stableTokenDecimals)
       setGdDecimals(stats.goodDollarDecimals)
-      console.info("GoodReserve route info", route)
     } catch (err) {
       setStatsError(mapFriendlyError(err, "Failed to read reserve stats"))
     } finally {
@@ -242,10 +251,22 @@ export function ReserveSwap() {
   }, [loadReserveContext, refetchQuote, loadBalances])
 
   const handleExecute = async () => {
-    await executeSwap(amountIn, quote)
-    if (txStatus === "done") {
-      setAmountIn("")
+    if (chain?.id !== routeInfo?.chainId && routeInfo?.chainId) {
+      try {
+        await switchChainAsync({ chainId: routeInfo.chainId })
+      } catch (err) {
+        console.warn("Failed to switch network", err)
+      }
+      return
     }
+
+    const didSucceed = await executeSwap(amountIn, quote)
+    if (!didSucceed) return
+
+    setAmountIn("")
+    clearQuote()
+    await loadBalances()
+    await loadReserveContext()
   }
 
   if (!address) return null
@@ -287,6 +308,10 @@ export function ReserveSwap() {
       : direction === "buy"
         ? formatTokenAmount(quote, gdDecimals)
         : formatTokenAmount(quote, stableDecimals)
+  const slippageLabel =
+    slippagePreset === "auto"
+      ? `Auto (${AUTO_SLIPPAGE_PERCENT}%)`
+      : `${slippagePreset}%`
 
   const reserveRatioPercent =
     reserveStats?.reserveRatio !== null &&
@@ -485,7 +510,7 @@ export function ReserveSwap() {
             </span>
           )}
           <div className="summary-meta">
-            <span>Slippage guard: 5%</span>
+            <span>Slippage guard: {slippageLabel}</span>
             {impliedPrice && (
               <span title="Reserve implied price from current quote">
                 1 G$ ≈ {impliedPrice} {stableSymbol}
@@ -508,6 +533,29 @@ export function ReserveSwap() {
         </div>
       )}
 
+      <div className="slippage-row">
+        <span className="slippage-label">Max slippage</span>
+        <div className="slippage-options">
+          <button
+            type="button"
+            className={`quick-action-btn ${slippagePreset === "auto" ? "active" : ""}`}
+            onClick={() => setSlippagePreset("auto")}
+          >
+            Auto {AUTO_SLIPPAGE_PERCENT}%
+          </button>
+          {SLIPPAGE_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className={`quick-action-btn ${slippagePreset === preset ? "active" : ""}`}
+              onClick={() => setSlippagePreset(preset)}
+            >
+              {preset}%
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="action-row">
         <button
           onClick={handleExecute}
@@ -518,9 +566,11 @@ export function ReserveSwap() {
         >
           {txStatus === "pending"
             ? "Executing..."
-            : direction === "buy"
-              ? `Buy G$ with ${stableSymbol}`
-              : `Sell G$ for ${stableSymbol}`}
+            : chain?.id !== routeInfo?.chainId && routeInfo?.chainId
+              ? "Switch Network"
+              : direction === "buy"
+                ? `Buy G$ with ${stableSymbol}`
+                : `Sell G$ for ${stableSymbol}`}
         </button>
         <button
           type="button"
@@ -641,11 +691,7 @@ export function ReserveSwap() {
                   exchangeProvider: {routeInfo.exchangeProvider}
                 </span>
               )}
-              {routeInfo.buyGDFactory && (
-                <span style={{ fontSize: "12px", color: "#475569" }}>
-                  buyGDFactory: {routeInfo.buyGDFactory}
-                </span>
-              )}
+
               <button
                 className="secondary-button"
                 style={{ width: "100%" }}

@@ -8,14 +8,6 @@ export const XDC_CHAIN_ID = 50
 
 export type SupportedReserveChain = "celo" | "xdc"
 
-export type ExchangeHelperReserveConfig = {
-  mode: "exchange-helper"
-  exchangeHelper: Address
-  buyGDFactory: Address
-  goodDollar: Address
-  stableToken: Address
-}
-
 export type MentoBrokerReserveConfig = {
   mode: "mento-broker"
   broker: Address
@@ -32,7 +24,6 @@ export type UnavailableReserveConfig = {
 }
 
 export type ReserveChainConfig =
-  | ExchangeHelperReserveConfig
   | MentoBrokerReserveConfig
   | UnavailableReserveConfig
 
@@ -98,17 +89,6 @@ export const getReserveChainFromId = (
   return null
 }
 
-export const exchangeHelperABI = parseAbi([
-  "function buy(address _buyWith, uint256 _tokenAmount, uint256 _minReturn) returns (uint256)",
-  "function sell(address _sellWith, uint256 _gdAmount, uint256 _minReturn) returns (uint256)",
-  "event TokenPurchased(address indexed caller, address indexed inputToken, uint256 inputAmount, uint256 actualReturn, address indexed receiverAddress)",
-  "event TokenSold(address indexed caller, address indexed outputToken, uint256 gdAmount, uint256 contributionAmount, uint256 actualReturn, address indexed receiverAddress)",
-])
-
-export const buyGDFactoryABI = parseAbi([
-  "function getBuyQuote(address _buyWith, uint256 _tokenAmount) view returns (uint256 gdAmount)",
-  "function getSellQuote(uint256 _gdAmount, address _sellTo) view returns (uint256 tokenAmount)",
-])
 
 export const mentoBrokerABI = parseAbi([
   "function getAmountOut(address exchangeProvider, bytes32 exchangeId, address tokenIn, address tokenOut, uint256 amountIn) view returns (uint256 amountOut)",

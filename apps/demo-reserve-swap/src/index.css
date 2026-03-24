@@ -304,10 +304,43 @@ body {
   color: #0369a1;
 }
 
+.quick-action-btn.active {
+  border-color: #00aeef;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
 .quick-action-btn:disabled {
   color: #94a3b8;
   border-color: #e2e8f0;
   cursor: not-allowed;
+}
+
+.slippage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.slippage-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.slippage-options {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .action-row {
@@ -374,6 +407,16 @@ body {
   }
 
   .quick-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .slippage-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .slippage-options {
     width: 100%;
     justify-content: space-between;
   }

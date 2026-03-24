@@ -26,9 +26,16 @@ export function useReserveSwapTx(
     stableToken: `0x${string}`
     stableDecimals: number
     gdDecimals: number
+    slippagePercent: number
   },
 ): UseReserveSwapTxResult {
-  const { direction, stableToken, stableDecimals, gdDecimals } = params
+  const {
+    direction,
+    stableToken,
+    stableDecimals,
+    gdDecimals,
+    slippagePercent,
+  } = params
 
   const [txStatus, setTxStatus] = useState<TxStatus>("idle")
   const [txResult, setTxResult] = useState<string | null>(null)
@@ -49,7 +56,10 @@ export function useReserveSwapTx(
       setTxError(null)
 
       try {
-        const minReturn = (quote * 95n) / 100n
+        const slippageBps = BigInt(
+          Math.min(10_000, Math.max(0, Math.round(slippagePercent * 100))),
+        )
+        const minReturn = (quote * (10_000n - slippageBps)) / 10_000n
 
         if (direction === "buy") {
           const parsed = parseUnits(amountIn, stableDecimals)
@@ -73,7 +83,7 @@ export function useReserveSwapTx(
         return false
       }
     },
-    [sdk, direction, stableToken, stableDecimals, gdDecimals],
+    [sdk, direction, stableToken, stableDecimals, gdDecimals, slippagePercent],
   )
 
   const resetTx = useCallback(() => {

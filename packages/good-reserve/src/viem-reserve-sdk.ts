@@ -14,8 +14,6 @@ import {
   getReserveChainFromId,
   type ReserveChainConfig,
   type SupportedReserveChain,
-  exchangeHelperABI,
-  buyGDFactoryABI,
   mentoBrokerABI,
   mentoExchangeProviderABI,
   erc20ABI,
@@ -48,11 +46,9 @@ export interface GetReserveEventsOptions {
 export type ReserveRouteInfo = {
   env: ReserveEnv
   chainId: number
-  mode: "exchange-helper" | "mento-broker"
+  mode: "mento-broker"
   stableToken: Address
   goodDollar: Address
-  exchangeHelper?: Address
-  buyGDFactory?: Address
   broker?: Address
   exchangeProvider?: Address
 }
@@ -151,15 +147,6 @@ export class GoodReserveSDK {
   async getBuyQuote(tokenIn: Address, amountIn: bigint): Promise<bigint> {
     if (amountIn <= 0n) throw new Error("amountIn must be greater than zero")
 
-    if (this.contracts.mode === "exchange-helper") {
-      return this.publicClient.readContract({
-        address: this.contracts.buyGDFactory,
-        abi: buyGDFactoryABI,
-        functionName: "getBuyQuote",
-        args: [tokenIn, amountIn],
-      })
-    }
-
     const exchangeId = await this.getMentoExchangeId()
     return this.publicClient.readContract({
       address: this.contracts.broker,
@@ -182,15 +169,6 @@ export class GoodReserveSDK {
    */
   async getSellQuote(gdAmount: bigint, sellTo: Address): Promise<bigint> {
     if (gdAmount <= 0n) throw new Error("gdAmount must be greater than zero")
-
-    if (this.contracts.mode === "exchange-helper") {
-      return this.publicClient.readContract({
-        address: this.contracts.buyGDFactory,
-        abi: buyGDFactoryABI,
-        functionName: "getSellQuote",
-        args: [gdAmount, sellTo],
-      })
-    }
 
     const exchangeId = await this.getMentoExchangeId()
     return this.publicClient.readContract({
@@ -249,18 +227,6 @@ export class GoodReserveSDK {
    * Returns active route info including chain/env and contract addresses in use.
    */
   getRouteInfo(): ReserveRouteInfo {
-    if (this.contracts.mode === "exchange-helper") {
-      return {
-        env: this.env,
-        chainId: this.chainId,
-        mode: "exchange-helper",
-        stableToken: this.contracts.stableToken,
-        goodDollar: this.contracts.goodDollar,
-        exchangeHelper: this.contracts.exchangeHelper,
-        buyGDFactory: this.contracts.buyGDFactory,
-      }
-    }
-
     return {
       env: this.env,
       chainId: this.chainId,
@@ -281,29 +247,6 @@ export class GoodReserveSDK {
    * round-trip, even on the Mento path where pool discovery is async.
    */
   async getReserveStats(): Promise<ReserveStats> {
-    if (this.contracts.mode === "exchange-helper") {
-      const [goodDollarTotalSupply, stableTokenDecimals, goodDollarDecimals] =
-        await Promise.all([
-          this.publicClient.readContract({
-            address: this.contracts.goodDollar,
-            abi: erc20ABI,
-            functionName: "totalSupply",
-          }),
-          this.getTokenDecimals(this.contracts.stableToken),
-          this.getTokenDecimals(this.contracts.goodDollar),
-        ])
-
-      return {
-        goodDollarTotalSupply,
-        stableTokenDecimals,
-        goodDollarDecimals,
-        poolReserveBalance: null,
-        poolTokenSupply: null,
-        reserveRatio: null,
-        exitContribution: null,
-      }
-    }
-
     // Pull this out into a local so the arrow function inside Promise.all
     // doesn't need to re-read `this.contracts` after the await.
     const exchangeProvider = this.contracts.exchangeProvider
@@ -357,54 +300,6 @@ export class GoodReserveSDK {
     const fromBlock =
       options.fromBlock ??
       (blocksAgo >= latestBlock ? 0n : latestBlock - blocksAgo)
-
-    if (this.contracts.mode === "exchange-helper") {
-      const [buyLogs, sellLogs] = await Promise.all([
-        this.publicClient.getContractEvents({
-          address: this.contracts.exchangeHelper,
-          abi: exchangeHelperABI,
-          eventName: "TokenPurchased",
-          args: { caller: account },
-          fromBlock,
-          toBlock: latestBlock,
-        }),
-        this.publicClient.getContractEvents({
-          address: this.contracts.exchangeHelper,
-          abi: exchangeHelperABI,
-          eventName: "TokenSold",
-          args: { caller: account },
-          fromBlock,
-          toBlock: latestBlock,
-        }),
-      ])
-
-      const buys: ReserveEvent[] = buyLogs.map((log) => ({
-        type: "buy",
-        account,
-        tokenIn: log.args.inputToken as Address,
-        tokenOut: this.contracts.goodDollar,
-        amountIn: log.args.inputAmount as bigint,
-        amountOut: log.args.actualReturn as bigint,
-        tx: log.transactionHash,
-        block: log.blockNumber,
-      }))
-
-      const sells: ReserveEvent[] = sellLogs.map((log) => ({
-        type: "sell",
-        account,
-        tokenIn: this.contracts.goodDollar,
-        tokenOut: log.args.outputToken as Address,
-        amountIn: log.args.gdAmount as bigint,
-        amountOut: log.args.actualReturn as bigint,
-        tx: log.transactionHash,
-        block: log.blockNumber,
-      }))
-
-      const sortedEvents = [...buys, ...sells].sort((a, b) =>
-        a.block < b.block ? -1 : a.block > b.block ? 1 : 0,
-      )
-      return this.attachTimestamps(sortedEvents)
-    }
 
     const exchangeId = await this.getMentoExchangeId()
     const logs = await this.publicClient.getContractEvents({
@@ -463,18 +358,6 @@ export class GoodReserveSDK {
 
     await this.ensureAllowance(tokenIn, this.getSwapSpender(), amountIn, onHash)
 
-    if (this.contracts.mode === "exchange-helper") {
-      return this.submitAndWait(
-        {
-          address: this.contracts.exchangeHelper,
-          abi: exchangeHelperABI,
-          functionName: "buy",
-          args: [tokenIn, amountIn, minReturn],
-        },
-        onHash,
-      )
-    }
-
     const exchangeId = await this.getMentoExchangeId()
     return this.submitAndWait(
       {
@@ -519,18 +402,6 @@ export class GoodReserveSDK {
       onHash,
     )
 
-    if (this.contracts.mode === "exchange-helper") {
-      return this.submitAndWait(
-        {
-          address: this.contracts.exchangeHelper,
-          abi: exchangeHelperABI,
-          functionName: "sell",
-          args: [sellTo, gdAmount, minReturn],
-        },
-        onHash,
-      )
-    }
-
     const exchangeId = await this.getMentoExchangeId()
     return this.submitAndWait(
       {
@@ -566,9 +437,6 @@ export class GoodReserveSDK {
   }
 
   private getSwapSpender(): Address {
-    if (this.contracts.mode === "exchange-helper") {
-      return this.contracts.exchangeHelper
-    }
     return this.contracts.broker
   }
 
