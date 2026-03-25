@@ -117,6 +117,24 @@ describe("StreamingSDK", () => {
         )
     })
 
+    it("should create or update a stream via setFlowrate with exactly 3 args", async () => {
+        const sdk = new StreamingSDK(publicClient, walletClient)
+        const hash = await sdk.createOrUpdateStream({
+            receiver: "0xreceiver" as Address,
+            token: TEST_SUPERTOKEN,
+            flowRate: BigInt(100),
+        })
+
+        expect(hash).toBe("0xhash")
+        expect(publicClient.simulateContract).toHaveBeenCalledWith(
+            expect.objectContaining({
+                functionName: "setFlowrate",
+                // Exactly 3 args: token, receiver, flowRate (no account, no userData)
+                args: [TEST_SUPERTOKEN, "0xreceiver", BigInt(100)],
+            })
+        )
+    })
+
     it("should delete a stream", async () => {
         const sdk = new StreamingSDK(publicClient, walletClient)
         const hash = await sdk.deleteStream({

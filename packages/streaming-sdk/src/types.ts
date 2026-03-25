@@ -41,6 +41,14 @@ export interface StreamInfo {
   streamedSoFar?: bigint
 }
 
+export interface SetStreamParams {
+  receiver: Address
+  token?: TokenSymbol | Address
+  /** Flow rate in wei per second. Passing 0 deletes the stream. */
+  flowRate: bigint
+  onHash?: (hash: Hash) => void
+}
+
 export interface CreateStreamParams {
   receiver: Address
   token?: TokenSymbol | Address

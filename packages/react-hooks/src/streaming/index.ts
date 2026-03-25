@@ -7,6 +7,7 @@ import {
     GdaSDK,
     SubgraphClient,
     SupportedChains,
+    type SetStreamParams,
     type StreamInfo,
     type GDAPool,
     type PoolMembership,
@@ -37,6 +38,19 @@ export interface UseUpdateStreamParams {
 export interface UseDeleteStreamParams {
     receiver: Address
     token?: TokenSymbol | Address
+    userData?: `0x${string}`
+    environment?: Environment
+}
+
+/**
+ * Params for the recommended create-or-update hook.
+ * Uses setFlowrate under the hood — creates when no stream exists, updates otherwise.
+ * Pass flowRate = 0n to stop the stream.
+ */
+export interface UseSetStreamParams {
+    receiver?: Address
+    token?: TokenSymbol | Address
+    flowRate?: bigint
     userData?: `0x${string}`
     environment?: Environment
 }
@@ -131,6 +145,34 @@ export function useCreateStream() {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
             return sdk.createStream({ receiver, token, flowRate, userData })
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["streams"] })
+        },
+    })
+}
+
+/**
+ * Recommended hook for creating or updating a stream.
+ * Uses setFlowrate under the hood — handles both create and update in one call.
+ * Pass flowRate = 0n to stop/delete the stream.
+ */
+export function useSetStream() {
+    const sdks = useStreamingSdks()
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({
+            receiver,
+            token,
+            flowRate,
+            environment = "production",
+        }: UseSetStreamParams & { environment?: Environment }): Promise<Hash> => {
+            if (!receiver) throw new Error("Receiver address is required")
+            if (flowRate === undefined) throw new Error("Flow rate is required")
+            const sdk = sdks.get(environment)
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
+            return sdk.createOrUpdateStream({ receiver, token, flowRate })
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["streams"] })

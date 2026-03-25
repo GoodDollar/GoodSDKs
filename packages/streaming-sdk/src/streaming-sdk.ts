@@ -8,6 +8,7 @@ import {
 import { cfaForwarderAbi } from "@sfpro/sdk/abi"
 import {
     StreamingSDKOptions,
+    SetStreamParams,
     CreateStreamParams,
     UpdateStreamParams,
     DeleteStreamParams,
@@ -83,6 +84,37 @@ export class StreamingSDK {
             )
         }
         this.walletClient = walletClient
+    }
+
+    /**
+     * Create or update a stream using the recommended setFlowrate method.
+     * This is idempotent — it creates a new stream if none exists,
+     * or updates an existing one. Pass flowRate = 0n to delete the stream.
+     */
+    async createOrUpdateStream(params: SetStreamParams): Promise<Hash> {
+        const { receiver, token, flowRate, onHash } = params
+
+        if (!receiver) throw new Error("Receiver address is required")
+        if (flowRate < BigInt(0)) throw new Error("Flow rate cannot be negative")
+
+        const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
+        if (!resolvedToken) {
+            throw new Error(
+                `Token address not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide an address explicitly or set a defaultToken symbol.`
+            )
+        }
+
+        return this.submitAndWait(
+            {
+                address: this.cfaForwarder,
+                abi: cfaForwarderAbi,
+                functionName: "setFlowrate",
+                // setFlowrate takes exactly 3 args: token, receiver, flowRate
+                args: [resolvedToken, receiver, flowRate],
+            },
+            onHash,
+        )
     }
 
     async createStream(params: CreateStreamParams): Promise<Hash> {
