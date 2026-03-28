@@ -314,7 +314,7 @@ export class BridgingSDK {
   }
 
   /**
-   * Fetches the combined, sorted bridge history for an address
+   * Fetches the combined, sorted bridge history for an address on the current chain
    */
   async getHistory(address: Address, options?: EventOptions): Promise<(BridgeRequestEvent | ExecutedTransferEvent)[]> {
     const [requests, executed] = await Promise.all([
@@ -325,6 +325,35 @@ export class BridgingSDK {
     const history: (BridgeRequestEvent | ExecutedTransferEvent)[] = [...requests, ...executed]
     
     return history.sort((a, b) => {
+      if (a.blockNumber < b.blockNumber) return 1
+      if (a.blockNumber > b.blockNumber) return -1
+      return 0
+    })
+  }
+
+  /**
+   * Fetches the combined, sorted bridge history for an address across multiple chains
+   */
+  static async getAllHistory(
+    address: Address,
+    clients: Record<number, PublicClient>,
+    options?: EventOptions
+  ): Promise<(BridgeRequestEvent | ExecutedTransferEvent)[]> {
+    const historyPromises = Object.entries(clients).map(async ([chainIdStr, client]) => {
+      try {
+        const chainId = Number(chainIdStr) as ChainId
+        const sdk = new BridgingSDK(client, undefined, chainId)
+        return await sdk.getHistory(address, options)
+      } catch (err) {
+        console.warn(`Failed to fetch history for chain ${chainIdStr}: ${err instanceof Error ? err.message : String(err)}`)
+        return []
+      }
+    })
+
+    const allHistoryFiles = await Promise.all(historyPromises)
+    const combined = allHistoryFiles.flat()
+    
+    return combined.sort((a, b) => {
       if (a.blockNumber < b.blockNumber) return 1
       if (a.blockNumber > b.blockNumber) return -1
       return 0
@@ -344,7 +373,7 @@ export class BridgingSDK {
     }
 
     const currentBlock = await this.publicClient.getBlockNumber()
-    const fromBlock = options?.fromBlock || (currentBlock > 50000n ? currentBlock - 50000n : 0n)
+    const fromBlock = options?.fromBlock || (currentBlock > 10000n ? currentBlock - 10000n : 0n)
     const toBlock = options?.toBlock || "latest"
     const limit = options?.limit || EVENT_QUERY_BATCH_SIZE
 
@@ -362,6 +391,7 @@ export class BridgingSDK {
         transactionHash: log.transactionHash,
         blockNumber: log.blockNumber,
         address: log.address,
+        chainId: this.currentChainId,
         args: {
           from: log.args.from as Address,
           to: log.args.to as Address,
@@ -390,7 +420,7 @@ export class BridgingSDK {
     }
 
     const currentBlock = await this.publicClient.getBlockNumber()
-    const fromBlock = options?.fromBlock || (currentBlock > 50000n ? currentBlock - 50000n : 0n)
+    const fromBlock = options?.fromBlock || (currentBlock > 10000n ? currentBlock - 10000n : 0n)
     const toBlock = options?.toBlock || "latest"
     const limit = options?.limit || EVENT_QUERY_BATCH_SIZE
 
@@ -399,7 +429,7 @@ export class BridgingSDK {
         address: contractAddress as Address,
         abi: MESSAGE_PASSING_BRIDGE_ABI,
         eventName: "ExecutedTransfer",
-        args: { from: address },
+        args: { to: address },
         fromBlock,
         toBlock,
       })
@@ -408,6 +438,7 @@ export class BridgingSDK {
         transactionHash: log.transactionHash,
         blockNumber: log.blockNumber,
         address: log.address,
+        chainId: this.currentChainId,
         args: {
           from: log.args.from as Address,
           to: log.args.to as Address,
@@ -456,6 +487,9 @@ export class BridgingSDK {
 
   private async getAxelarStatus(txHash: Hash): Promise<TransactionStatus> {
     const response = await fetch(`${API_ENDPOINTS.AXELARSCAN}/gmp?txHash=${txHash}`)
+    if (!response.ok) {
+      throw new Error(`Axelar API error: ${response.statusText}`)
+    }
     const data: AxelarscanResponse = await response.json()
     if (!data.data || data.data.length === 0) return { status: "pending" }
     const transaction = data.data[0]

@@ -1,5 +1,6 @@
 import { createAppKit } from "@reown/appkit/react"
-import { WagmiProvider as WagmiProviderOriginal, http } from "wagmi"
+import { WagmiProvider as WagmiProviderOriginal, http, createConfig } from "wagmi"
+import { createPublicClient, http as viemHttp } from "viem"
 import { celo, mainnet, fuse, xdc } from "@reown/appkit/networks"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi"
@@ -28,7 +29,7 @@ const wagmiAdapter = new WagmiAdapter({
   ssr: true,
   transports: {
     [celo.id]: http("https://forno.celo.org"),
-    [mainnet.id]: http("https://eth.llamarpc.com"),
+    [mainnet.id]: http("https://cloudflare-eth.com"),
     [fuse.id]: http("https://rpc.fuse.io"),
     [xdc.id]: http("https://rpc.xdcrpc.com"),
   },
@@ -61,3 +62,10 @@ export function WagmiProvider({ children }: ComponentProps) {
 }
 
 export { wagmiAdapter }
+
+export const publicClients: Record<number, any> = {
+  [celo.id]: createPublicClient({ chain: celo as any, transport: viemHttp("https://forno.celo.org") }),
+  [mainnet.id]: createPublicClient({ chain: mainnet as any, transport: viemHttp("https://cloudflare-eth.com") }),
+  [fuse.id]: createPublicClient({ chain: fuse as any, transport: viemHttp("https://rpc.fuse.io") }),
+  [xdc.id]: createPublicClient({ chain: xdc as any, transport: viemHttp("https://rpc.xdcrpc.com") }),
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react"
 import { usePublicClient, useWalletClient, useChainId } from "wagmi"
+import { type PublicClient } from "viem"
 import { BridgingSDK, type BridgeProtocol, type ChainId, type BridgeRequestEvent, type ExecutedTransferEvent } from "@goodsdks/bridging-sdk"
 
 export interface UseBridgingSDKResult {
@@ -110,7 +111,10 @@ export function useBridgeFee(
 /**
  * Hook for fetching and tracking bridge history
  */
-export function useBridgeHistory(address: `0x${string}` | undefined) {
+export function useBridgeHistory(
+  address: `0x${string}` | undefined,
+  clients?: Record<number, PublicClient>
+) {
   const { sdk } = useBridgingSDK()
   const [history, setHistory] = useState<(BridgeRequestEvent | ExecutedTransferEvent)[]>([])
   const [loading, setLoading] = useState(false)
@@ -122,7 +126,11 @@ export function useBridgeHistory(address: `0x${string}` | undefined) {
     try {
       setLoading(true)
       setError(null)
-      const data = await sdk.getHistory(address)
+      
+      const data = clients 
+        ? await BridgingSDK.getAllHistory(address, clients)
+        : await sdk.getHistory(address)
+        
       setHistory(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch history")
@@ -135,7 +143,7 @@ export function useBridgeHistory(address: `0x${string}` | undefined) {
     fetchHistory()
     const interval = setInterval(fetchHistory, 30000) // Poll every 30s
     return () => clearInterval(interval)
-  }, [sdk, address])
+  }, [sdk, address, clients])
 
   return { history, loading, error, refetch: fetchHistory }
 }
