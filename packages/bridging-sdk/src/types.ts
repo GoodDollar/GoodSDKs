@@ -20,6 +20,7 @@ export interface BridgeRequestEvent {
   transactionHash: Hash
   blockNumber: bigint
   address: Address
+  chainId: ChainId
   args: {
     from: Address
     to: Address
@@ -35,6 +36,7 @@ export interface ExecutedTransferEvent {
   transactionHash: Hash
   blockNumber: bigint
   address: Address
+  chainId: ChainId
   args: {
     from: Address
     to: Address

@@ -50,7 +50,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
     }
 
     fetchData()
-    const interval = setInterval(fetchData, 10000)
+    const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [sdk, address, fromChain])
 
@@ -59,14 +59,14 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
     address: address,
     chainId: fromChain,
     token: SUPPORTED_CHAINS[fromChain].tokenAddress,
-    query: { refetchInterval: 10000 }
+    query: { refetchInterval: 30000 }
   });
 
   const { data: toBalanceData } = useBalance({
     address: address,
     chainId: toChain,
     token: SUPPORTED_CHAINS[toChain].tokenAddress,
-    query: { refetchInterval: 10000 }
+    query: { refetchInterval: 30000 }
   });
 
   useEffect(() => {

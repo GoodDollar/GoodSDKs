@@ -48,12 +48,6 @@ export const SUPPORTED_CHAINS: Record<number, BridgeChain> = {
   },
 }
 
-export const CHAIN_NAMES = {
-  42220: "CELO",
-  122: "FUSE",
-  1: "ETH",
-  50: "XDC",
-} as const
 
 export const BRIDGE_PROTOCOLS: Record<BridgeProtocol, string> = {
   AXELAR: "AXELAR",

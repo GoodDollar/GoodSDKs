@@ -22,4 +22,4 @@ export function normalizeAmount(amount: bigint, fromChainId: ChainId): bigint {
   return amount * (10n ** BigInt(decimalShift))
 }
 
-export { formatUnits as formatAmount, parseUnits as parseAmount }
+export { formatUnits, parseUnits } from "viem"

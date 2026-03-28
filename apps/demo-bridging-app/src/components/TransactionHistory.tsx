@@ -3,14 +3,15 @@ import { useAccount } from "wagmi"
 import { useBridgingSDK, useBridgeHistory } from "@goodsdks/react-hooks"
 import { BridgingSDK } from "@goodsdks/bridging-sdk"
 import type { BridgeRequestEvent, ExecutedTransferEvent } from "@goodsdks/bridging-sdk"
+import { publicClients } from "../config"
 
 export function TransactionHistory() {
   const { address, isConnected } = useAccount()
-  const { history, loading } = useBridgeHistory(address)
+  const { history, loading, error } = useBridgeHistory(address, publicClients)
 
   if (!isConnected) return null
 
-  if (loading) {
+  if (loading && history.length === 0) {
     return (
       <div className="flex justify-center py-20">
         <svg
@@ -36,6 +37,24 @@ export function TransactionHistory() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="premium-card text-center p-12 border-red-100 bg-red-50/30">
+        <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p className="text-red-900 font-bold text-lg mb-2">
+          Failed to load history
+        </p>
+        <p className="text-red-600 font-medium">
+          {error}
+        </p>
+      </div>
+    )
+  }
+
   if (history.length === 0) {
     return (
       <div className="premium-card text-center p-12">
@@ -52,7 +71,7 @@ export function TransactionHistory() {
   return (
     <div className="space-y-4">
       {history.map((tx: BridgeRequestEvent | ExecutedTransferEvent, index: number) => (
-        <TransactionCard key={index} transaction={tx} />
+        <TransactionCard key={`${tx.transactionHash}-${index}`} transaction={tx} />
       ))}
     </div>
   )
@@ -64,6 +83,11 @@ function TransactionCard({ transaction }: { transaction: BridgeRequestEvent | Ex
   const [statusLoading, setStatusLoading] = useState(false)
   const type = "targetChainId" in transaction.args ? "request" : "executed"
   const protocol = transaction.args.bridge
+
+  // Determine current display status
+  const trackedStatus = status?.status || (type === "executed" ? "completed" : "pending")
+  const statusLabel = trackedStatus === "completed" ? "Completed" : trackedStatus === "failed" ? "Failed" : "Initiated"
+  const statusColor = trackedStatus === "completed" ? "bg-emerald-500" : trackedStatus === "failed" ? "bg-red-500" : "bg-blue-500"
 
   const fetchStatus = async () => {
     if (!sdk || type !== "request") return
@@ -91,12 +115,12 @@ function TransactionCard({ transaction }: { transaction: BridgeRequestEvent | Ex
   }
 
   const srcChainId = type === "request"
-    ? sdk?.publicClient.chain?.id || 42220
-    : (transaction.args as ExecutedTransferEvent["args"]).sourceChainId
+    ? transaction.chainId
+    : (transaction as ExecutedTransferEvent).args.sourceChainId
 
   const dstChainId = type === "request"
-    ? (transaction.args as BridgeRequestEvent["args"]).targetChainId
-    : sdk?.publicClient.chain?.id || 42220
+    ? (transaction as BridgeRequestEvent).args.targetChainId
+    : transaction.chainId
 
   const amount = formatAmountValue(transaction.args.amount, Number(srcChainId))
 
@@ -112,16 +136,16 @@ function TransactionCard({ transaction }: { transaction: BridgeRequestEvent | Ex
             <span className="text-slate-300">•</span>
             <span className="text-slate-400 text-sm font-medium">
               {type === "request"
-                ? new Date(Number((transaction.args as BridgeRequestEvent["args"]).timestamp) * 1000).toLocaleString()
+                ? new Date(Number((transaction as BridgeRequestEvent).args.timestamp) * 1000).toLocaleString()
                 : `Block #${transaction.blockNumber}`}
             </span>
           </div>
           <div className="flex items-center gap-3">
             <div
-              className={`w-2 h-2 rounded-full ${type === "request" ? "bg-blue-500" : "bg-emerald-500"}`}
+              className={`w-2 h-2 rounded-full ${statusColor}`}
             ></div>
             <span className="text-slate-500 text-sm font-semibold capitalize">
-              {type === "request" ? "Initiated" : "Completed"}
+              {statusLabel}
             </span>
           </div>
         </div>
@@ -177,7 +201,7 @@ function TransactionCard({ transaction }: { transaction: BridgeRequestEvent | Ex
         </div>
 
         <div className="flex items-center gap-3">
-          {type === "request" && !status && (
+          {type === "request" && trackedStatus !== "completed" && (
             <button
               onClick={fetchStatus}
               disabled={statusLoading}
@@ -187,11 +211,13 @@ function TransactionCard({ transaction }: { transaction: BridgeRequestEvent | Ex
             </button>
           )}
 
-          {status && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-100">
-              <div className="animate-pulse w-2 h-2 rounded-full bg-orange-400"></div>
-              <span className="text-orange-600 font-bold text-sm">
-                {BridgingSDK.getStatusLabel(status)}
+          {trackedStatus === "completed" && type === "request" && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-100">
+              <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-emerald-600 font-bold text-sm">
+                Verified
               </span>
             </div>
           )}

@@ -9,8 +9,6 @@ export type {
   BridgeRequestEvent,
   ExecutedTransferEvent,
   EventOptions,
-  FeeEstimate,
-  CanBridgeResult,
   TransactionStatus,
   BridgeHistory,
   BridgeTransaction,
@@ -20,7 +18,7 @@ export type {
 } from "./types"
 
 // Utilities
-export { normalizeAmount, formatAmount, parseAmount } from "./utils/decimals"
+export { normalizeAmount, formatUnits, parseUnits } from "./utils/decimals"
 
 export {
   fetchFeeEstimates,
@@ -36,7 +34,6 @@ export {
 // Constants
 export {
   SUPPORTED_CHAINS,
-  CHAIN_NAMES,
   BRIDGE_PROTOCOLS,
   API_ENDPOINTS,
   EXPLORER_URLS,
