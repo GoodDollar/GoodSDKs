@@ -4,6 +4,8 @@
 
 ## Installation
 
+Install the hooks package alongside its peer dependencies:
+
 ```bash
 yarn add @goodsdks/react-hooks @goodsdks/citizen-sdk wagmi viem
 # or
@@ -57,8 +59,6 @@ export const App = () => (
 
 ## Hooks
 
-### Identity & Claim
-
 - `useIdentitySDK(env?: contractEnv)`
   - Initialises the `IdentitySDK` using the active Wagmi public and wallet clients.
   - `env` defaults to `"production"` and accepts `"staging"` or `"development"`.
@@ -67,91 +67,6 @@ export const App = () => (
   - Surfaces entitlement errors via the returned `error` string.
 
 Both hooks re-run whenever the connected wallet, public client, or environment changes.
-
-### Wallet-Link (IdentityV4)
-
-All wallet-link hooks live in a dedicated file (`wagmi-wallet-link-sdk.ts`) and are exported from the package root.
-
-#### `useConnectAccount(sdk)`
-
-Manages the connect-account flow including the security confirmation prompt.
-
-```tsx
-const { connect, loading, error, txHash, pendingSecurityConfirm, confirmSecurity, reset } =
-  useConnectAccount(sdk)
-
-// Trigger the flow — a confirmation dialog will appear via pendingSecurityConfirm
-await connect("0xSecondaryWallet")
-
-// Render the security prompt
-if (pendingSecurityConfirm) {
-  return (
-    <div>
-      <pre>{pendingSecurityConfirm.message}</pre>
-      <button onClick={() => confirmSecurity(true)}>Confirm</button>
-      <button onClick={() => confirmSecurity(false)}>Cancel</button>
-    </div>
-  )
-}
-```
-
-#### `useDisconnectAccount(sdk)`
-
-Same API as `useConnectAccount` but calls `disconnectAccount` on the SDK.
-
-#### `useConnectedStatus(sdk, account?, chainId?, publicClients?)`
-
-Fetches and watches wallet-link status. Omit `chainId` to query all supported chains. For all-chains queries pass app-configured `publicClients` keyed by `SupportedChains` — any chain without a client returns an error entry rather than silently skipping.
-
-```tsx
-import { createPublicClient, http } from "viem"
-import { SupportedChains } from "@goodsdks/citizen-sdk"
-
-const publicClients = {
-  [SupportedChains.CELO]: createPublicClient({ transport: http("https://forno.celo.org") }),
-  [SupportedChains.FUSE]: createPublicClient({ transport: http("https://rpc.fuse.io") }),
-  [SupportedChains.XDC]:  createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
-}
-
-const { statuses, loading, error, refetch } = useConnectedStatus(
-  sdk,
-  "0xAccount",
-  undefined,
-  publicClients,
-)
-
-statuses.forEach(({ chainId, chainName, isConnected, root, error }) => {
-  console.log(chainId, chainName, isConnected, root, error)
-})
-```
-
-#### `useWalletLink(env?, watchAccount?, chainId?, publicClients?)`
-
-Composite hook. Returns `{ sdk, sdkLoading, sdkError, connectAccount, disconnectAccount, connectedStatus }`. Reuses `useIdentitySDK` internally so there is a single SDK initialisation path.
-
-```tsx
-import { createPublicClient, http } from "viem"
-import { SupportedChains } from "@goodsdks/citizen-sdk"
-
-const publicClients = {
-  [SupportedChains.CELO]: createPublicClient({ transport: http("https://forno.celo.org") }),
-  [SupportedChains.FUSE]: createPublicClient({ transport: http("https://rpc.fuse.io") }),
-  [SupportedChains.XDC]:  createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
-}
-
-const { connectAccount, disconnectAccount, connectedStatus } = useWalletLink(
-  "production",
-  "0xAccount",
-  undefined,
-  publicClients,
-)
-
-// connectAccount.connect(targetAddress)
-// disconnectAccount.disconnect(targetAddress)
-// connectedStatus.statuses[0].isConnected
-```
-
-The `reset()` helper on each action hook resets `loading`, `error`, `txHash`, and `pendingSecurityConfirm` together.
 
 ## Demo & Further Reading
 
