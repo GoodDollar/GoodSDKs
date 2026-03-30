@@ -9,6 +9,8 @@ import {
     calculateFlowRate,
     formatFlowRate,
     flowRateFromAmount,
+    getSuperTokenAddress,
+    getSuperTokenAddressSafe,
     getG$Token,
     getSUPToken,
 } from "./index"
@@ -19,6 +21,11 @@ import {
 
 const createMockPublicClient = (chainId: number = SupportedChains.CELO) => ({
     chain: { id: chainId, name: "Celo" },
+    readContract: vi.fn().mockImplementation(({ functionName }) => {
+        if (functionName === "getFlowrate") return BigInt(321)
+        if (functionName === "getFlowInfo") return [BigInt(123), BigInt(321), BigInt(456), BigInt(789)]
+        return BigInt(0)
+    }),
     simulateContract: vi.fn().mockResolvedValue({ request: {} }),
     waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: "success" }),
 } as any)
@@ -72,6 +79,20 @@ describe("Utilities", () => {
         it("should derive flow rate from amount string", () => {
             const flowRate = flowRateFromAmount("100", "month")
             expect(flowRate).toBe(parseEther("100") / BigInt(2592000))
+        })
+    })
+
+    describe("Default token helpers", () => {
+        it("should resolve the default Base token to SUP", () => {
+            expect(getSuperTokenAddress(SupportedChains.BASE, "production")).toBe(
+                getSUPToken(SupportedChains.BASE, "production"),
+            )
+        })
+
+        it("should safely resolve the default Base token to SUP", () => {
+            expect(getSuperTokenAddressSafe(SupportedChains.BASE, "production")).toBe(
+                getSUPToken(SupportedChains.BASE, "production"),
+            )
         })
     })
 })
@@ -143,6 +164,42 @@ describe("StreamingSDK", () => {
             userData: "0xabcd" as `0x${string}`,
         })
         expect(hash).toBe("0xhash")
+    })
+
+    it("should read live flow rate from the CFA forwarder", async () => {
+        const sdk = new StreamingSDK(publicClient)
+        const flowRate = await sdk.getFlowRate({
+            sender: "0xsender" as Address,
+            receiver: "0xreceiver" as Address,
+            token: TEST_SUPERTOKEN,
+        })
+
+        expect(flowRate).toBe(BigInt(321))
+        expect(publicClient.readContract).toHaveBeenCalledWith(
+            expect.objectContaining({
+                functionName: "getFlowrate",
+                args: [TEST_SUPERTOKEN, "0xsender", "0xreceiver"],
+            }),
+        )
+    })
+
+    it("should read live flow info from the CFA forwarder", async () => {
+        const sdk = new StreamingSDK(publicClient)
+        const info = await sdk.getFlowInfo({
+            sender: "0xsender" as Address,
+            receiver: "0xreceiver" as Address,
+            token: TEST_SUPERTOKEN,
+        })
+
+        expect(info).toEqual({
+            sender: "0xsender",
+            receiver: "0xreceiver",
+            token: TEST_SUPERTOKEN,
+            flowRate: BigInt(321),
+            lastUpdated: BigInt(123),
+            deposit: BigInt(456),
+            owedDeposit: BigInt(789),
+        })
     })
 
     describe("Token Auto-Resolution", () => {
@@ -280,7 +337,7 @@ describe("GdaSDK", () => {
         expect(hash).toBe("0xhash")
     })
 
-    it("should fetch distribution pools (member pools) via subgraph", async () => {
+    it("should fetch distribution pools via subgraph", async () => {
         const sdk = new GdaSDK(publicClient)
         const mockAccount = "0x0000000000000000000000000000000000000001" as Address
         const mockPools = [{
@@ -300,6 +357,27 @@ describe("GdaSDK", () => {
         const pools = await sdk.getDistributionPools(mockAccount)
         expect(queryMemberPoolsSpy).toHaveBeenCalledWith(mockAccount, {})
         expect(pools).toEqual(mockPools)
+    })
+
+    it("should fetch a specific pool detail from the account's distribution pools", async () => {
+        const sdk = new GdaSDK(publicClient)
+        const mockPool = {
+            id: "0xpool" as Address,
+            token: "0xtoken" as Address,
+            totalUnits: BigInt(10),
+            totalAmountClaimed: BigInt(2),
+            flowRate: BigInt(1),
+            admin: "0xadmin" as Address,
+            isConnected: true,
+        }
+
+        const getDistributionPoolsSpy = vi
+            .spyOn(sdk, "getDistributionPools")
+            .mockResolvedValue([mockPool])
+
+        const pool = await sdk.getPoolDetails("0xpool" as Address, "0xaccount" as Address)
+        expect(getDistributionPoolsSpy).toHaveBeenCalledWith("0xaccount")
+        expect(pool).toEqual(mockPool)
     })
 })
 

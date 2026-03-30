@@ -94,7 +94,7 @@ function StreamingDemo() {
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
 
-  const createStream = async () => {
+  const setStream = async () => {
     if (!publicClient || !walletClient) return
 
     const sdk = new StreamingSDK(publicClient, walletClient, {
@@ -103,17 +103,17 @@ function StreamingDemo() {
 
     const flowRate = calculateFlowRate(parseEther('100'), 'month')
     
-    const hash = await sdk.createStream({
+    const hash = await sdk.createOrUpdateStream({
       receiver: '0x...',
       token: '<G$_TOKEN_ADDRESS>', // replace with your local/testnet token address
       flowRate,
       onHash: (hash) => console.log('Transaction:', hash)
     })
 
-    console.log('Stream created:', hash)
+    console.log('Stream set:', hash)
   }
 
-  return <button onClick={createStream}>Create Stream</button>
+  return <button onClick={setStream}>Create / Update Stream</button>
 }
 ```
 
@@ -137,9 +137,9 @@ async function testSubgraph() {
 
   console.log('Streams found:', streams)
 
-  // Test querying member pools for a specific account
+  // Test querying member-scoped distribution pools with account-scoped membership status
   const pools = await client.queryMemberPools('0x...')
-  console.log('GDA member pools:', pools)
+  console.log('GDA pools:', pools)
 
   // Test querying SUP reserves (Base) - requires The Graph Gateway apiKey
   const supClient = new SubgraphClient(SupportedChains.BASE, { apiKey: process.env.GRAPH_API_KEY })
@@ -226,7 +226,7 @@ console.log('All exports loaded successfully')
 Test the React hooks in a component:
 
 ```typescript
-import { useCreateStream, useStreamList } from '@goodsdks/react-hooks'
+import { useSetStream, useStreamList } from '@goodsdks/react-hooks'
 import { useAccount } from 'wagmi'
 
 function StreamingComponent() {
@@ -236,17 +236,17 @@ function StreamingComponent() {
     enabled: !!address 
   })
 
-  const { mutate: createStream } = useCreateStream()
+  const { mutate: setStream } = useSetStream()
 
   return (
     <div>
       <p>Streams: {streams?.length ?? 0}</p>
-      <button onClick={() => createStream({
+      <button onClick={() => setStream({
         receiver: '0x...',
         token: '0x...',
         flowRate: BigInt('1000000000000000')
       })}>
-        Create Stream
+        Create / Update Stream
       </button>
     </div>
   )

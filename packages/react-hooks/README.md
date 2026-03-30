@@ -68,16 +68,25 @@ export const App = () => (
 
 ### Streaming Hooks
 
-- `useStreamList({ account, environment, enabled })`
-  - Fetches all active streams for an account (subgraph query is chain-based; `environment` only affects SDK token resolution for write operations).
+- `useStreamingSDK({ environment, defaultToken })`
+  - Returns `{ sdk, loading, error }` for components that want direct access to `StreamingSDK`.
+- `useStreamList({ account, environment, first, skip, enabled })`
+  - Fetches active streams for an account.
+  - Supports merged pagination via `first` and `skip`.
+- `useSuperTokenBalance({ account, token, environment, enabled })`
+  - Fetches the current SuperToken snapshot balance for the selected token.
+- `useBalanceHistory({ account, token, environment, first, skip, enabled })`
+  - Fetches historical balance snapshots from the subgraph.
+- `useFlowRate({ sender, receiver, token, environment, enabled })`
+  - Reads the current live CFA flow rate directly from the forwarder.
 - `usePoolMemberships({ account, enabled })`
   - Fetches GDA pool memberships for an account, including `isConnected` status (recommended for most UIs).
-- `useGDAPools({ account, enabled })`
-  - Lists distribution pools where `account` is a member, including `isConnected` status per pool.
-- `useSupReserves({ apiKey, enabled })`
-  - Fetches SUP reserve holdings. **Requires `apiKey`** (The Graph Gateway) on Base mainnet.
+- `useSupReserves({ account, apiKey, enabled })`
+  - Fetches SUP reserve holdings for the provided account. **Requires `apiKey`** (The Graph Gateway) on Base mainnet.
 - `useCreateStream()`, `useUpdateStream()`, `useDeleteStream()`
-  - Mutators for managing 1-to-1 streams. Supports `token` as `TokenSymbol` ('G$' | 'SUP') or `Address`.
+  - Low-level mutators for managing 1-to-1 streams. Supports `token` as `TokenSymbol` ('G$' | 'SUP') or `Address`.
+- `useSetStream()`
+  - Recommended create-or-update mutation backed by `setFlowrate`.
 - `useConnectToPool()`, `useDisconnectFromPool()`
   - Mutators for GDA pool memberships.
 

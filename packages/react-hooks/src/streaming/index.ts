@@ -7,11 +7,11 @@ import {
     GdaSDK,
     SubgraphClient,
     SupportedChains,
-    type SetStreamParams,
     type StreamInfo,
-    type GDAPool,
     type PoolMembership,
     type SUPReserveLocker,
+    type SuperTokenBalance,
+    getSuperTokenAddressForSymbolSafe,
     type Environment,
     type TokenSymbol,
 } from "@goodsdks/streaming-sdk"
@@ -51,7 +51,6 @@ export interface UseSetStreamParams {
     receiver?: Address
     token?: TokenSymbol | Address
     flowRate?: bigint
-    userData?: `0x${string}`
     environment?: Environment
 }
 
@@ -59,11 +58,39 @@ export interface UseStreamListParams {
     account: Address
     direction?: "incoming" | "outgoing" | "all"
     environment?: Environment
+    first?: number
+    skip?: number
     enabled?: boolean
 }
 
-export interface UseGDAPoolsParams {
-    account: Address
+export interface UseStreamingSDKParams {
+    environment?: Environment
+    defaultToken?: TokenSymbol | Address
+}
+
+export interface UseSuperTokenBalanceParams {
+    account?: Address
+    token?: TokenSymbol | Address
+    environment?: Environment
+    enabled?: boolean
+}
+
+export interface UseBalanceHistoryParams {
+    account?: Address
+    token?: TokenSymbol | Address
+    fromTimestamp?: number
+    toTimestamp?: number
+    first?: number
+    skip?: number
+    environment?: Environment
+    enabled?: boolean
+}
+
+export interface UseFlowRateParams {
+    sender?: Address
+    receiver?: Address
+    token?: TokenSymbol | Address
+    environment?: Environment
     enabled?: boolean
 }
 
@@ -123,6 +150,61 @@ function useStreamingSdks(options?: { defaultToken?: TokenSymbol | Address }) {
     }, [publicClient, walletClient, options?.defaultToken])
 }
 
+function resolveTokenFilter(
+    chainId: number | undefined,
+    environment: Environment,
+    token?: TokenSymbol | Address,
+): Address | undefined {
+    if (!token) return undefined
+    if (token === "G$" || token === "SUP") {
+        return getSuperTokenAddressForSymbolSafe(chainId, environment, token)
+    }
+    return token
+}
+
+function invalidateStreamingQueries(queryClient: ReturnType<typeof useQueryClient>) {
+    queryClient.invalidateQueries({ queryKey: ["streams"] })
+    queryClient.invalidateQueries({ queryKey: ["super-token-balance"] })
+    queryClient.invalidateQueries({ queryKey: ["balance-history"] })
+    queryClient.invalidateQueries({ queryKey: ["flow-rate"] })
+}
+
+export function useStreamingSDK({
+    environment = "production",
+    defaultToken,
+}: UseStreamingSDKParams = {}) {
+    const publicClient = usePublicClient()
+    const { data: walletClient } = useWalletClient()
+
+    const result = useMemo(() => {
+        if (!publicClient) {
+            return { sdk: null as StreamingSDK | null, error: null as string | null }
+        }
+
+        try {
+            return {
+                sdk: new StreamingSDK(
+                    publicClient,
+                    walletClient ? (walletClient as WalletClient) : undefined,
+                    { environment, defaultToken },
+                ),
+                error: null,
+            }
+        } catch (error) {
+            return {
+                sdk: null,
+                error: error instanceof Error ? error.message : "Failed to initialize StreamingSDK",
+            }
+        }
+    }, [defaultToken, environment, publicClient, walletClient])
+
+    return {
+        sdk: result.sdk,
+        loading: !publicClient,
+        error: result.error,
+    }
+}
+
 /**
  * React Hooks for Superfluid operations
  */
@@ -147,7 +229,7 @@ export function useCreateStream() {
             return sdk.createStream({ receiver, token, flowRate, userData })
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["streams"] })
+            invalidateStreamingQueries(queryClient)
         },
     })
 }
@@ -175,11 +257,15 @@ export function useSetStream() {
             return sdk.createOrUpdateStream({ receiver, token, flowRate })
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["streams"] })
+            invalidateStreamingQueries(queryClient)
         },
     })
 }
 
+/**
+ * Low-level explicit updateFlow wrapper.
+ * Prefer useSetStream() for the recommended setFlowrate path.
+ */
 export function useUpdateStream() {
     const sdks = useStreamingSdks()
     const queryClient = useQueryClient()
@@ -197,7 +283,7 @@ export function useUpdateStream() {
             return sdk.updateStream({ receiver, token, newFlowRate, userData })
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["streams"] })
+            invalidateStreamingQueries(queryClient)
         },
     })
 }
@@ -218,7 +304,7 @@ export function useDeleteStream() {
             return sdk.deleteStream({ receiver, token, userData })
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["streams"] })
+            invalidateStreamingQueries(queryClient)
         },
     })
 }
@@ -227,43 +313,128 @@ export function useStreamList({
     account,
     direction = "all",
     environment = "production",
+    first,
+    skip,
     enabled = true,
 }: UseStreamListParams) {
     const sdks = useStreamingSdks()
     const publicClient = usePublicClient()
 
     return useQuery<StreamInfo[]>({
-        queryKey: ["streams", account, direction, environment, publicClient?.chain?.id],
+        queryKey: ["streams", account, direction, environment, first, skip, publicClient?.chain?.id],
         queryFn: async () => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.getActiveStreams({ account, direction })
+            return sdk.getActiveStreams({ account, direction, first, skip })
         },
         enabled: enabled && !!account && !!publicClient,
     })
 }
 
-export function useGDAPools({
+export function useSuperTokenBalance({
     account,
+    token,
+    environment = "production",
     enabled = true,
-}: UseGDAPoolsParams) {
+}: UseSuperTokenBalanceParams) {
+    const sdks = useStreamingSdks()
     const publicClient = usePublicClient()
-    const sdk = useMemo(() => {
-        if (!publicClient) return null
-        try {
-            return new GdaSDK(publicClient, undefined, { chainId: publicClient.chain?.id })
-        } catch (e) {
-            return null
-        }
-    }, [publicClient])
 
-    return useQuery<GDAPool[]>({
-        queryKey: ["gda-pools", account, publicClient?.chain?.id],
+    return useQuery<bigint>({
+        queryKey: [
+            "super-token-balance",
+            account,
+            token,
+            environment,
+            publicClient?.chain?.id,
+        ],
         queryFn: async () => {
-            if (!sdk) throw new Error("Public client not available")
-            return sdk.getDistributionPools(account)
+            if (!account) throw new Error("Account is required")
+            const sdk = sdks.get(environment)
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
+            return sdk.getSuperTokenBalance(account, token)
         },
-        enabled: enabled && !!publicClient && !!account,
+        enabled: enabled && !!account && !!publicClient,
+    })
+}
+
+export function useBalanceHistory({
+    account,
+    token,
+    fromTimestamp,
+    toTimestamp,
+    first,
+    skip,
+    environment = "production",
+    enabled = true,
+}: UseBalanceHistoryParams) {
+    const sdks = useStreamingSdks()
+    const publicClient = usePublicClient()
+
+    return useQuery<SuperTokenBalance[]>({
+        queryKey: [
+            "balance-history",
+            account,
+            token,
+            fromTimestamp,
+            toTimestamp,
+            first,
+            skip,
+            environment,
+            publicClient?.chain?.id,
+        ],
+        queryFn: async () => {
+            if (!account) throw new Error("Account is required")
+            const sdk = sdks.get(environment)
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
+
+            const history = await sdk.getBalanceHistory({
+                account,
+                fromTimestamp,
+                toTimestamp,
+                first,
+                skip,
+            })
+
+            const tokenFilter = resolveTokenFilter(publicClient?.chain?.id, environment, token)
+            if ((token === "G$" || token === "SUP") && !tokenFilter) return []
+            if (!tokenFilter) return history
+
+            return history.filter(
+                (entry) => entry.token.toLowerCase() === tokenFilter.toLowerCase(),
+            )
+        },
+        enabled: enabled && !!account && !!publicClient,
+    })
+}
+
+export function useFlowRate({
+    sender,
+    receiver,
+    token,
+    environment = "production",
+    enabled = true,
+}: UseFlowRateParams) {
+    const sdks = useStreamingSdks()
+    const publicClient = usePublicClient()
+
+    return useQuery<bigint>({
+        queryKey: [
+            "flow-rate",
+            sender,
+            receiver,
+            token,
+            environment,
+            publicClient?.chain?.id,
+        ],
+        queryFn: async () => {
+            if (!sender) throw new Error("Sender is required")
+            if (!receiver) throw new Error("Receiver is required")
+            const sdk = sdks.get(environment)
+            if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
+            return sdk.getFlowRate({ sender, receiver, token })
+        },
+        enabled: enabled && !!sender && !!receiver && !!publicClient,
     })
 }
 

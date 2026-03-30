@@ -4,7 +4,7 @@ A demonstration application showcasing the GoodDollar Superfluid Streaming SDK w
 
 ## What This Demo Shows
 
-This app demonstrates the key improvement in the Streaming SDK: you no longer need to manually specify G$ token addresses. The SDK automatically resolves the correct token based on your selected environment.
+This app demonstrates the key improvement in the Streaming SDK: you no longer need to manually specify G$ token addresses, and the recommended write path is a single `createOrUpdateStream()` call backed by Superfluid's `setFlowrate`. The SDK automatically resolves the correct token based on your selected environment.
 
 ### Before (Old API)
 ```typescript
@@ -21,7 +21,7 @@ const sdk = new StreamingSDK(publicClient, walletClient, {
   environment: 'production' // Auto-resolves G$ token
 })
 
-await sdk.createStream({
+await sdk.createOrUpdateStream({
   receiver: '<RECEIVER_ADDRESS>',
   // No token parameter needed!
   flowRate
@@ -32,10 +32,13 @@ await sdk.createStream({
 
 - **Environment Selector** - Switch between production, staging, and development
 - **Wallet Connection** - Connect via WalletConnect to Celo or Base
-- **Create Streams** - Create G$ streams with a simple form (no token address needed!)
-- **View Active Streams** - See all your incoming and outgoing streams
+- **Set Streams** - Create or update streams with a single `setFlowrate`-backed form
+- **View Active Streams** - See indexed active streams for the connected wallet
+- **Token Balances** - Display the current G$ or SUP SuperToken balance
+- **Balance History** - Display recent subgraph balance snapshots for the selected token
 - **Manage Streams** - Delete streams you've created
-- **GDA Memberships** - View your pool memberships and connect/disconnect with `isConnected` status
+- **GDA Memberships** - View your pool memberships and connect/disconnect with account-scoped `isConnected` status
+- **SUP Reserves** - View Base reserve holdings when `VITE_GRAPH_API_KEY` is configured
 - **Visual API Examples** - See the actual code being used in real-time
 
 ## Setup

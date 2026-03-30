@@ -15,10 +15,11 @@ import {
 import { config as tamaguiConfigBase } from "@tamagui/config/v3"
 import { useAccount, usePublicClient, useSwitchChain } from "wagmi"
 import {
-    useCreateStream,
-    useUpdateStream,
     useDeleteStream,
+    useSetStream,
     useStreamList,
+    useSuperTokenBalance,
+    useBalanceHistory,
     usePoolMemberships,
     useSupReserves,
     useConnectToPool,
@@ -36,9 +37,16 @@ import {
     type SUPReserveLocker,
     type TokenSymbol,
 } from "@goodsdks/streaming-sdk"
-import { parseEther, type Address } from "viem"
+import { formatEther, parseEther, type Address } from "viem"
 
 const tamaguiConfig = createTamagui(tamaguiConfigBase)
+
+function formatTokenAmount(amount: bigint): string {
+    const formatted = formatEther(amount)
+    const [integer, fraction] = formatted.split(".")
+    if (!fraction) return formatted
+    return `${integer}.${fraction.slice(0, 4)}`
+}
 
 // mutation wrapper with error/success alerts
 function runMutationWithAlerts<TArgs>(
@@ -72,12 +80,24 @@ function runMutationWithAlerts<TArgs>(
 }
 
 // UI Components
-const SectionCard: React.FC<React.PropsWithChildren<{ gap?: string | number; bg?: string; title?: string; borderColor?: string; flex?: number }>> = ({
+const SectionCard: React.FC<React.PropsWithChildren<{
+    gap?: string | number
+    bg?: string
+    title?: string
+    subtitle?: string
+    headerAction?: React.ReactNode
+    borderColor?: string
+    flex?: number
+    contentMinHeight?: number
+}>> = ({
     children,
     gap = "$3",
     bg = "white",
     title,
+    subtitle,
+    headerAction,
     borderColor = "#E2E8F0",
+    contentMinHeight,
 }) => (
     <YStack
         padding="$4"
@@ -91,11 +111,56 @@ const SectionCard: React.FC<React.PropsWithChildren<{ gap?: string | number; bg?
         shadowOffset={{ width: 0, height: 2 }}
         shadowRadius={4}
     >
-        {title && (
-            <Text fontSize={18} fontWeight="bold" marginBottom="$2" color="$blue11">
-                {title}
-            </Text>
+        {(title || headerAction) && (
+            <XStack justifyContent="space-between" alignItems="flex-start" gap="$3">
+                <YStack flex={1} gap="$1">
+                    {title ? (
+                        <Text fontSize={18} fontWeight="bold" color="$blue11">
+                            {title}
+                        </Text>
+                    ) : null}
+                    {subtitle ? (
+                        <Text fontSize={11} color="$gray10" lineHeight={16}>
+                            {subtitle}
+                        </Text>
+                    ) : null}
+                </YStack>
+                {headerAction ? headerAction : null}
+            </XStack>
         )}
+        <YStack gap={gap} minHeight={contentMinHeight}>
+            {children}
+        </YStack>
+    </YStack>
+)
+
+const InlineActionButton: React.FC<{
+    label: string
+    onPress: () => void
+}> = ({ label, onPress }) => (
+    <Button
+        size="$2"
+        chromeless
+        color="$blue10"
+        fontWeight="600"
+        onPress={onPress}
+        paddingHorizontal="$1"
+    >
+        {label}
+    </Button>
+)
+
+const CenteredCardState: React.FC<React.PropsWithChildren<{ minHeight?: number }>> = ({
+    children,
+    minHeight = 140,
+}) => (
+    <YStack
+        minHeight={minHeight}
+        justifyContent="center"
+        alignItems="center"
+        paddingVertical="$4"
+        paddingHorizontal="$3"
+    >
         {children}
     </YStack>
 )
@@ -106,6 +171,7 @@ const OperationSection: React.FC<{
     buttonColor: string
     isLoading: boolean
     onAction: (receiver: string, amount: string) => void
+    description?: string
     showAmount?: boolean
     timeUnit?: "hour" | "day" | "month"
     setTimeUnit?: (unit: "hour" | "day" | "month") => void
@@ -116,6 +182,7 @@ const OperationSection: React.FC<{
     buttonColor,
     isLoading,
     onAction,
+    description,
     showAmount = true,
     timeUnit,
     setTimeUnit,
@@ -125,7 +192,7 @@ const OperationSection: React.FC<{
         const [amount, setAmount] = useState("10")
 
         return (
-            <SectionCard title={title}>
+            <SectionCard title={title} subtitle={description}>
                 <Input
                     placeholder="Receiver 0x..."
                     value={receiver}
@@ -134,33 +201,38 @@ const OperationSection: React.FC<{
                     bg="white"
                 />
                 {showAmount && (
-                    <XStack gap="$2" alignItems="center">
-                        <Input
-                            flex={1}
-                            placeholder="Amount"
-                            value={amount}
-                            onChangeText={setAmount}
-                            borderColor="#CBD5E0"
-                            bg="white"
-                        />
-                        {setTimeUnit && (
-                            <XStack backgroundColor="#EDF2F7" borderRadius="$3" padding="$1">
-                                {(["hour", "day", "month"] as const).map(unit => (
-                                    <Button
-                                        key={unit}
-                                        size="$2"
-                                        onPress={() => setTimeUnit(unit)}
-                                        backgroundColor={timeUnit === unit ? "$blue10" : "transparent"}
-                                        color={timeUnit === unit ? "white" : "$gray11"}
-                                        borderWidth={0}
-                                        hoverStyle={{ backgroundColor: timeUnit === unit ? "$blue10" : "$gray3" }}
-                                    >
-                                        {unit}
-                                    </Button>
-                                ))}
-                            </XStack>
-                        )}
-                    </XStack>
+                    <YStack gap="$2">
+                        <XStack gap="$2" alignItems="center">
+                            <Input
+                                flex={1}
+                                placeholder="Amount"
+                                value={amount}
+                                onChangeText={setAmount}
+                                borderColor="#CBD5E0"
+                                bg="white"
+                            />
+                            {setTimeUnit && (
+                                <XStack backgroundColor="#EDF2F7" borderRadius="$3" padding="$1">
+                                    {(["hour", "day", "month"] as const).map(unit => (
+                                        <Button
+                                            key={unit}
+                                            size="$2"
+                                            onPress={() => setTimeUnit(unit)}
+                                            backgroundColor={timeUnit === unit ? "$blue10" : "transparent"}
+                                            color={timeUnit === unit ? "white" : "$gray11"}
+                                            borderWidth={0}
+                                            hoverStyle={{ backgroundColor: timeUnit === unit ? "$blue10" : "$gray3" }}
+                                        >
+                                            {unit}
+                                        </Button>
+                                    ))}
+                                </XStack>
+                            )}
+                        </XStack>
+                        <Text fontSize={11} color="$gray10">
+                            Amount sets a streaming rate for the selected time unit. It does not transfer that full amount immediately.
+                        </Text>
+                    </YStack>
                 )}
                 <Button
                     onPress={() => onAction(receiver, amount)}
@@ -182,10 +254,12 @@ const ActiveStreamsList: React.FC<{
     isLoading: boolean
     onRefresh: () => void
 }> = ({ streams, isLoading, onRefresh }) => (
-    <SectionCard title="Active Streams">
-        <XStack justifyContent="flex-end">
-            <Button size="$2" onPress={onRefresh} chromeless>Refresh</Button>
-        </XStack>
+    <SectionCard
+        title="Active Streams"
+        subtitle="Shows current indexed stream state for this wallet, not one-time transfer history."
+        headerAction={<InlineActionButton label="Refresh" onPress={onRefresh} />}
+        contentMinHeight={196}
+    >
         {isLoading ? <Spinner /> : (streams && streams.length > 0) ? (
             <YStack gap="$2">
                 {streams.map((s, i) => (
@@ -195,13 +269,130 @@ const ActiveStreamsList: React.FC<{
                             <Text fontSize={12} fontFamily="$mono" color="$blue11">{s.receiver?.slice(0, 10)}...{s.receiver?.slice(-6)}</Text>
                         </XStack>
                         <XStack justifyContent="space-between">
-                            <Text fontSize={12} color="$gray10" fontWeight="600">Flow Rate:</Text>
+                            <Text fontSize={12} color="$gray10" fontWeight="600">Current Rate:</Text>
                             <Text fontSize={12} fontWeight="bold" color="$green10">{formatFlowRate(s.flowRate, "month")}</Text>
+                        </XStack>
+                        <XStack justifyContent="space-between">
+                            <Text fontSize={12} color="$gray10" fontWeight="600">Indexed Streamed:</Text>
+                            <Text fontSize={12} fontWeight="600" color="$blue11">
+                                {formatTokenAmount(s.streamedSoFar ?? 0n)}
+                            </Text>
+                        </XStack>
+                        <XStack justifyContent="space-between">
+                            <Text fontSize={12} color="$gray10" fontWeight="600">Started:</Text>
+                            <Text fontSize={11} color="$gray10">
+                                {new Date(Number(s.timestamp) * 1000).toLocaleString()}
+                            </Text>
                         </XStack>
                     </YStack>
                 ))}
             </YStack>
-        ) : <Text color="$gray10" textAlign="center" padding="$4">No active streams found</Text>}
+        ) : (
+            <CenteredCardState>
+                <Text color="$gray10" textAlign="center">
+                    No active streams found
+                </Text>
+            </CenteredCardState>
+        )}
+    </SectionCard>
+)
+
+const CompactBalanceSummary: React.FC<{
+    balance?: bigint
+    isLoading: boolean
+    symbol: TokenSymbol
+    onRefresh: () => void
+}> = ({ balance, isLoading, symbol, onRefresh }) => (
+    <YStack
+        marginTop="$2"
+        padding="$3"
+        backgroundColor="#F7FAFC"
+        borderRadius="$3"
+        borderWidth={1}
+        borderColor="#E2E8F0"
+        gap="$2"
+    >
+        <XStack justifyContent="space-between" alignItems="flex-start" gap="$2">
+            <YStack gap="$1">
+                <Text fontSize={12} fontWeight="700" color="$blue11">
+                    {symbol} Balance
+                </Text>
+                <Text fontSize={11} color="$gray10">
+                    Current indexed snapshot
+                </Text>
+            </YStack>
+            <InlineActionButton label="Refresh" onPress={onRefresh} />
+        </XStack>
+        {isLoading ? (
+            <XStack minHeight={52} alignItems="center">
+                <Spinner size="small" />
+            </XStack>
+        ) : (
+            <YStack gap="$1">
+                <Text fontSize={26} fontWeight="bold" color="$blue11" lineHeight={30}>
+                    {formatTokenAmount(balance ?? 0n)}
+                </Text>
+                <Text fontSize={11} color="$gray10">
+                    Selected token balance
+                </Text>
+                <Text fontSize={10} color="$gray9">
+                    Updates follow subgraph indexing, so changes may appear a few seconds after a stream update.
+                </Text>
+            </YStack>
+        )}
+    </YStack>
+)
+
+const BalanceHistorySection: React.FC<{
+    history: { balance: bigint; updatedAtTimestamp: number; token: Address }[]
+    isLoading: boolean
+    onRefresh: () => void
+    symbol: TokenSymbol
+}> = ({ history, isLoading, onRefresh, symbol }) => (
+    <SectionCard
+        title={`Recent ${symbol} Balance Snapshots`}
+        subtitle="Indexed balance snapshot logs from the subgraph. This is not a transaction feed."
+        headerAction={<InlineActionButton label="Refresh" onPress={onRefresh} />}
+        contentMinHeight={156}
+    >
+        {isLoading ? (
+            <CenteredCardState minHeight={120}>
+                <Spinner />
+            </CenteredCardState>
+        ) : history.length > 0 ? (
+                <YStack gap="$2">
+                    {history.map((entry, index) => (
+                        <YStack
+                            key={`${entry.token}-${entry.updatedAtTimestamp}-${index}`}
+                        padding="$3"
+                        backgroundColor="#F7FAFC"
+                        borderRadius="$3"
+                        borderWidth={1}
+                        borderColor="#E2E8F0"
+                        gap="$1"
+                    >
+                        <XStack justifyContent="space-between">
+                            <Text fontSize={12} color="$gray10" fontWeight="600">Balance</Text>
+                            <Text fontSize={12} fontWeight="bold" color="$blue11">
+                                {formatTokenAmount(entry.balance)}
+                            </Text>
+                        </XStack>
+                        <Text fontSize={11} color="$gray10">
+                            {new Date(entry.updatedAtTimestamp * 1000).toLocaleString()}
+                        </Text>
+                    </YStack>
+                ))}
+            </YStack>
+        ) : (
+            <CenteredCardState>
+                <Text color="$gray10" textAlign="center">
+                    No indexed balance snapshots found yet
+                </Text>
+                <Text color="$gray9" textAlign="center" fontSize={11} maxWidth={360}>
+                    Stream transactions can exist even when this stays empty, because it only shows subgraph balance snapshot logs.
+                </Text>
+            </CenteredCardState>
+        )}
     </SectionCard>
 )
 
@@ -213,12 +404,16 @@ const GDAMembershipsSection: React.FC<{
     isConnecting: boolean
     isDisconnecting: boolean
 }> = ({ memberships, isLoading, onConnect, onDisconnect, isConnecting, isDisconnecting }) => (
-    <SectionCard title="My GDA Pool Memberships">
+    <SectionCard
+        title="My GDA Pool Memberships"
+        subtitle="Member-scoped pool status and claimed amounts from the subgraph."
+        contentMinHeight={196}
+    >
         {isLoading ? <Spinner /> : (memberships && memberships.length > 0) ? (
             <YStack gap="$2">
-                {memberships.map((m, i) => (
+                {memberships.map((membership, i) => (
                     <YStack
-                        key={`${m.pool}-${i}`}
+                        key={`${membership.pool}-${i}`}
                         padding="$3"
                         backgroundColor="#F7FAFC"
                         borderRadius="$3"
@@ -228,43 +423,47 @@ const GDAMembershipsSection: React.FC<{
                     >
                         <XStack justifyContent="space-between" ai="center">
                             <Text fontSize={12} fontWeight="bold" color="$blue11">
-                                {m.pool.slice(0, 10)}...{m.pool.slice(-6)}
+                                {membership.pool.slice(0, 10)}...{membership.pool.slice(-6)}
                             </Text>
                             <View
                                 paddingHorizontal="$2"
                                 paddingVertical="$1"
                                 borderRadius="$2"
-                                backgroundColor={m.isConnected ? "$green4" : "$gray3"}
+                                backgroundColor={membership.isConnected ? "$green4" : "$gray3"}
                             >
-                                <Text fontSize={10} color={m.isConnected ? "$green10" : "$gray10"}>
-                                    {m.isConnected ? "Connected" : "Disconnected"}
+                                <Text fontSize={10} color={membership.isConnected ? "$green10" : "$gray10"}>
+                                    {membership.isConnected ? "Connected" : "Disconnected"}
                                 </Text>
                             </View>
                         </XStack>
 
                         <XStack justifyContent="space-between">
                             <Text fontSize={11} color="$gray10">
-                                Units: <Text fontWeight="600" color="$gray12">{m.units.toString()}</Text>
+                                Units: <Text fontWeight="600" color="$gray12">{membership.units.toString()}</Text>
                             </Text>
                             <Text fontSize={11} color="$gray10">
-                                Claimed: <Text fontWeight="600" color="$gray12">{m.totalAmountClaimed.toString()}</Text>
+                                Claimed: <Text fontWeight="600" color="$gray12">{formatTokenAmount(membership.totalAmountClaimed)}</Text>
                             </Text>
                         </XStack>
 
                         <Button
-                            backgroundColor={m.isConnected ? "$red10" : "$green10"}
+                            backgroundColor={membership.isConnected ? "$red10" : "$green10"}
                             color="white"
-                            onPress={() => (m.isConnected ? onDisconnect(m.pool) : onConnect(m.pool))}
+                            onPress={() => (membership.isConnected ? onDisconnect(membership.pool) : onConnect(membership.pool))}
                             disabled={isConnecting || isDisconnecting}
                             hoverStyle={{ opacity: 0.8 }}
                         >
-                            {m.isConnected ? "Disconnect" : "Connect"}
+                            {membership.isConnected ? "Disconnect" : "Connect"}
                         </Button>
                     </YStack>
                 ))}
             </YStack>
         ) : (
-            <Text color="$gray10" textAlign="center" padding="$4">No GDA pool memberships found</Text>
+            <CenteredCardState>
+                <Text color="$gray10" textAlign="center">
+                    No GDA pool memberships found
+                </Text>
+            </CenteredCardState>
         )}
     </SectionCard>
 )
@@ -281,9 +480,11 @@ export default function App() {
     const [timeUnit, setTimeUnit] = useState<"month" | "day" | "hour">("month")
     const apiKey = import.meta.env.VITE_GRAPH_API_KEY || ""
     const hasGraphApiKey = !!apiKey
+    const RESOLVED_TOKEN_ADDR = chainId
+        ? (selectedToken === "G$" ? getG$Token(chainId, environment) : getSUPToken(chainId, environment))
+        : undefined
 
-    const { mutate: createStream, isLoading: isCreating } = useCreateStream()
-    const { mutate: updateStream, isLoading: isUpdating } = useUpdateStream()
+    const { mutate: setStream, isLoading: isSettingStream } = useSetStream()
     const { mutate: deleteStream, isLoading: isDeleting } = useDeleteStream()
     const { mutate: connectToPool, isLoading: isConnecting } = useConnectToPool()
     const { mutate: disconnectFromPool, isLoading: isDisconnecting } = useDisconnectFromPool()
@@ -295,7 +496,33 @@ export default function App() {
     } = useStreamList({
         account: address as Address,
         environment,
+        first: 10,
+        skip: 0,
         enabled: !!address,
+    })
+
+    const {
+        data: selectedTokenBalance,
+        isLoading: balanceLoading,
+        refetch: refetchBalance,
+    } = useSuperTokenBalance({
+        account: address as Address,
+        token: selectedToken,
+        environment,
+        enabled: !!address && !!RESOLVED_TOKEN_ADDR,
+    })
+
+    const {
+        data: balanceHistory,
+        isLoading: balanceHistoryLoading,
+        refetch: refetchBalanceHistory,
+    } = useBalanceHistory({
+        account: address as Address,
+        token: selectedToken,
+        environment,
+        first: 8,
+        skip: 0,
+        enabled: !!address && !!RESOLVED_TOKEN_ADDR,
     })
 
     const { data: memberships, isLoading: membershipsLoading } = usePoolMemberships({
@@ -308,6 +535,10 @@ export default function App() {
         apiKey,
         enabled: isConnected && environment === "production" && hasGraphApiKey,
     })
+
+    const recentBalanceHistory = [...(balanceHistory ?? [])]
+        .sort((left, right) => right.updatedAtTimestamp - left.updatedAtTimestamp)
+        .slice(0, 6)
 
     // Keep UI state consistent with network capabilities
     useEffect(() => {
@@ -345,36 +576,32 @@ export default function App() {
         )
     }, [chainId, isConnected, environment, hasGraphApiKey])
 
-    // Resolves address for display
-    const RESOLVED_TOKEN_ADDR = chainId
-        ? (selectedToken === "G$" ? getG$Token(chainId, environment) : getSUPToken(chainId, environment))
-        : undefined
+    const refetchIndexedViews = () => {
+        refetchStreams()
+        refetchBalance()
+        refetchBalanceHistory()
+    }
 
-    const handleCreateStream = (receiver: string, amount: string) => {
+    const refreshAfterStreamMutation = () => {
+        refetchIndexedViews()
+        if (typeof window !== "undefined") {
+            window.setTimeout(() => {
+                refetchIndexedViews()
+            }, 6000)
+        }
+    }
+
+    const handleSetStream = (receiver: string, amount: string) => {
         if (!receiver || !amount) return alert("Please fill in all fields")
         const flowRate = calculateFlowRate(parseEther(amount), timeUnit)
-        runMutationWithAlerts(createStream, {
+        runMutationWithAlerts(setStream, {
             receiver: receiver as Address,
             environment,
             flowRate,
             token: selectedToken
         }, {
-            onSuccess: () => refetchStreams(),
-            successMessage: "Stream created!"
-        })
-    }
-
-    const handleUpdateStream = (receiver: string, amount: string) => {
-        if (!receiver || !amount) return alert("Please fill in all fields")
-        const newFlowRate = calculateFlowRate(parseEther(amount), timeUnit)
-        runMutationWithAlerts(updateStream, {
-            receiver: receiver as Address,
-            environment,
-            newFlowRate,
-            token: selectedToken
-        }, {
-            onSuccess: () => refetchStreams(),
-            successMessage: "Stream updated!"
+            onSuccess: () => refreshAfterStreamMutation(),
+            successMessage: "Stream created or updated!"
         })
     }
 
@@ -385,7 +612,7 @@ export default function App() {
             environment,
             token: selectedToken
         }, {
-            onSuccess: () => refetchStreams(),
+            onSuccess: () => refreshAfterStreamMutation(),
             successMessage: "Stream deleted!"
         })
     }
@@ -409,7 +636,7 @@ export default function App() {
     return (
         <TamaguiProvider config={tamaguiConfig}>
             <ScrollView flex={1} padding="$4" backgroundColor="#F7FAFC">
-                <YStack maxWidth={800} width="100%" alignSelf="center" gap="$4" paddingBottom="$10">
+                <YStack maxWidth={920} width="100%" alignSelf="center" gap="$4" paddingBottom="$10">
 
                     <XStack justifyContent="space-between" ai="center">
                         <Text fontSize={28} fontWeight="bold" color="$blue11">Streaming SDK</Text>
@@ -417,82 +644,95 @@ export default function App() {
                     </XStack>
 
                     {/* Network and Environment selection */}
-                    <XStack gap="$4" $sm={{ fd: "column" }}>
-                        <SectionCard bg="white" gap="$2" title="NETWORK" flex={1}>
-                            <Text fontSize={14} color="$blue10" fontWeight="bold">
-                                {publicClient?.chain?.name || "Unknown"} ({chainId})
-                            </Text>
-                            <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1" flexWrap="wrap">
-                                {[
-                                    { id: SupportedChains.CELO, name: "Celo" },
-                                    { id: SupportedChains.BASE, name: "Base" },
-                                ].map(c => (
-                                    <Button
-                                        key={c.id}
-                                        size="$2"
-                                        backgroundColor={chainId === c.id ? "white" : "transparent"}
-                                        color={chainId === c.id ? "$blue10" : "$gray11"}
-                                        borderWidth={0}
-                                        elevation={chainId === c.id ? 2 : 0}
-                                        onPress={() => switchChain?.({ chainId: c.id })}
-                                    >
-                                        {c.name}
-                                    </Button>
-                                ))}
-                            </XStack>
-                        </SectionCard>
+                    <XStack gap="$4" alignItems="stretch" $sm={{ fd: "column" }}>
+                        <View flex={0.85}>
+                            <SectionCard bg="white" gap="$2" title="NETWORK">
+                                <Text fontSize={14} color="$blue10" fontWeight="bold">
+                                    {publicClient?.chain?.name || "Unknown"} ({chainId})
+                                </Text>
+                                <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1" flexWrap="wrap">
+                                    {[
+                                        { id: SupportedChains.CELO, name: "Celo" },
+                                        { id: SupportedChains.BASE, name: "Base" },
+                                    ].map(c => (
+                                        <Button
+                                            key={c.id}
+                                            size="$2"
+                                            backgroundColor={chainId === c.id ? "white" : "transparent"}
+                                            color={chainId === c.id ? "$blue10" : "$gray11"}
+                                            borderWidth={0}
+                                            elevation={chainId === c.id ? 2 : 0}
+                                            onPress={() => switchChain?.({ chainId: c.id })}
+                                        >
+                                            {c.name}
+                                        </Button>
+                                    ))}
+                                </XStack>
+                            </SectionCard>
+                        </View>
 
-                        <SectionCard bg="white" gap="$2" title="TOKEN & ENVIRONMENT" flex={1}>
-                            <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1" mb="$2">
-                                {(["G$", "SUP"] as const).map(tk => (
-                                    // Token availability is chain-dependent: G$ on Celo, SUP on Base
-                                    // Keep UI explicit to avoid "Not available" confusion.
-                                    <Button
-                                        key={tk}
-                                        size="$2"
-                                        flex={1}
-                                        backgroundColor={selectedToken === tk ? "white" : "transparent"}
-                                        color={selectedToken === tk ? "$blue10" : "$gray11"}
-                                        borderWidth={0}
-                                        elevation={selectedToken === tk ? 2 : 0}
-                                        onPress={() => setSelectedToken(tk)}
-                                        disabled={
-                                            (tk === "G$" && chainId === SupportedChains.BASE) ||
-                                            (tk === "SUP" && chainId === SupportedChains.CELO)
-                                        }
-                                        opacity={
-                                            (tk === "G$" && chainId === SupportedChains.BASE) ||
+                        <View flex={1.75}>
+                            <SectionCard bg="white" gap="$2" title="TOKEN & ENVIRONMENT">
+                                <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1" mb="$2">
+                                    {(["G$", "SUP"] as const).map(tk => (
+                                        // Token availability is chain-dependent: G$ on Celo, SUP on Base
+                                        // Keep UI explicit to avoid "Not available" confusion.
+                                        <Button
+                                            key={tk}
+                                            size="$2"
+                                            flex={1}
+                                            backgroundColor={selectedToken === tk ? "white" : "transparent"}
+                                            color={selectedToken === tk ? "$blue10" : "$gray11"}
+                                            borderWidth={0}
+                                            elevation={selectedToken === tk ? 2 : 0}
+                                            onPress={() => setSelectedToken(tk)}
+                                            disabled={
+                                                (tk === "G$" && chainId === SupportedChains.BASE) ||
                                                 (tk === "SUP" && chainId === SupportedChains.CELO)
-                                                ? 0.3
-                                                : 1
-                                        }
-                                    >
-                                        {tk}
-                                    </Button>
-                                ))}
-                            </XStack>
-                            <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1">
-                                {(["production", "staging", "development"] as const).map(env => (
-                                    <Button
-                                        key={env}
-                                        size="$2"
-                                        flex={1}
-                                        backgroundColor={environment === env ? "white" : "transparent"}
-                                        color={environment === env ? "$blue10" : "$gray11"}
-                                        borderWidth={0}
-                                        elevation={environment === env ? 2 : 0}
-                                        onPress={() => setEnvironment(env)}
-                                        disabled={chainId === SupportedChains.BASE && env !== "production"}
-                                        opacity={chainId === SupportedChains.BASE && env !== "production" ? 0.4 : 1}
-                                    >
-                                        {env.charAt(0).toUpperCase() + env.slice(1)}
-                                    </Button>
-                                ))}
-                            </XStack>
-                            <Text fontSize={11} color="$gray10" mt="$2">
-                                Current {selectedToken}: <Text fontWeight="bold" color="$blue10">{RESOLVED_TOKEN_ADDR ? `${RESOLVED_TOKEN_ADDR.slice(0, 10)}...` : "Not available"}</Text>
-                            </Text>
-                        </SectionCard>
+                                            }
+                                            opacity={
+                                                (tk === "G$" && chainId === SupportedChains.BASE) ||
+                                                    (tk === "SUP" && chainId === SupportedChains.CELO)
+                                                    ? 0.3
+                                                    : 1
+                                            }
+                                        >
+                                            {tk}
+                                        </Button>
+                                    ))}
+                                </XStack>
+                                <XStack backgroundColor="#EDF2F7" borderRadius="$2" padding="$1" gap="$1">
+                                    {(["production", "staging", "development"] as const).map(env => (
+                                        <Button
+                                            key={env}
+                                            size="$2"
+                                            flex={1}
+                                            backgroundColor={environment === env ? "white" : "transparent"}
+                                            color={environment === env ? "$blue10" : "$gray11"}
+                                            borderWidth={0}
+                                            elevation={environment === env ? 2 : 0}
+                                            onPress={() => setEnvironment(env)}
+                                            disabled={chainId === SupportedChains.BASE && env !== "production"}
+                                            opacity={chainId === SupportedChains.BASE && env !== "production" ? 0.4 : 1}
+                                        >
+                                            {env.charAt(0).toUpperCase() + env.slice(1)}
+                                        </Button>
+                                    ))}
+                                </XStack>
+                                <Text fontSize={11} color="$gray10" mt="$2">
+                                    Current {selectedToken}: <Text fontWeight="bold" color="$blue10">{RESOLVED_TOKEN_ADDR ? `${RESOLVED_TOKEN_ADDR.slice(0, 10)}...` : "Not available"}</Text>
+                                </Text>
+                                <CompactBalanceSummary
+                                    balance={selectedTokenBalance}
+                                    isLoading={balanceLoading}
+                                    symbol={selectedToken}
+                                    onRefresh={() => {
+                                        refetchBalance()
+                                        refetchBalanceHistory()
+                                    }}
+                                />
+                            </SectionCard>
+                        </View>
                     </XStack>
 
                     {chainId === SupportedChains.BASE && (
@@ -501,7 +741,7 @@ export default function App() {
                                 Base Network Mode (SUP Only)
                             </Text>
                             <Text fontSize={12} color="$orange10">
-                                Streaming and GDA Pools are not yet configured for G$ on Base. This view is filtered to show **SUP Reserves** only.
+                                This Base demo focuses on SUP balances, history, and reserve holdings. Stream write actions and GDA pool controls remain Celo-only here.
                             </Text>
                         </SectionCard>
                     )}
@@ -512,23 +752,14 @@ export default function App() {
                             <XStack gap="$4" $sm={{ fd: "column" }}>
                                 <View flex={1}>
                                     <OperationSection
-                                        title="Create Stream"
-                                        buttonText="Create Stream"
+                                        title="Set Stream"
+                                        buttonText="Create / Update Stream"
                                         buttonColor="$blue10"
-                                        isLoading={isCreating}
-                                        onAction={handleCreateStream}
+                                        isLoading={isSettingStream}
+                                        onAction={handleSetStream}
+                                        description="Uses Superfluid's recommended setFlowrate path. The same sender + receiver + token updates an existing stream; use a different receiver to create a separate stream."
                                         timeUnit={timeUnit}
                                         setTimeUnit={setTimeUnit}
-                                        disabled={!RESOLVED_TOKEN_ADDR}
-                                    />
-                                </View>
-                                <View flex={1}>
-                                    <OperationSection
-                                        title="Update Stream"
-                                        buttonText="Update Stream"
-                                        buttonColor="$orange10"
-                                        isLoading={isUpdating}
-                                        onAction={handleUpdateStream}
                                         disabled={!RESOLVED_TOKEN_ADDR}
                                     />
                                 </View>
@@ -611,6 +842,16 @@ export default function App() {
                             )}
                         </SectionCard>
                     )}
+
+                    <BalanceHistorySection
+                        history={recentBalanceHistory}
+                        isLoading={balanceHistoryLoading}
+                        onRefresh={() => {
+                            refetchBalance()
+                            refetchBalanceHistory()
+                        }}
+                        symbol={selectedToken}
+                    />
                 </YStack>
             </ScrollView>
         </TamaguiProvider>

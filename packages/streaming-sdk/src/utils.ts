@@ -30,7 +30,8 @@ export function getSuperTokenAddress(
     chainId: SupportedChains,
     environment: Environment,
 ): Address {
-    return getSuperTokenAddressForSymbol(chainId, environment, "G$")
+    const defaultToken = chainId === SupportedChains.BASE ? "SUP" : "G$"
+    return getSuperTokenAddressForSymbol(chainId, environment, defaultToken)
 }
 
 export function getSuperTokenAddressSafe(
@@ -38,7 +39,9 @@ export function getSuperTokenAddressSafe(
     environment: Environment,
 ): Address | undefined {
     if (!isSupportedChain(chainId)) return undefined
-    return getG$Token(chainId, environment)
+    return chainId === SupportedChains.BASE
+        ? getSUPToken(chainId, environment)
+        : getG$Token(chainId, environment)
 }
 
 export function getSuperTokenAddressForSymbol(

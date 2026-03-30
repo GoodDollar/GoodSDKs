@@ -12,6 +12,8 @@ import {
     CreateStreamParams,
     UpdateStreamParams,
     DeleteStreamParams,
+    LiveFlowInfo,
+    StreamLookupParams,
     StreamInfo,
     GetStreamsOptions,
     GetBalanceHistoryOptions,
@@ -117,6 +119,10 @@ export class StreamingSDK {
         )
     }
 
+    /**
+     * Low-level explicit createFlow wrapper.
+     * Prefer createOrUpdateStream() for the recommended setFlowrate path.
+     */
     async createStream(params: CreateStreamParams): Promise<Hash> {
         const { receiver, token, flowRate, userData = "0x", onHash } = params
 
@@ -147,6 +153,10 @@ export class StreamingSDK {
         )
     }
 
+    /**
+     * Low-level explicit updateFlow wrapper.
+     * Prefer createOrUpdateStream() for the recommended setFlowrate path.
+     */
     async updateStream(params: UpdateStreamParams): Promise<Hash> {
         const { receiver, token, newFlowRate, userData = "0x", onHash } = params
 
@@ -214,6 +224,67 @@ export class StreamingSDK {
             timestamp: BigInt(stream.createdAtTimestamp),
             streamedSoFar: stream.streamedUntilUpdatedAt,
         }))
+    }
+
+    /**
+     * Read the current live flow rate directly from the CFA forwarder.
+     */
+    async getFlowRate(params: StreamLookupParams): Promise<bigint> {
+        const { sender, receiver, token } = params
+
+        if (!sender) throw new Error("Sender address is required")
+        if (!receiver) throw new Error("Receiver address is required")
+
+        const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
+        if (!resolvedToken) {
+            throw new Error(
+                `Token address not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide an address explicitly or set a defaultToken symbol.`,
+            )
+        }
+
+        return this.publicClient.readContract({
+            address: this.cfaForwarder,
+            abi: cfaForwarderAbi,
+            functionName: "getFlowrate",
+            args: [resolvedToken, sender, receiver],
+        })
+    }
+
+    /**
+     * Read the current live flow info directly from the CFA forwarder.
+     */
+    async getFlowInfo(params: StreamLookupParams): Promise<LiveFlowInfo> {
+        const { sender, receiver, token } = params
+
+        if (!sender) throw new Error("Sender address is required")
+        if (!receiver) throw new Error("Receiver address is required")
+
+        const resolvedToken = this.resolveTokenSymbol(token ?? this.defaultToken)
+        if (!resolvedToken) {
+            throw new Error(
+                `Token address not available for chain ${this.chainId} in ${this.environment} environment. ` +
+                `Please provide an address explicitly or set a defaultToken symbol.`,
+            )
+        }
+
+        const [lastUpdated, flowRate, deposit, owedDeposit] =
+            await this.publicClient.readContract({
+                address: this.cfaForwarder,
+                abi: cfaForwarderAbi,
+                functionName: "getFlowInfo",
+                args: [resolvedToken, sender, receiver],
+            })
+
+        return {
+            sender,
+            receiver,
+            token: resolvedToken,
+            flowRate,
+            lastUpdated,
+            deposit,
+            owedDeposit,
+        }
     }
 
     /**

@@ -11,12 +11,15 @@ import {
   GetBalanceHistoryOptions,
 } from "../types"
 
+const SUBGRAPH_BATCH_SIZE = 100
+const MAX_SUBGRAPH_RESULTS = 5000
+
 /**
  * GraphQL query definitions
  */
-const GET_STREAMS = gql`
-  query GetStreams($account: String!, $skip: Int = 0, $first: Int = 100) {
-    outgoingStreams: streams(
+const GET_OUTGOING_STREAMS = gql`
+  query GetOutgoingStreams($account: String!, $skip: Int = 0, $first: Int = 100) {
+    streams(
       where: { sender: $account, currentFlowRate_gt: "0" }
       first: $first
       skip: $skip
@@ -32,7 +35,12 @@ const GET_STREAMS = gql`
       updatedAtTimestamp
       createdAtTimestamp
     }
-    incomingStreams: streams(
+  }
+`
+
+const GET_INCOMING_STREAMS = gql`
+  query GetIncomingStreams($account: String!, $skip: Int = 0, $first: Int = 100) {
+    streams(
       where: { receiver: $account, currentFlowRate_gt: "0" }
       first: $first
       skip: $skip
@@ -183,6 +191,26 @@ interface SubgraphPool {
 }
 interface SubgraphPoolMembership { pool: SubgraphPool; units: string; isConnected: boolean; totalAmountClaimed: string }
 interface SubgraphLocker { id: string; lockerOwner: SubgraphAccount; blockNumber: string; blockTimestamp: string }
+type StreamDirection = Exclude<GetStreamsOptions["direction"], "all">
+
+function normalizeTimestampToSubgraphSeconds(timestamp?: number): number | undefined {
+  if (timestamp === undefined) return undefined
+  return timestamp >= 1_000_000_000_000
+    ? Math.floor(timestamp / 1000)
+    : Math.floor(timestamp)
+}
+
+function mapDistributionPool(pool: SubgraphPool): GDAPool {
+  return {
+    id: pool.id as Address,
+    token: pool.token.id as Address,
+    totalUnits: BigInt(pool.totalUnits),
+    totalAmountClaimed: BigInt(pool.poolMembers?.[0]?.totalAmountClaimed ?? "0"),
+    flowRate: BigInt(pool.flowRate),
+    admin: pool.admin.id as Address,
+    isConnected: pool.poolMembers?.[0]?.isConnected ?? false,
+  }
+}
 
 export class SubgraphClient {
   private client: GraphQLClient
@@ -208,51 +236,14 @@ export class SubgraphClient {
   }
 
   async queryStreams(options: GetStreamsOptions): Promise<StreamQueryResult[]> {
-    const { account, direction = "all", first: requestedFirst, skip: requestedSkip } = options
+    const { account, direction = "all", first, skip = 0 } = options
 
-    // Internal helper for paginated request
-    const fetchBatch = async (first: number, skip: number) => {
-      if (!account) return { outgoingStreams: [], incomingStreams: [] }
-      return this.client.request<{
-        outgoingStreams: SubgraphStream[]
-        incomingStreams: SubgraphStream[]
-      }>(GET_STREAMS, { account: account.toLowerCase(), first, skip })
-    }
+    if (!account) return []
 
-    let allOutgoing: SubgraphStream[] = []
-    let allIncoming: SubgraphStream[] = []
+    const requestedWindow =
+      first === undefined ? undefined : Math.min(skip + first, MAX_SUBGRAPH_RESULTS)
 
-    if (requestedFirst !== undefined && requestedSkip !== undefined) {
-      // User requested explicit pagination, just fetch once
-      const data = await fetchBatch(requestedFirst, requestedSkip)
-      allOutgoing = data.outgoingStreams
-      allIncoming = data.incomingStreams
-    } else {
-      // Loop to fetch all records in batches of 100
-      let skip = requestedSkip ?? 0
-      const batchSize = 100
-      let hasMore = true
-
-      while (hasMore) {
-        const data = await fetchBatch(batchSize, skip)
-        allOutgoing = [...allOutgoing, ...data.outgoingStreams]
-        allIncoming = [...allIncoming, ...data.incomingStreams]
-
-        // Keep looping if either list was full
-        hasMore = (data.outgoingStreams.length === batchSize || data.incomingStreams.length === batchSize)
-        skip += batchSize
-
-        // Safety break to prevent infinite loops in case of weird subgraph behavior
-        if (skip > 5000) break
-      }
-    }
-
-    let streams: SubgraphStream[] = []
-    if (direction === "outgoing") streams = allOutgoing
-    else if (direction === "incoming") streams = allIncoming
-    else streams = [...allOutgoing, ...allIncoming]
-
-    return streams.map((s) => ({
+    const mapStreams = (streams: SubgraphStream[]) => streams.map((s) => ({
       id: s.id,
       sender: s.sender.id as Address,
       receiver: s.receiver.id as Address,
@@ -262,6 +253,31 @@ export class SubgraphClient {
       updatedAtTimestamp: Number(s.updatedAtTimestamp),
       createdAtTimestamp: Number(s.createdAtTimestamp),
     }))
+
+    if (direction === "incoming" || direction === "outgoing") {
+      const streams = await this.collectStreamsByDirection(
+        account,
+        direction,
+        requestedWindow,
+      )
+
+      return mapStreams(first === undefined ? streams.slice(skip) : streams.slice(skip, skip + first))
+    }
+
+    const [outgoing, incoming] = await Promise.all([
+      this.collectStreamsByDirection(account, "outgoing", requestedWindow),
+      this.collectStreamsByDirection(account, "incoming", requestedWindow),
+    ])
+
+    const merged = [...outgoing, ...incoming].sort(
+      (left, right) =>
+        Number(right.createdAtTimestamp) - Number(left.createdAtTimestamp),
+    )
+
+    const paginated =
+      first === undefined ? merged.slice(skip) : merged.slice(skip, skip + first)
+
+    return mapStreams(paginated)
   }
 
   async queryBalances(account: Address): Promise<SuperTokenBalance[]> {
@@ -286,8 +302,8 @@ export class SubgraphClient {
       accountTokenSnapshotLogs: SubgraphSnapshotLog[]
     }>(GET_BALANCE_HISTORY, {
       account: account.toLowerCase(),
-      fromTimestamp: fromTimestamp ? Math.floor(fromTimestamp / 1000) : undefined,
-      toTimestamp: toTimestamp ? Math.floor(toTimestamp / 1000) : undefined,
+      fromTimestamp: normalizeTimestampToSubgraphSeconds(fromTimestamp),
+      toTimestamp: normalizeTimestampToSubgraphSeconds(toTimestamp),
       first,
       skip,
     })
@@ -327,17 +343,7 @@ export class SubgraphClient {
       GET_MEMBER_POOLS,
       { account: account.toLowerCase(), first, skip }
     )
-    return data.pools.map((p) => ({
-      id: p.id as Address,
-      token: p.token.id as Address,
-      totalUnits: BigInt(p.totalUnits),
-      // Use the per-member claimed amount, not the pool-wide distributed total
-      totalAmountClaimed: BigInt(p.poolMembers?.[0]?.totalAmountClaimed ?? "0"),
-      flowRate: BigInt(p.flowRate),
-      admin: p.admin.id as Address,
-      // Surface per-member connection status returned by the filtered query
-      isConnected: p.poolMembers?.[0]?.isConnected ?? false,
-    }))
+    return data.pools.map((pool) => mapDistributionPool(pool))
   }
 
   /**
@@ -369,5 +375,51 @@ export class SubgraphClient {
       blockNumber: BigInt(l.blockNumber),
       blockTimestamp: BigInt(l.blockTimestamp),
     }))
+  }
+
+  private async fetchStreamsBatch(
+    account: Address,
+    direction: StreamDirection,
+    first: number,
+    skip: number,
+  ): Promise<SubgraphStream[]> {
+    const query = direction === "outgoing" ? GET_OUTGOING_STREAMS : GET_INCOMING_STREAMS
+    const data = await this.client.request<{ streams: SubgraphStream[] }>(
+      query,
+      {
+        account: account.toLowerCase(),
+        first,
+        skip,
+      },
+    )
+
+    return data.streams
+  }
+
+  private async collectStreamsByDirection(
+    account: Address,
+    direction: StreamDirection,
+    limit?: number,
+  ): Promise<SubgraphStream[]> {
+    const cappedLimit =
+      limit === undefined ? MAX_SUBGRAPH_RESULTS : Math.min(limit, MAX_SUBGRAPH_RESULTS)
+
+    const streams: SubgraphStream[] = []
+    let batchSkip = 0
+
+    while (batchSkip < MAX_SUBGRAPH_RESULTS) {
+      const remaining = cappedLimit - streams.length
+      if (remaining <= 0) break
+
+      const batchFirst = Math.min(SUBGRAPH_BATCH_SIZE, remaining)
+      const batch = await this.fetchStreamsBatch(account, direction, batchFirst, batchSkip)
+      streams.push(...batch)
+
+      if (batch.length < batchFirst) break
+
+      batchSkip += batch.length
+    }
+
+    return streams
   }
 }

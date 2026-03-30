@@ -41,6 +41,22 @@ export interface StreamInfo {
   streamedSoFar?: bigint
 }
 
+export interface StreamLookupParams {
+  sender: Address
+  receiver: Address
+  token?: TokenSymbol | Address
+}
+
+export interface LiveFlowInfo {
+  sender: Address
+  receiver: Address
+  token: Address
+  flowRate: bigint
+  lastUpdated: bigint
+  deposit: bigint
+  owedDeposit: bigint
+}
+
 export interface SetStreamParams {
   receiver: Address
   token?: TokenSymbol | Address
@@ -138,13 +154,21 @@ export interface SUPReserveLocker {
 export interface GetStreamsOptions {
   account: Address
   direction?: "incoming" | "outgoing" | "all"
+  /**
+   * Maximum number of merged results to return.
+   * For `direction: "all"`, pagination is applied after outgoing + incoming
+   * streams are merged and sorted by `createdAtTimestamp` descending.
+   */
   first?: number
+  /** Number of merged results to skip before returning records. */
   skip?: number
 }
 
 export interface GetBalanceHistoryOptions {
   account: Address
+  /** Unix timestamp in seconds. Millisecond values are also accepted and normalized. */
   fromTimestamp?: number
+  /** Unix timestamp in seconds. Millisecond values are also accepted and normalized. */
   toTimestamp?: number
   first?: number
   skip?: number
