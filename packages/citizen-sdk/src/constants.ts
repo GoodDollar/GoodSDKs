@@ -146,17 +146,12 @@ export const chainConfigs: Record<SupportedChains, ChainConfig> = {
     label: "XDC Network",
     shortName: "XDC",
     explorer: makeExplorer("https://xdcscan.com"),
+    // rpcUrls: ["https://rpc.xdc.network", "https://rpc.ankr.com/xdc"],
     rpcUrls: ["https://rpc.ankr.com/xdc"],
     defaultGasPrice: BigInt(12.5e9),
     claimGasBuffer: 150000n,
     fvDefaultChain: SupportedChains.XDC,
     contracts: {
-      production: {
-        identityContract: "0x27a4a02C9ed591E1a86e2e5D05870292c34622C9",
-        ubiContract: "0x22867567E2D80f2049200E25C6F31CB6Ec2F0faf",
-        faucetContract: "0x7344Da1Be296f03fbb8082aDaC5696058B5a9bd9",
-        g$Contract: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c",
-      },
       development: {
         identityContract: "0xa6632e9551A340E8582cc797017fbA645695E29f",
         ubiContract: "0xA2619D468EfE2f6D8b3D915B999327C8fE13aE2c",
@@ -194,29 +189,12 @@ export const createRpcUrlIterator = (chainId: SupportedChains) => {
   }
 }
 
-/**
- * Core identity ABI — includes both read/write identity methods
- * and IdentityV4 wallet-link methods (connectAccount, disconnectAccount, connectedAccounts).
- */
 export const identityV2ABI = parseAbi([
-  // Whitelist management (IdentityV2)
   "function addWhitelisted(address account)",
   "function removeWhitelisted(address account)",
   "function getWhitelistedRoot(address account) view returns (address)",
   "function lastAuthenticated(address account) view returns (uint256)",
   "function authenticationPeriod() view returns (uint256)",
-  // Wallet-link methods (IdentityV4)
-  "function connectAccount(address account) external",
-  "function disconnectAccount(address account) external",
-  "function connectedAccounts(address account) view returns (address)",
-])
-
-/** Alias exported for clarity when consumers only need wallet-link methods. */
-export const walletLinkABI = parseAbi([
-  "function connectAccount(address account) external",
-  "function disconnectAccount(address account) external",
-  "function connectedAccounts(address account) view returns (address)",
-  "function getWhitelistedRoot(address account) view returns (address)",
 ])
 
 // ABI for the UBISchemeV2 contract for essential functions and events
@@ -239,26 +217,3 @@ export const faucetABI = parseAbi([
 export const g$ABI = parseAbi([
   "function balanceOf(address account) view returns (uint256)",
 ])
-
-/**
- * Security messages shown to end-users before wallet-link actions.
- * Wallet integrators can opt out by passing `skipSecurityMessage: true` in WalletLinkOptions.
- */
-export const WALLET_LINK_SECURITY_MESSAGES = {
-  connect: [
-    "SECURITY NOTICE — Connect Wallet",
-    "You are about to link a secondary wallet to your GoodDollar identity.",
-    "• Only connect wallets you own and control.",
-    "• All connected wallets share a single daily UBI claim.",
-    "• The whitelisted root identity is the only account that can connect a wallet.",
-    "Do not proceed if you did not initiate this action.",
-  ].join("\n"),
-
-  disconnect: [
-    "SECURITY NOTICE — Disconnect Wallet",
-    "You are about to remove a wallet from your GoodDollar identity.",
-    "• Once disconnected the wallet no longer shares your UBI claim.",
-    "• Either the root identity or the connected account itself can disconnect.",
-    "Do not proceed if you did not initiate this action.",
-  ].join("\n"),
-} as const
