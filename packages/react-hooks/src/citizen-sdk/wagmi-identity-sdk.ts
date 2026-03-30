@@ -21,7 +21,7 @@ export const useIdentitySDK = (
   useEffect(() => {
     if (!publicClient || !walletClient) {
       setSdk(null)
-      setError("Wallet or Public client not initialized")
+      setError(null)
       return
     }
 
