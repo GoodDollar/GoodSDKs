@@ -2057,6 +2057,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@goodsdks/bridging-sdk@workspace:*, @goodsdks/bridging-sdk@workspace:packages/bridging-sdk":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/bridging-sdk@workspace:packages/bridging-sdk"
+  dependencies:
+    "@repo/typescript-config": "workspace:*"
+    tsup: "npm:^8.3.5"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+  peerDependencies:
+    viem: "*"
+  languageName: unknown
+  linkType: soft
+
 "@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/citizen-sdk@workspace:packages/citizen-sdk"
@@ -2178,10 +2191,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
+"@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
   dependencies:
+    "@goodsdks/bridging-sdk": "workspace:*"
     "@goodsdks/citizen-sdk": "npm:*"
     "@repo/typescript-config": "workspace:*"
     "@types/react": "npm:^19"
@@ -10523,6 +10537,32 @@ __metadata:
   languageName: node
   linkType: hard
 
+"demo-bridging-app@workspace:apps/demo-bridging-app":
+  version: 0.0.0-use.local
+  resolution: "demo-bridging-app@workspace:apps/demo-bridging-app"
+  dependencies:
+    "@goodsdks/bridging-sdk": "workspace:*"
+    "@goodsdks/react-hooks": "workspace:*"
+    "@reown/appkit": "npm:^1.7.2"
+    "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
+    "@tanstack/react-query": "npm:^4.36.1"
+    "@types/react": "npm:^18.3.18"
+    "@types/react-dom": "npm:^18.3.5"
+    "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
+    "@typescript-eslint/parser": "npm:^5.62.0"
+    "@vitejs/plugin-react": "npm:^4.3.4"
+    eslint: "npm:^8.57.1"
+    eslint-plugin-react-hooks: "npm:^4.6.0"
+    eslint-plugin-react-refresh: "npm:^0.4.6"
+    react: "npm:^18.3.1"
+    react-dom: "npm:^18.3.1"
+    typescript: "npm:^5.8.2"
+    viem: "npm:^2.28.0"
+    vite: "npm:6.3.5"
+    wagmi: "npm:^2.14.8"
+  languageName: unknown
+  linkType: soft
+
 "demo-identity-app@workspace:apps/demo-identity-app":
   version: 0.0.0-use.local
   resolution: "demo-identity-app@workspace:apps/demo-identity-app"
@@ -11397,6 +11437,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"eslint-plugin-react-hooks@npm:^4.6.0":
+  version: 4.6.2
+  resolution: "eslint-plugin-react-hooks@npm:4.6.2"
+  peerDependencies:
+    eslint: ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0
+  checksum: 10c0/4844e58c929bc05157fb70ba1e462e34f1f4abcbc8dd5bbe5b04513d33e2699effb8bca668297976ceea8e7ebee4e8fc29b9af9d131bcef52886feaa2308b2cc
+  languageName: node
+  linkType: hard
+
 "eslint-plugin-react-hooks@npm:^5.0.0, eslint-plugin-react-hooks@npm:^5.2.0":
   version: 5.2.0
   resolution: "eslint-plugin-react-hooks@npm:5.2.0"
@@ -11412,6 +11461,15 @@ __metadata:
   peerDependencies:
     eslint: ">=8.40"
   checksum: 10c0/7c19c864c5fb1292dd1c9df2ce73cb1f86457937975d108e8619d6f354855d838d3f56f0262ce5cd541a7087de103ad802a32906e13724ea1b93c6e3b6477708
+  languageName: node
+  linkType: hard
+
+"eslint-plugin-react-refresh@npm:^0.4.6":
+  version: 0.4.26
+  resolution: "eslint-plugin-react-refresh@npm:0.4.26"
+  peerDependencies:
+    eslint: ">=8.40"
+  checksum: 10c0/11c2b25b7a7025e621b02970c4cf3815b0b77486027df9f8bb731cc52972156804fd163b0f99404b33e36a3c60cd1a1be8199ba64c66b5276da3173bbb5ab6e7
   languageName: node
   linkType: hard
 
