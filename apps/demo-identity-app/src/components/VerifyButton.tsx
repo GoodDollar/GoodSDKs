@@ -10,9 +10,7 @@ interface VerifyButtonProps {
   onVerificationSuccess: () => void
 }
 
-export const VerifyButton: React.FC<VerifyButtonProps> = ({
-  onVerificationSuccess,
-}) => {
+export const VerifyButton: React.FC<VerifyButtonProps> = () => {
   const { address } = useAccount()
   const { sdk: identitySDK } = useIdentitySDK("development")
 

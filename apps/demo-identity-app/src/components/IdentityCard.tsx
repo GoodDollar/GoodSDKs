@@ -7,32 +7,46 @@ export const IdentityCard: React.FC = () => {
   const { address } = useAccount()
   const { sdk: identitySDK, loading, error } = useIdentitySDK("development")
   const [expiry, setExpiry] = useState<string | undefined>(undefined)
+  const [isWhitelisted, setIsWhitelisted] = useState<boolean | undefined>(undefined)
+  const [rootAddress, setRootAddress] = useState<string | undefined>(undefined)
 
   useEffect(() => {
-    const fetchExpiry = async () => {
+    const fetchIdentityData = async () => {
       if (!identitySDK || !address) return
 
-      const identityExpiry = await identitySDK.getIdentityExpiryData(address)
+      try {
+        const { isWhitelisted: whitelisted, root } =
+          await identitySDK.getWhitelistedRoot(address)
 
-      const { expiryTimestamp } = identitySDK.calculateIdentityExpiry(
-        identityExpiry?.lastAuthenticated ?? BigInt(0),
-        identityExpiry?.authPeriod ?? BigInt(0),
-      )
+        setIsWhitelisted(whitelisted)
+        setRootAddress(root)
 
-      const date = new Date(Number(expiryTimestamp))
-      const formattedExpiryTimestamp = date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "2-digit",
-      })
+        if (whitelisted) {
+          const identityExpiry = await identitySDK.getIdentityExpiryData(root as `0x${string}`)
 
-      if (formattedExpiryTimestamp) {
-        setExpiry(formattedExpiryTimestamp)
+          const { expiryTimestamp } = identitySDK.calculateIdentityExpiry(
+            identityExpiry?.lastAuthenticated ?? BigInt(0),
+            identityExpiry?.authPeriod ?? BigInt(0),
+          )
+
+          const date = new Date(Number(expiryTimestamp))
+          const formattedExpiryTimestamp = date.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "2-digit",
+          })
+
+          setExpiry(formattedExpiryTimestamp)
+        } else {
+          setExpiry(undefined)
+        }
+      } catch (err) {
+        console.error("fetchIdentityData error:", err)
       }
     }
 
     if (identitySDK) {
-      fetchExpiry()
+      fetchIdentityData()
     }
   }, [address, identitySDK])
 
@@ -53,12 +67,21 @@ export const IdentityCard: React.FC = () => {
       ) : (
         <>
           <Text color="$text" fontSize="$medium" mb="$small">
-            Wallet Address: {address}
+            Connected Wallet: {address.slice(0, 6)}...{address.slice(-4)}
           </Text>
+          {isWhitelisted && rootAddress && rootAddress.toLowerCase() !== address.toLowerCase() && (
+            <Text color="$text" fontSize="$medium" mb="$small">
+              Root Identity: {rootAddress.slice(0, 6)}...{rootAddress.slice(-4)}
+            </Text>
+          )}
           <Text color="$text" fontSize="$medium">
-            {expiry && new Date(expiry) < new Date() ? "Expired" : "Expiry"}:{" "}
-            {expiry || "Not Verified"}
+            Status: {isWhitelisted ? "Whitelisted" : "Not Whitelisted"}
           </Text>
+          {isWhitelisted && expiry && (
+            <Text color="$text" fontSize="$medium" mt="$small">
+              {new Date(expiry) < new Date() ? "Expired" : "Expiry"}: {expiry}
+            </Text>
+          )}
         </>
       )}
     </View>
