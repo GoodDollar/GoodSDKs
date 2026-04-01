@@ -1,5 +1,5 @@
 import { createAppKit } from "@reown/appkit/react"
-import { WagmiProvider as WagmiProviderOriginal, http, createConfig } from "wagmi"
+import { WagmiProvider as WagmiProviderOriginal, http } from "wagmi"
 import { createPublicClient, http as viemHttp } from "viem"
 import { celo, mainnet, fuse, xdc } from "@reown/appkit/networks"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"

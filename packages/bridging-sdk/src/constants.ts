@@ -83,3 +83,14 @@ export const NORMALIZED_DECIMALS = 18
 export const FEE_MULTIPLIER = 1.1 // 10% buffer for fee estimation
 
 export const EVENT_QUERY_BATCH_SIZE = 1000
+
+// Default block lookback for history queries (~7 days per chain based on avg block time)
+// Ethereum: ~12s/block → 50,000 blocks ≈ 7 days
+// Celo/Fuse: ~5s/block → 120,000 blocks ≈ 7 days
+// XDC: ~2s/block → 300,000 blocks ≈ 7 days
+export const HISTORY_BLOCK_LOOKBACK: Record<number, bigint> = {
+  1: 50000n,
+  42220: 120000n,
+  122: 120000n,
+  50: 300000n,
+}

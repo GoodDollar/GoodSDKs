@@ -47,51 +47,47 @@ const canBridge = await bridgingSDK.canBridge(
 )
 
 if (canBridge.isWithinLimit) {
-  // Estimate fee
-  const feeEstimate = await bridgingSDK.estimateFee(1, "AXELAR")
-  
-  // Bridge tokens
+  // Bridge tokens (fee is estimated internally)
   const receipt = await bridgingSDK.bridgeTo(
     "0xRecipientAddress",
     1, // Ethereum mainnet
     1000000000000000000n, // 1 G$
     "AXELAR",
-    feeEstimate.fee // msg.value must cover the fee
   )
-  
+
   console.log("Bridge transaction:", receipt.transactionHash)
 }
 ```
 
 ### React Integration
 
+`useBridgingSDK` is part of the `@goodsdks/react-hooks` package.
+
 ```tsx
-import { useBridgingSDK } from "@goodsdks/bridging-sdk"
+import { useBridgingSDK } from "@goodsdks/react-hooks"
 
 const BridgeComponent = () => {
   const { sdk, loading, error } = useBridgingSDK()
-  
+
   if (loading) return <p>Loading SDK...</p>
   if (error) return <p>Error: {error}</p>
   if (!sdk) return <p>SDK not initialized</p>
-  
+
   const handleBridge = async () => {
     try {
-      const feeEstimate = await sdk.estimateFee(1, "LAYERZERO")
       const receipt = await sdk.bridgeTo(
         "0xRecipientAddress",
         1, // Ethereum mainnet
         1000000000000000000n, // 1 G$
         "LAYERZERO",
-        feeEstimate.fee
       )
-      
+
       console.log("Bridge successful:", receipt.transactionHash)
     } catch (error) {
       console.error("Bridge failed:", error)
     }
   }
-  
+
   return <button onClick={handleBridge}>Bridge 1 G$ to Ethereum</button>
 }
 ```
@@ -108,24 +104,23 @@ The SDK handles different decimal precision across chains:
 **Important**: Bridge operations use native token decimals, while limit checks use 18-decimal normalized amounts.
 
 ```typescript
-import { normalizeAmount, denormalizeAmount } from "@goodsdks/bridging-sdk"
+import { normalizeAmount } from "@goodsdks/bridging-sdk"
 
-// For bridging from Celo (18 decimals) to Ethereum (2 decimals)
+// For bridging from Celo (18 decimals) — normalize to 18 decimals for limit checks
 const bridgeAmount = 1000000000000000000n // 1 G$ in Celo decimals
 const normalizedAmount = normalizeAmount(bridgeAmount, 42220) // Convert to 18 decimals
-const ethereumAmount = denormalizeAmount(normalizedAmount, 1) // Convert to 2 decimals
 ```
 
 ### Fee Estimation
 
-Fees are estimated using the GoodServer API and must be covered by `msg.value`:
+Fees are estimated using the GoodServer API. The SDK handles `msg.value` internally:
 
 ```typescript
 const feeEstimate = await sdk.estimateFee(targetChainId, "AXELAR")
 console.log(`Fee: ${feeEstimate.feeInNative}`) // e.g., "4.8367843657257685 Celo"
 
-// The fee must be provided as msg.value in the bridge transaction
-await sdk.bridgeTo(recipient, targetChainId, amount, "AXELAR", feeEstimate.fee)
+// The SDK automatically includes the fee as msg.value
+await sdk.bridgeTo(recipient, targetChainId, amount, "AXELAR")
 ```
 
 ### Transaction Tracking
@@ -138,7 +133,7 @@ const status = await sdk.getTransactionStatus(txHash, "AXELAR")
 console.log("Status:", status.status) // "pending" | "completed" | "failed"
 
 // Get explorer link
-const explorerLink = sdk.getExplorerLink(txHash, "AXELAR")
+const explorerLink = sdk.explorerLink(txHash, "AXELAR")
 console.log("Explorer:", explorerLink) // https://axelarscan.io/gmp/0x...
 
 // Get bridge history
@@ -180,7 +175,7 @@ const estimate = await sdk.estimateFee(1, "AXELAR")
 // Returns: { fee: bigint, feeInNative: string, protocol: "AXELAR" }
 ```
 
-##### `bridgeTo(target, targetChainId, amount, protocol, msgValue?)`
+##### `bridgeTo(target, targetChainId, amount, protocol)`
 
 Generic bridge method that automatically handles fee estimation and validation.
 
@@ -190,11 +185,10 @@ const receipt = await sdk.bridgeTo(
   1, // Ethereum mainnet
   1000000000000000000n, // 1 G$
   "AXELAR",
-  feeEstimate.fee // Optional, will be estimated if not provided
 )
 ```
 
-##### `bridgeToWithLz(target, targetChainId, amount, adapterParams?, msgValue?)`
+##### `bridgeToWithLz(target, targetChainId, amount, adapterParams?)`
 
 Bridge using LayerZero with custom adapter parameters.
 
@@ -204,21 +198,18 @@ const receipt = await sdk.bridgeToWithLz(
   1, // Ethereum mainnet
   1000000000000000000n, // 1 G$
   "0x000100000000000000000000000000000000000000000000000000000000000000060000", // Custom adapter params
-  feeEstimate.fee
 )
 ```
 
-##### `bridgeToWithAxelar(target, targetChainId, amount, gasRefundAddress?, msgValue?)`
+##### `bridgeToWithAxelar(target, targetChainId, amount)`
 
-Bridge using Axelar with optional gas refund address.
+Bridge using Axelar.
 
 ```typescript
 const receipt = await sdk.bridgeToWithAxelar(
   "0xRecipientAddress",
   1, // Ethereum mainnet
   1000000000000000000n, // 1 G$
-  "0xRefundAddress", // Optional gas refund address
-  feeEstimate.fee
 )
 ```
 
@@ -256,12 +247,12 @@ const status = await sdk.getTransactionStatus(
 // Returns: { status: "pending" | "completed" | "failed", srcTxHash?, dstTxHash?, timestamp?, error? }
 ```
 
-##### `getExplorerLink(txHash, protocol)`
+##### `explorerLink(txHash, protocol)`
 
 Generates an explorer link for a bridge transaction.
 
 ```typescript
-const link = sdk.getExplorerLink("0xTransactionHash", "LAYERZERO")
+const link = sdk.explorerLink("0xTransactionHash", "LAYERZERO")
 // Returns: "https://layerzeroscan.com/tx/0xTransactionHash"
 ```
 
