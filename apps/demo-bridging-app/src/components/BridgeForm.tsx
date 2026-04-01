@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useAccount, useBalance, useChainId } from "wagmi"
+import { useAccount, useBalance, useChainId, useSwitchChain } from "wagmi"
 import { parseUnits } from "viem"
 import { useBridgingSDK, useBridgeFee } from "@goodsdks/react-hooks"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
@@ -13,6 +13,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   const { address } = useAccount()
   const { sdk, loading: sdkLoading } = useBridgingSDK()
   const walletChainId = useChainId() as ChainId
+  const { switchChain } = useSwitchChain()
 
   // fromChain always tracks the wallet's actual connected chain
   const fromChain: ChainId = SUPPORTED_CHAINS[walletChainId] ? walletChainId : 42220
@@ -55,6 +56,12 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   }, [sdk, address, fromChain])
 
   // Get cross-chain balances using standard Wagmi hook
+  const { data: nativeBalanceData } = useBalance({
+    address: address,
+    chainId: fromChain,
+    query: { refetchInterval: 30000 }
+  });
+
   const { data: fromBalanceData } = useBalance({
     address: address,
     chainId: fromChain,
@@ -139,6 +146,16 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
         throw new Error(errMsg)
       }
 
+      // Check native balance covers the bridge fee
+      if (fee && nativeBalanceData) {
+        if (nativeBalanceData.value < fee.amount) {
+          const symbol = SUPPORTED_CHAINS[fromChain].nativeCurrency.symbol
+          throw new Error(
+            `Insufficient ${symbol} to pay the bridge fee. Need ${fee.formatted.split(" ")[0]} ${symbol} but only have ${nativeBalanceData.formatted} ${symbol}.`
+          )
+        }
+      }
+
       await sdk.bridgeTo(
         recipient as `0x${string}`,
         toChain,
@@ -161,8 +178,8 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   }
 
   const handleSwapChains = () => {
-    // fromChain is locked to the connected wallet chain — swap only affects toChain display
-    setToChain(fromChain)
+    // fromChain is derived from the connected wallet — switching direction means switching the wallet chain
+    switchChain({ chainId: toChain })
   }
 
   const getEstimatedReceive = () => {

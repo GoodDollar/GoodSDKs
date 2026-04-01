@@ -16,6 +16,7 @@ import {
   SUPPORTED_CHAINS,
   BRIDGE_CONTRACT_ADDRESSES,
   EVENT_QUERY_BATCH_SIZE,
+  HISTORY_BLOCK_LOOKBACK,
   API_ENDPOINTS,
 } from "./constants"
 import type {
@@ -71,7 +72,7 @@ export class BridgingSDK {
       throw new Error(`Unsupported chain ID: ${walletClient.chain?.id}`)
     }
     this.walletClient = walletClient
-    this.currentChainId = walletClient.chain.id
+    // currentChainId is driven by publicClient — do not override it here
   }
 
   /**
@@ -317,14 +318,82 @@ export class BridgingSDK {
    * Fetches the combined, sorted bridge history for an address on the current chain
    */
   async getHistory(address: Address, options?: EventOptions): Promise<(BridgeRequestEvent | ExecutedTransferEvent)[]> {
-    const [requests, executed] = await Promise.all([
-      this.getBridgeRequests(address, options),
-      this.getExecutedTransfers(address, options)
+    return BridgingSDK._fetchChainHistory(address, this.publicClient, this.currentChainId, options)
+  }
+
+  /**
+   * Fetches combined bridge history for a single chain using the provided client.
+   * Results are sorted by block number (descending) within the chain.
+   */
+  private static async _fetchChainHistory(
+    address: Address,
+    publicClient: PublicClient,
+    chainId: ChainId,
+    options?: EventOptions,
+  ): Promise<(BridgeRequestEvent | ExecutedTransferEvent)[]> {
+    const contractAddress = BRIDGE_CONTRACT_ADDRESSES[chainId]
+    if (!contractAddress) {
+      throw new Error(`Bridge contract not deployed on chain ${chainId}`)
+    }
+
+    const currentBlock = await publicClient.getBlockNumber()
+    const lookback = HISTORY_BLOCK_LOOKBACK[chainId] ?? 50000n
+    const fromBlock = options?.fromBlock || (currentBlock > lookback ? currentBlock - lookback : 0n)
+    const toBlock = options?.toBlock || "latest"
+    const limit = options?.limit || EVENT_QUERY_BATCH_SIZE
+
+    const [requestLogs, executedLogs] = await Promise.all([
+      publicClient.getContractEvents({
+        address: contractAddress as Address,
+        abi: MESSAGE_PASSING_BRIDGE_ABI,
+        eventName: "BridgeRequest",
+        args: { from: address },
+        fromBlock,
+        toBlock,
+      }),
+      publicClient.getContractEvents({
+        address: contractAddress as Address,
+        abi: MESSAGE_PASSING_BRIDGE_ABI,
+        eventName: "ExecutedTransfer",
+        args: { to: address },
+        fromBlock,
+        toBlock,
+      }),
     ])
 
-    const history: (BridgeRequestEvent | ExecutedTransferEvent)[] = [...requests, ...executed]
-    
-    return history.sort((a, b) => {
+    const requests: BridgeRequestEvent[] = (requestLogs as any[]).slice(0, limit).map((log) => ({
+      transactionHash: log.transactionHash,
+      blockNumber: log.blockNumber,
+      address: log.address,
+      chainId,
+      args: {
+        from: log.args.from as Address,
+        to: log.args.to as Address,
+        amount: log.args.normalizedAmount as bigint,
+        targetChainId: Number(log.args.targetChainId) as ChainId,
+        timestamp: log.args.timestamp as bigint,
+        bridge: log.args.bridge === 0 ? "AXELAR" : "LAYERZERO",
+        id: log.args.id as bigint,
+      },
+    }))
+
+    const executed: ExecutedTransferEvent[] = (executedLogs as any[]).slice(0, limit).map((log) => ({
+      transactionHash: log.transactionHash,
+      blockNumber: log.blockNumber,
+      address: log.address,
+      chainId,
+      args: {
+        from: log.args.from as Address,
+        to: log.args.to as Address,
+        amount: log.args.normalizedAmount as bigint,
+        fee: log.args.fee as bigint,
+        sourceChainId: Number(log.args.sourceChainId) as ChainId,
+        bridge: log.args.bridge === 0 ? "AXELAR" : "LAYERZERO",
+        id: log.args.id as bigint,
+      },
+    }))
+
+    return [...requests, ...executed].sort((a, b) => {
       if (a.blockNumber < b.blockNumber) return 1
       if (a.blockNumber > b.blockNumber) return -1
       return 0
@@ -332,7 +401,9 @@ export class BridgingSDK {
   }
 
   /**
-   * Fetches the combined, sorted bridge history for an address across multiple chains
+   * Fetches bridge history for an address across multiple chains.
+   * Each chain's results are sorted by block number internally.
+   * No cross-chain sorting is applied since block numbers are chain-specific.
    */
   static async getAllHistory(
     address: Address,
@@ -342,21 +413,31 @@ export class BridgingSDK {
     const historyPromises = Object.entries(clients).map(async ([chainIdStr, client]) => {
       try {
         const chainId = Number(chainIdStr) as ChainId
-        const sdk = new BridgingSDK(client, undefined, chainId)
-        return await sdk.getHistory(address, options)
+        return await BridgingSDK._fetchChainHistory(address, client, chainId, options)
       } catch (err) {
         console.warn(`Failed to fetch history for chain ${chainIdStr}: ${err instanceof Error ? err.message : String(err)}`)
         return []
       }
     })
 
-    const allHistoryFiles = await Promise.all(historyPromises)
-    const combined = allHistoryFiles.flat()
-    
-    return combined.sort((a, b) => {
-      if (a.blockNumber < b.blockNumber) return 1
-      if (a.blockNumber > b.blockNumber) return -1
-      return 0
+    const allHistoryByChain = await Promise.all(historyPromises)
+    const allEvents = allHistoryByChain.flat()
+
+    // Deduplicate: BridgeRequest and ExecutedTransfer share the same `id` when
+    // the bridge completes. Keep only the ExecutedTransfer in that case, since
+    // it represents the final state.
+    const executedIds = new Set(
+      allEvents
+        .filter((e): e is ExecutedTransferEvent => !("targetChainId" in e.args))
+        .map((e) => e.args.id)
+    )
+
+    return allEvents.filter((e) => {
+      if ("targetChainId" in e.args) {
+        // BridgeRequest — drop if a matching ExecutedTransfer exists
+        return !executedIds.has(e.args.id)
+      }
+      return true
     })
   }
 
@@ -373,7 +454,8 @@ export class BridgingSDK {
     }
 
     const currentBlock = await this.publicClient.getBlockNumber()
-    const fromBlock = options?.fromBlock || (currentBlock > 10000n ? currentBlock - 10000n : 0n)
+    const lookback = HISTORY_BLOCK_LOOKBACK[this.currentChainId] ?? 50000n
+    const fromBlock = options?.fromBlock || (currentBlock > lookback ? currentBlock - lookback : 0n)
     const toBlock = options?.toBlock || "latest"
     const limit = options?.limit || EVENT_QUERY_BATCH_SIZE
 
@@ -420,7 +502,8 @@ export class BridgingSDK {
     }
 
     const currentBlock = await this.publicClient.getBlockNumber()
-    const fromBlock = options?.fromBlock || (currentBlock > 10000n ? currentBlock - 10000n : 0n)
+    const lookback = HISTORY_BLOCK_LOOKBACK[this.currentChainId] ?? 50000n
+    const fromBlock = options?.fromBlock || (currentBlock > lookback ? currentBlock - lookback : 0n)
     const toBlock = options?.toBlock || "latest"
     const limit = options?.limit || EVENT_QUERY_BATCH_SIZE
 
