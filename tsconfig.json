@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/citizen-sdk" },
+    { "path": "./packages/react-hooks" },
+    { "path": "./packages/ui-components" },
+    { "path": "./packages/engagement-contracts" },
+    { "path": "./packages/engagement-sdk" },
+    { "path": "./packages/savings-sdk" },
+    { "path": "./packages/savings-widget" },
+    { "path": "./packages/good-reserve" },
+    { "path": "./apps/demo-identity-app" },
+    { "path": "./apps/engagement-app" },
+    { "path": "./apps/demo-reserve-swap" }
+  ]
+}
