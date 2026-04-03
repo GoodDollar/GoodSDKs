@@ -1,6 +1,6 @@
 # GoodDollar React Hooks
 
-`@goodsdks/react-hooks` bundles ready-to-use React hooks that wrap the core `@goodsdks/citizen-sdk` identity and claim clients. They streamline Wagmi integrations by wiring the required Viem clients and exposing state for loading and error handling.
+`@goodsdks/react-hooks` bundles ready-to-use React hooks that wrap the core `@goodsdks/citizen-sdk` identity and claim clients, plus the `@goodsdks/good-reserve` reserve client. They streamline Wagmi integrations by wiring the required Viem clients and exposing state for loading and error handling.
 
 ## Installation
 
@@ -20,7 +20,11 @@ See an example wagmi configuration with reown's Appkit in the demo app: [WagmiCo
 ```tsx
 import { WagmiProvider } from "wagmi"
 import { config } from "./wagmiConfig"
-import { useIdentitySDK, useClaimSDK } from "@goodsdks/react-hooks"
+import {
+  useIdentitySDK,
+  useClaimSDK,
+  useGoodReserve,
+} from "@goodsdks/react-hooks"
 
 const IdentityStatus = () => {
   const { sdk, loading, error } = useIdentitySDK("production")
@@ -47,10 +51,20 @@ const ClaimButton = () => {
   return <button onClick={onClaim}>Claim UBI</button>
 }
 
+const ReserveQuote = () => {
+  const { sdk, loading, error } = useGoodReserve("production")
+
+  if (loading) return <p>Loading reserve...</p>
+  if (error || !sdk) return <p>Reserve error: {error}</p>
+
+  return <p>Reserve stable token: {sdk.getStableTokenAddress()}</p>
+}
+
 export const App = () => (
   <WagmiProvider config={config}>
     <IdentityStatus />
     <ClaimButton />
+    <ReserveQuote />
   </WagmiProvider>
 )
 ```
@@ -65,8 +79,11 @@ export const App = () => (
 - `useClaimSDK(env?: contractEnv)`
   - Builds on `useIdentitySDK` and returns a ready `ClaimSDK` once identity checks resolve.
   - Surfaces entitlement errors via the returned `error` string.
+- `useGoodReserve(env?: ReserveEnv, options?: GoodReserveSDKOptions)`
+  - Returns a ready `GoodReserveSDK` for reserve quotes, approvals, buys, and sells on the active chain.
+  - Returns `error` when the connected chain/env pair is unsupported, such as XDC on `production`.
 
-Both hooks re-run whenever the connected wallet, public client, or environment changes.
+These hooks re-run whenever the connected wallet, public client, or environment changes.
 
 ### Wallet-Link (IdentityV4)
 
@@ -186,5 +203,6 @@ If you want to keep the action in one click, wait until Wagmi finishes switching
 
 ## Demo & Further Reading
 
-- Reference implementation: `apps/demo-identity-app` (Claim button + Wagmi/AppKit setup).
+- Reference implementations: `apps/demo-identity-app` and `apps/demo-reserve-swap`.
 - Core SDK details: `packages/citizen-sdk/README.md` and `packages/citizen-sdk/README-ClaimSDK.md`.
+- Reserve SDK details: `packages/good-reserve/README.md`.
