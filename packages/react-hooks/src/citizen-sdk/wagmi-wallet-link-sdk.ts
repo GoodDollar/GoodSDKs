@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Address, PublicClient } from "viem"
 
 import { contractEnv, IdentitySDK, SupportedChains } from "@goodsdks/citizen-sdk"
@@ -17,7 +17,7 @@ interface UseWalletLinkActionReturn {
     loading: boolean
     error: string | null
     txHash: `0x${string}` | null
-    pendingSecurityConfirm: { message: string; resolve: (confirmed: boolean) => void } | null
+    pendingSecurityConfirm: { message: string } | null
     confirmSecurity: (confirmed: boolean) => void
     reset: () => void
 }
@@ -29,25 +29,22 @@ const useWalletLinkAction = (
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
-    const [pendingSecurityConfirm, setPendingSecurityConfirm] = useState<{
-        message: string
-        resolve: (confirmed: boolean) => void
-    } | null>(null)
+    const [pendingSecurityMessage, setPendingSecurityMessage] = useState<string | null>(null)
+    const securityResolveRef = useRef<((confirmed: boolean) => void) | null>(null)
 
     const reset = useCallback(() => {
         setLoading(false)
         setError(null)
         setTxHash(null)
-        setPendingSecurityConfirm(null)
+        securityResolveRef.current = null
+        setPendingSecurityMessage(null)
     }, [])
 
-    const confirmSecurity = useCallback(
-        (confirmed: boolean) => {
-            pendingSecurityConfirm?.resolve(confirmed)
-            setPendingSecurityConfirm(null)
-        },
-        [pendingSecurityConfirm],
-    )
+    const confirmSecurity = useCallback((confirmed: boolean) => {
+        securityResolveRef.current?.(confirmed)
+        securityResolveRef.current = null
+        setPendingSecurityMessage(null)
+    }, [])
 
     const run = useCallback(
         async (account: Address, options?: WalletLinkOptions) => {
@@ -72,8 +69,9 @@ const useWalletLinkAction = (
                         (options?.skipSecurityMessage
                             ? undefined
                             : (message) =>
-                                new Promise((resolve) => {
-                                    setPendingSecurityConfirm({ message, resolve })
+                                new Promise<boolean>((resolve) => {
+                                    securityResolveRef.current = resolve
+                                    setPendingSecurityMessage(message)
                                 })),
                 })
             } catch (err: any) {
@@ -90,7 +88,9 @@ const useWalletLinkAction = (
         loading,
         error,
         txHash,
-        pendingSecurityConfirm,
+        pendingSecurityConfirm: pendingSecurityMessage
+            ? { message: pendingSecurityMessage }
+            : null,
         confirmSecurity,
         reset,
     }
@@ -111,9 +111,6 @@ export const useConnectAccount = (
     return {
         ...base,
         connect: base.run,
-        pendingSecurityConfirm: base.pendingSecurityConfirm
-            ? { message: base.pendingSecurityConfirm.message }
-            : null,
     }
 }
 
@@ -132,9 +129,6 @@ export const useDisconnectAccount = (
     return {
         ...base,
         disconnect: base.run,
-        pendingSecurityConfirm: base.pendingSecurityConfirm
-            ? { message: base.pendingSecurityConfirm.message }
-            : null,
     }
 }
 
@@ -185,7 +179,7 @@ export const useConnectedStatus = (
         return () => {
             cancelled = true
         }
-    }, [sdk, account, chainId, trigger])
+    }, [sdk, account, chainId, publicClients, trigger])
 
     return { statuses, loading, error, refetch }
 }

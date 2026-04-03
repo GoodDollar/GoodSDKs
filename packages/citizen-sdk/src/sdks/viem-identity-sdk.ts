@@ -24,6 +24,10 @@ import {
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
+import {
+  createRpcIteratorRegistry,
+  getRpcFallbackClient,
+} from "../utils/rpcFallback"
 
 import type {
   IdentityContract,
@@ -65,6 +69,7 @@ export class IdentitySDK {
   public env: contractEnv = "production"
   private readonly chainId: SupportedChains
   private readonly fvDefaultChain: SupportedChains
+  private readonly rpcIterators = createRpcIteratorRegistry()
 
   /**
    * Initializes the IdentitySDK.
@@ -204,17 +209,14 @@ export class IdentitySDK {
    * When omitted, all supported chains are queried in parallel via Promise.allSettled
    * and one ChainConnectedStatus entry is returned per chain.
    *
-   * This SDK is headless: it never creates its own public clients internally.
-   * For the SDK's current chain `this.publicClient` is reused (preserving the
-   * app's transport config — custom headers, retry policy, authenticated RPCs, etc.).
-   * For all other chains the caller must supply app-configured clients via
-   * `publicClients`. Any chain without a supplied client returns an error entry
-   * rather than silently skipping.
+   * App-provided public clients always take precedence. For the SDK's current
+   * chain `this.publicClient` is reused when no override is passed. For other
+   * chains the SDK falls back to local read-only RPC clients using the same
+   * fallback flow as other multi-chain reads.
    *
    * @param account - The account address to check.
    * @param chainId - Optional. Restricts the query to this chain only.
    * @param publicClients - Optional. App-level public clients keyed by SupportedChains ID.
-   * Required for any chain other than the SDK's current chain when querying all chains.
    * @returns An array of ChainConnectedStatus (one entry per queried chain).
    */
   async checkConnectedStatus(
@@ -240,19 +242,12 @@ export class IdentitySDK {
           } satisfies ChainConnectedStatus
         }
 
+        const isPrimaryChain = this.chainId === config.id
         const client =
           publicClients?.[config.id] ??
-          (this.chainId === config.id ? this.publicClient : undefined)
-
-        if (!client) {
-          return {
-            chainId: config.id,
-            chainName: config.label,
-            isConnected: false,
-            root: zeroAddress as Address,
-            error: `No public client provided for chain ${config.label}`,
-          } satisfies ChainConnectedStatus
-        }
+          (isPrimaryChain
+            ? this.publicClient
+            : getRpcFallbackClient(config.id, this.rpcIterators))
 
         const root = (await client.readContract({
           address: contracts.identityContract,

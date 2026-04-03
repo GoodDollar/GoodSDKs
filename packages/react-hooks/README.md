@@ -80,7 +80,7 @@ Manages the connect-account flow including the security confirmation prompt.
 const { connect, loading, error, txHash, pendingSecurityConfirm, confirmSecurity, reset } =
   useConnectAccount(sdk)
 
-// Trigger the flow — a confirmation dialog will appear via pendingSecurityConfirm
+// Trigger the flow - a confirmation dialog will appear via pendingSecurityConfirm
 await connect("0xSecondaryWallet")
 
 // Render the security prompt
@@ -101,7 +101,7 @@ Same API as `useConnectAccount` but calls `disconnectAccount` on the SDK.
 
 #### `useConnectedStatus(sdk, account?, chainId?, publicClients?)`
 
-Fetches and watches wallet-link status. Omit `chainId` to query all supported chains. For all-chains queries pass app-configured `publicClients` keyed by `SupportedChains` — any chain without a client returns an error entry rather than silently skipping.
+Fetches and watches wallet-link status. Omit `chainId` to query all supported chains. App-configured `publicClients` keyed by `SupportedChains` are used first when provided; otherwise the SDK reuses its active chain client and falls back to built-in read-only RPC clients for the other supported chains.
 
 ```tsx
 import { createPublicClient, http } from "viem"
@@ -110,7 +110,7 @@ import { SupportedChains } from "@goodsdks/citizen-sdk"
 const publicClients = {
   [SupportedChains.CELO]: createPublicClient({ transport: http("https://forno.celo.org") }),
   [SupportedChains.FUSE]: createPublicClient({ transport: http("https://rpc.fuse.io") }),
-  [SupportedChains.XDC]:  createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
+  [SupportedChains.XDC]: createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
 }
 
 const { statuses, loading, error, refetch } = useConnectedStatus(
@@ -136,7 +136,7 @@ import { SupportedChains } from "@goodsdks/citizen-sdk"
 const publicClients = {
   [SupportedChains.CELO]: createPublicClient({ transport: http("https://forno.celo.org") }),
   [SupportedChains.FUSE]: createPublicClient({ transport: http("https://rpc.fuse.io") }),
-  [SupportedChains.XDC]:  createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
+  [SupportedChains.XDC]: createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
 }
 
 const { connectAccount, disconnectAccount, connectedStatus } = useWalletLink(
@@ -152,6 +152,37 @@ const { connectAccount, disconnectAccount, connectedStatus } = useWalletLink(
 ```
 
 The `reset()` helper on each action hook resets `loading`, `error`, `txHash`, and `pendingSecurityConfirm` together.
+
+#### Switching chains before connect/disconnect
+
+`connectAccount` and `disconnectAccount` act on the currently connected Wagmi wallet chain. If a user wants to perform a wallet-link action on another supported chain, switch first and let the hooks reinitialise with the new clients before sending the transaction.
+
+```tsx
+import { useChainId, useSwitchChain } from "wagmi"
+import { SupportedChains } from "@goodsdks/citizen-sdk"
+import { useWalletLink } from "@goodsdks/react-hooks"
+
+const WalletLinkAction = () => {
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
+  const { connectAccount, sdkLoading } = useWalletLink("production", "0xAccount")
+
+  const connectOnCelo = async () => {
+    if (chainId !== SupportedChains.CELO) {
+      await switchChainAsync({ chainId: SupportedChains.CELO })
+      return
+    }
+
+    if (!sdkLoading) {
+      await connectAccount.connect("0xSecondaryWallet")
+    }
+  }
+
+  return <button onClick={connectOnCelo}>Connect on Celo</button>
+}
+```
+
+If you want to keep the action in one click, wait until Wagmi finishes switching chains and `useWalletLink` has re-created the SDK for that chain before calling `connect` or `disconnect`.
 
 ## Demo & Further Reading
 
