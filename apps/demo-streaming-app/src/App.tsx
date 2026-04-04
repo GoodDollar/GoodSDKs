@@ -40,6 +40,15 @@ import {
 import { formatEther, parseEther, type Address } from "viem"
 
 const tamaguiConfig = createTamagui(tamaguiConfigBase)
+const DEFAULT_HISTORY_WINDOW_SECONDS = 30 * 24 * 60 * 60
+
+function getBalanceHistoryWindow() {
+    const toTimestamp = Date.now()
+    return {
+        fromTimestamp: toTimestamp - (DEFAULT_HISTORY_WINDOW_SECONDS * 1000),
+        toTimestamp,
+    }
+}
 
 function formatTokenAmount(amount: bigint): string {
     const formatted = formatEther(amount)
@@ -351,7 +360,7 @@ const BalanceHistorySection: React.FC<{
 }> = ({ history, isLoading, onRefresh, symbol }) => (
     <SectionCard
         title={`Recent ${symbol} Balance Snapshots`}
-        subtitle="Indexed balance snapshot logs from the subgraph. This is not a transaction feed."
+        subtitle="Indexed balance snapshot logs from the last 30 days. This is not a transaction feed."
         headerAction={<InlineActionButton label="Refresh" onPress={onRefresh} />}
         contentMinHeight={156}
     >
@@ -511,6 +520,7 @@ export default function App() {
         environment,
         enabled: !!address && !!RESOLVED_TOKEN_ADDR,
     })
+    const [balanceHistoryWindow, setBalanceHistoryWindow] = useState(getBalanceHistoryWindow)
 
     const {
         data: balanceHistory,
@@ -519,6 +529,8 @@ export default function App() {
     } = useBalanceHistory({
         account: address as Address,
         token: selectedToken,
+        fromTimestamp: balanceHistoryWindow.fromTimestamp,
+        toTimestamp: balanceHistoryWindow.toTimestamp,
         environment,
         first: 8,
         skip: 0,
@@ -579,7 +591,7 @@ export default function App() {
     const refetchIndexedViews = () => {
         refetchStreams()
         refetchBalance()
-        refetchBalanceHistory()
+        setBalanceHistoryWindow(getBalanceHistoryWindow())
     }
 
     const refreshAfterStreamMutation = () => {
@@ -780,37 +792,51 @@ export default function App() {
                     <Separator marginVertical="$2" />
 
                     {/* Data Displays */}
-                    <XStack gap="$4" $sm={{ fd: "column" }}>
-                        {chainId !== SupportedChains.BASE && (
-                            <>
+                    {chainId !== SupportedChains.BASE && (
+                        <YStack gap="$4">
+                            <XStack gap="$4" $sm={{ fd: "column" }}>
                                 <View flex={1}>
-                                    <ActiveStreamsList streams={streams || []} isLoading={streamsLoading} onRefresh={() => refetchStreams()} />
-                                </View>
-                                <View flex={1}>
-                                    <GDAMembershipsSection
-                                        memberships={memberships || []}
-                                        isLoading={membershipsLoading}
-                                        onConnect={(pool) =>
-                                            runMutationWithAlerts(
-                                                connectToPool,
-                                                { poolAddress: pool },
-                                                { successMessage: "Connected!" }
-                                            )
-                                        }
-                                        onDisconnect={(pool) =>
-                                            runMutationWithAlerts(
-                                                disconnectFromPool,
-                                                { poolAddress: pool },
-                                                { successMessage: "Disconnected!" }
-                                            )
-                                        }
-                                        isConnecting={isConnecting}
-                                        isDisconnecting={isDisconnecting}
+                                    <ActiveStreamsList
+                                        streams={streams || []}
+                                        isLoading={streamsLoading}
+                                        onRefresh={() => refetchStreams()}
                                     />
                                 </View>
-                            </>
-                        )}
-                    </XStack>
+                                <View flex={1}>
+                                    <BalanceHistorySection
+                                        history={recentBalanceHistory}
+                                        isLoading={balanceHistoryLoading}
+                                        onRefresh={() => {
+                                            refetchBalance()
+                                            setBalanceHistoryWindow(getBalanceHistoryWindow())
+                                        }}
+                                        symbol={selectedToken}
+                                    />
+                                </View>
+                            </XStack>
+
+                            <GDAMembershipsSection
+                                memberships={memberships || []}
+                                isLoading={membershipsLoading}
+                                onConnect={(pool) =>
+                                    runMutationWithAlerts(
+                                        connectToPool,
+                                        { poolAddress: pool },
+                                        { successMessage: "Connected!" }
+                                    )
+                                }
+                                onDisconnect={(pool) =>
+                                    runMutationWithAlerts(
+                                        disconnectFromPool,
+                                        { poolAddress: pool },
+                                        { successMessage: "Disconnected!" }
+                                    )
+                                }
+                                isConnecting={isConnecting}
+                                isDisconnecting={isDisconnecting}
+                            />
+                        </YStack>
+                    )}
 
                     {chainId === SupportedChains.BASE && (
                         <SectionCard title="SUP Reserve Holdings">
@@ -843,15 +869,17 @@ export default function App() {
                         </SectionCard>
                     )}
 
-                    <BalanceHistorySection
-                        history={recentBalanceHistory}
-                        isLoading={balanceHistoryLoading}
-                        onRefresh={() => {
-                            refetchBalance()
-                            refetchBalanceHistory()
-                        }}
-                        symbol={selectedToken}
-                    />
+                    {chainId === SupportedChains.BASE && (
+                        <BalanceHistorySection
+                            history={recentBalanceHistory}
+                            isLoading={balanceHistoryLoading}
+                            onRefresh={() => {
+                                refetchBalance()
+                                setBalanceHistoryWindow(getBalanceHistoryWindow())
+                            }}
+                            symbol={selectedToken}
+                        />
+                    )}
                 </YStack>
             </ScrollView>
         </TamaguiProvider>
