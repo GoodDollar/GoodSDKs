@@ -262,7 +262,8 @@ const ActiveStreamsList: React.FC<{
     streams: StreamInfo[]
     isLoading: boolean
     onRefresh: () => void
-}> = ({ streams, isLoading, onRefresh }) => (
+    account?: Address
+}> = ({ streams, isLoading, onRefresh, account }) => (
     <SectionCard
         title="Active Streams"
         subtitle="Shows current indexed stream state for this wallet, not one-time transfer history."
@@ -271,11 +272,16 @@ const ActiveStreamsList: React.FC<{
     >
         {isLoading ? <Spinner /> : (streams && streams.length > 0) ? (
             <YStack gap="$2">
-                {streams.map((s, i) => (
+                {streams.map((s, i) => {
+                    const isOutgoing = account ? s.sender?.toLowerCase() === account.toLowerCase() : true
+                    const counterpartyLabel = isOutgoing ? "To:" : "From:"
+                    const counterparty = isOutgoing ? s.receiver : s.sender
+
+                    return (
                     <YStack key={i} padding="$3" backgroundColor="#F7FAFC" borderRadius="$3" gap="$1" borderWidth={1} borderColor="#E2E8F0">
                         <XStack justifyContent="space-between">
-                            <Text fontSize={12} color="$gray10" fontWeight="600">To:</Text>
-                            <Text fontSize={12} fontFamily="$mono" color="$blue11">{s.receiver?.slice(0, 10)}...{s.receiver?.slice(-6)}</Text>
+                            <Text fontSize={12} color="$gray10" fontWeight="600">{counterpartyLabel}</Text>
+                            <Text fontSize={12} fontFamily="$mono" color="$blue11">{counterparty?.slice(0, 10)}...{counterparty?.slice(-6)}</Text>
                         </XStack>
                         <XStack justifyContent="space-between">
                             <Text fontSize={12} color="$gray10" fontWeight="600">Current Rate:</Text>
@@ -294,7 +300,7 @@ const ActiveStreamsList: React.FC<{
                             </Text>
                         </XStack>
                     </YStack>
-                ))}
+                )})}
             </YStack>
         ) : (
             <CenteredCardState>
@@ -800,6 +806,7 @@ export default function App() {
                                         streams={streams || []}
                                         isLoading={streamsLoading}
                                         onRefresh={() => refetchStreams()}
+                                        account={address}
                                     />
                                 </View>
                                 <View flex={1}>
