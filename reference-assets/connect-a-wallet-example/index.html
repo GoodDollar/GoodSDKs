@@ -1,0 +1,624 @@
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ShieldCheck,
+  Link as LinkIcon,
+  Unlink,
+  Info,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Loader2,
+  X,
+} from "lucide-react";
+import { fuse, celo, xdc } from "@reown/appkit/networks";
+
+import { ethers } from "ethers";
+import {
+  useAppKitProvider,
+  useAppKitAccount,
+  useAppKitNetwork,
+} from "@reown/appkit/react";
+import "./appkit";
+import "./styles.css";
+
+const LogoComponent = ({ size = "24", ...props }) => {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 1024 1024"
+      version="1.1"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <g id="surface1">
+        <path
+          style={{
+            stroke: "none",
+            fillRule: "nonzero",
+            fill: "rgb(4.705882%, 14.901961%, 23.921569%)",
+            fillOpacity: 1,
+          }}
+          d="M 1024 512.007812 C 1024 794.777344 794.769531 1024.007812 512 1024.007812 C 229.230469 1024.007812 0 794.777344 0 512.007812 C 0 229.238281 229.230469 0.0078125 512 0.0078125 C 794.769531 0.0078125 1024 229.238281 1024 512.007812 "
+        />
+        <path
+          style={{
+            stroke: "none",
+            fillRule: "nonzero",
+            fill: "rgb(100%, 100%, 100%)",
+            fillOpacity: 1,
+          }}
+          d="M 681.605469 481.089844 L 555.796875 481.089844 L 480.960938 555.910156 L 681.605469 555.910156 C 664.546875 630.351562 599.289062 683.824219 522.945312 685.914062 C 446.605469 688.003906 378.515625 638.179688 357.410156 564.785156 C 336.304688 491.390625 367.527344 413.011719 433.320312 374.230469 C 499.109375 335.449219 582.804688 346.085938 636.800781 400.097656 L 663.75 373.121094 L 767.429688 269.433594 L 661.671875 269.433594 L 628.539062 302.601562 C 553.40625 264.363281 463.800781 267.894531 391.910156 311.933594 C 320.023438 355.96875 276.167969 434.1875 276.101562 518.492188 C 276.0625 556.769531 285.132812 594.503906 302.566406 628.578125 L 206.058594 725.039062 L 311.910156 725.039062 L 347.203125 689.742188 C 421.332031 763.863281 534.730469 781.878906 628.179688 734.382812 C 721.628906 686.886719 773.914062 584.660156 757.730469 481.089844 Z M 681.605469 481.089844 "
+        />
+      </g>
+    </svg>
+  );
+};
+
+class NativeFetchAdapter {
+  constructor(url) {
+    this.url = url;
+  }
+
+  // This method mimics the EIP-1193 standard required by BrowserProvider
+  async request({ method, params }) {
+    const response = await fetch(this.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method,
+        params,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error.message);
+    }
+
+    return data.result;
+  }
+}
+
+// --- Configuration ---
+const CHAINS = {
+  CELO: {
+    id: 42220,
+    name: "Celo",
+    rpc: "https://forno.celo.org",
+    contract: "0xC361A6E67822a0EDc17D899227dd9FC50BD62F42",
+    logo: "C",
+    network: celo,
+    txType: 2,
+  },
+  FUSE: {
+    id: 122,
+    name: "Fuse",
+    rpc: "https://rpc.fuse.io",
+    contract: "0x2F9C28de9e6d44b71B91b8BA337A5D82e308E7BE",
+    logo: "F",
+    network: fuse,
+    txType: 2,
+  },
+  XDC: {
+    id: 50,
+    name: "XDC",
+    rpc: "https://rpc.xdc.network",
+    contract: "0x27a4a02C9ed591E1a86e2e5D05870292c34622C9",
+    logo: "X",
+    network: xdc,
+    txType: 0,
+  },
+};
+
+const CONTRACT_ABI = [
+  "function connectAccount(address account) external",
+  "function disconnectAccount(address account) external",
+  "function getWhitelistedRoot(address account) view returns (address)",
+  "function connectedAccounts(address account) view returns (address)",
+];
+
+const checkMiniPay = async () => {
+  if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts",
+      params: [],
+    });
+
+    return accounts[0];
+  }
+
+  return null;
+};
+
+const getContractAddress = (chainId) => {
+  if (!chainId) return null;
+  const id = Number(chainId);
+  const chain = Object.values(CHAINS).find((c) => c.id === id);
+  return chain?.contract || null;
+};
+
+const ToastContainer = ({ toasts, removeToast }) => (
+  <div className="toast-container">
+    {toasts.map((toast) => (
+      <div key={toast.id} className={`toast ${toast.type}`}>
+        {toast.type === "error" ? (
+          <AlertCircle size={18} />
+        ) : (
+          <CheckCircle2 size={18} />
+        )}
+        <p style={{ margin: 0, fontSize: "14px", fontWeight: 500 }}>
+          {toast.message}
+        </p>
+        <button onClick={() => removeToast(toast.id)} className="toast-close">
+          <X size={14} />
+        </button>
+      </div>
+    ))}
+  </div>
+);
+type ChainStatus = {
+  isConnected: boolean;
+  loading: boolean;
+  error?: boolean;
+};
+
+// Main Widget
+export default function ConnectIdentityWidget() {
+  // --- State ---
+  const { address, isConnected } = useAppKitAccount();
+  const { chainId, switchNetwork } = useAppKitNetwork();
+  const { walletProvider } = useAppKitProvider("eip155");
+
+  const [rootAddress, setRootAddress] = useState("");
+  const [accountToConnect, setAccountToConnect] = useState("");
+  const [loadingGlobal, setLoading] = useState(false);
+  const [inputError, setInputError] = useState("");
+  const [toasts, setToasts] = useState([]);
+  const [miniPayAddress, setMiniPayAddress] = useState("");
+  const [whitelistState, setWhitelistState] = useState<string | null>(null);
+
+  // State for status per chain: { [chainId]: { isConnected: bool, loading: bool } }
+  const [chainStatuses, setChainStatuses] = useState<
+    Record<number, ChainStatus>
+  >({});
+
+  const hasConnectedWallet =
+    !!miniPayAddress || (isConnected && walletProvider);
+
+  useEffect(() => {
+    checkMiniPay().then((addr) => addr && setMiniPayAddress(addr));
+  }, []);
+
+  useEffect(() => {
+    if (!hasConnectedWallet) {
+      setRootAddress("");
+      setWhitelistState(null);
+      return;
+    }
+    (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      try {
+        const result = await fetchWhitelistedRoot();
+        setWhitelistState(result.state);
+        if (result.state === "WHITELISTED_PRIMARY") {
+          setRootAddress(result.userAddress);
+        } else if (result.state === "CONNECTED_CHILD") {
+          setRootAddress(result.root); // Show the true identity owner
+        } else {
+          setRootAddress("Not Whitelisted");
+        }
+      } catch (e: any) {
+        addToast("Unable to load wallet address.", "error");
+      }
+    })();
+  }, [hasConnectedWallet, chainId]);
+
+  const getProvider = () => {
+    if (miniPayAddress && window.ethereum)
+      return new ethers.BrowserProvider(window.ethereum);
+    if (walletProvider)
+      return new ethers.BrowserProvider(walletProvider, "any");
+
+    throw new Error("No wallet provider available");
+  };
+
+  const fetchWhitelistedRoot = useCallback(async () => {
+    const provider = getProvider();
+    const signer = await provider.getSigner();
+    const userAddress = miniPayAddress || (await signer.getAddress());
+    const contractAddress = getContractAddress(chainId);
+    if (!contractAddress) return;
+
+    const contract = new ethers.Contract(
+      contractAddress,
+      CONTRACT_ABI,
+      provider
+    );
+
+    const root = await contract.getWhitelistedRoot(userAddress);
+
+    if (root === ethers.ZeroAddress) {
+      // user is NOT whitelisted nor connected to a whitelisted identity
+      return { state: "NOT_WHITELISTED", userAddress, root };
+    }
+
+    if (root.toLowerCase() !== userAddress.toLowerCase()) {
+      // user is a connected (child) account, but NOT the primary identity
+      return { state: "CONNECTED_CHILD", userAddress, root };
+    }
+
+    return { state: "WHITELISTED_PRIMARY", userAddress, root };
+  }, [chainId, walletProvider]);
+
+  // --- Helpers ---
+  const addToast = (message, type = "success") => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(
+      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+      4000
+    );
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const validateInput = (val) => {
+    setAccountToConnect(val);
+    if (!val) {
+      setInputError("");
+      return;
+    }
+    if (!ethers.isAddress(val)) {
+      setInputError("Invalid Ethereum address format");
+    } else if (val.toLowerCase() === rootAddress.toLowerCase()) {
+      setInputError("Cannot connect the whitelisted identity to itself");
+    } else {
+      checkAllChains(val);
+      setInputError("");
+    }
+  };
+
+  const checkAllChains = async (targetAddress: any) => {
+    const initialStatus: typeof chainStatuses = {};
+    Object.values(CHAINS).forEach((chain) => {
+      initialStatus[chain.id] = { isConnected: false, loading: true };
+    });
+    setChainStatuses(initialStatus);
+
+    Object.values(CHAINS).forEach(async (chain) => {
+      try {
+        //(this bypasses broken http/https polyfills that make JsonRpcProvider not work as expected)
+        const fetchClient = new NativeFetchAdapter(chain.rpc);
+        const provider = new ethers.BrowserProvider(fetchClient);
+
+        const contract = new ethers.Contract(
+          chain.contract,
+          CONTRACT_ABI,
+          provider
+        );
+
+        let isConnected = false;
+        try {
+          const connectedRoot = await contract.connectedAccounts(targetAddress);
+          isConnected = connectedRoot !== ethers.ZeroAddress;
+        } catch (e) {
+          console.warn(`RPC check failed for ${chain.name}`, {
+            e,
+          });
+        }
+
+        setChainStatuses((prev) => ({
+          ...prev,
+          [chain.id]: { isConnected, loading: false },
+        }));
+      } catch (err) {
+        console.error(`Error checking ${chain.name}:`, err);
+        setChainStatuses((prev) => ({
+          ...prev,
+          [chain.id]: { isConnected: false, loading: false, error: true },
+        }));
+      }
+    });
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    addToast("Address copied to clipboard", "success");
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      validateInput(text);
+    } catch (err) {
+      addToast("Failed to read clipboard", "error");
+    }
+  };
+
+  // --- Core Interaction Logic ---
+
+  const handleChainAction = async (targetChain, action) => {
+    if (!hasConnectedWallet)
+      return addToast("Please connect your wallet first.");
+
+    if (Number(chainId) !== targetChain.id) {
+      try {
+        setLoading(true);
+        if (switchNetwork) {
+          switchNetwork(targetChain.network);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+      } catch (err) {
+        console.error("Network switch error:", err);
+        setLoading(false);
+        return addToast(`Failed to switch to ${targetChain.name}`, "error");
+      }
+    }
+
+    // 2. Perform Transaction
+    try {
+      setLoading(true);
+      console.log(
+        `Sending tx to ${targetChain.name}: ${action} ${accountToConnect}`
+      );
+
+      const provider = getProvider();
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        targetChain.contract,
+        CONTRACT_ABI,
+        signer
+      );
+
+      const txOverrides = {
+        type: targetChain.txType,
+      };
+
+      const tx =
+        action === "connect"
+          ? await contract.connectAccount(accountToConnect, txOverrides)
+          : await contract.disconnectAccount(accountToConnect, txOverrides);
+      await tx.wait();
+
+      addToast(
+        action === "connect"
+          ? `Connected on ${targetChain.name}!`
+          : `Disconnected from ${targetChain.name}!`,
+        "success"
+      );
+
+      setChainStatuses((prev) => ({
+        ...prev,
+        [targetChain.id]: {
+          isConnected: action === "connect",
+          loading: false,
+        },
+      }));
+    } catch (err) {
+      console.error(err);
+      const message = err?.reason || err?.message || "Transaction failed.";
+      addToast(message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Render ---
+  return (
+    <div className="wrapper">
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      <div className="widget-container">
+        {/* Header Bar */}
+        <div className="widget-header">
+          <div className="logo-area">
+            <LogoComponent />
+            <h1>GoodDollar Identity</h1>
+          </div>
+
+          {!miniPayAddress ? (
+            address ? (
+              <div style={{ display: "flex" }}>
+                <appkit-network-button />
+                <appkit-account-button balance="hide" />
+              </div>
+            ) : (
+              <appkit-button />
+            )
+          ) : null}
+        </div>
+
+        <div className="widget-content">
+          <div className="info-box">
+            <Info className="info-icon" size={20} />
+            <p style={{ margin: 0 }}>
+              You can connect multiple wallet addresses.
+              <br />
+              <strong style={{ color: "var(--text-main)" }}>
+                However, only one claim per day is available, shared between the
+                connected accounts.
+              </strong>
+            </p>
+          </div>
+          {/* Status Section */}
+          <div>
+            <div className="status-card">
+              <div className="status-icon">
+                <ShieldCheck size={20} />
+              </div>
+              <div className="status-details">
+                <p className="label">Primary Whitelisted Identity</p>
+                <div className="address-row">
+                  <p className="address-text">
+                    {rootAddress || "Waiting for connection..."}
+                  </p>
+                  {rootAddress && (
+                    <button
+                      onClick={() => copyToClipboard(rootAddress)}
+                      className="copy-btn"
+                      title="Copy address"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: "16px" }}></div>
+          </div>
+
+          {/* Action Section */}
+          <div className="input-section">
+            <label htmlFor="targetAddress" className="input-label">
+              Connect or Disconnect Address
+            </label>
+
+            <div className="input-wrapper">
+              <input
+                id="targetAddress"
+                type="text"
+                value={accountToConnect}
+                onChange={(e) => validateInput(e.target.value.trim())}
+                disabled={!isConnected || loadingGlobal}
+                placeholder="0x..."
+                className={`address-input ${inputError ? "error" : ""}`}
+              />
+
+              <div className="input-actions">
+                {accountToConnect && !inputError && (
+                  <CheckCircle2
+                    color="var(--success)"
+                    size={18}
+                    style={{ marginRight: "8px" }}
+                  />
+                )}
+                {!accountToConnect && isConnected && (
+                  <button onClick={pasteFromClipboard} className="paste-btn">
+                    Paste
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Validation Message */}
+            <div className="validation-msg">
+              {inputError && (
+                <p className="error-text">
+                  <AlertCircle size={12} /> {inputError}
+                </p>
+              )}
+            </div>
+
+            {/* Per-Chain Action List */}
+            {whitelistState === "WHITELISTED_PRIMARY" &&
+              accountToConnect &&
+              !inputError && (
+                <div className="chain-list">
+                  {Object.values(CHAINS).map((chain) => {
+                    const status = chainStatuses[chain.id] || {
+                      loading: true,
+                      isConnected: false,
+                    };
+                    const isChainLoading = status.loading || loadingGlobal;
+
+                    return (
+                      <div key={chain.id} className="chain-row">
+                        <div className="chain-info">
+                          <div className="chain-icon">
+                            {chain.logo || <Globe size={16} />}
+                          </div>
+                          <div>
+                            <div className="chain-name">{chain.name}</div>
+                            {!status.loading && !status.error && (
+                              <div className="chain-status">
+                                <div
+                                  className={`status-dot ${
+                                    status.isConnected ? "active" : ""
+                                  }`}
+                                />
+                                {status.isConnected
+                                  ? "Connected"
+                                  : "Not Connected"}
+                              </div>
+                            )}
+                            {(status.error || status.loading) && (
+                              <div
+                                className="chain-status"
+                                style={{ fontSize: "10px" }}
+                              >
+                                {status.loading
+                                  ? "Checking..."
+                                  : "Check failed"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {status.isConnected ? (
+                          <button
+                            className="chain-btn disconnect"
+                            disabled={isChainLoading}
+                            onClick={() =>
+                              handleChainAction(chain, "disconnect")
+                            }
+                          >
+                            {isChainLoading ? (
+                              <Loader2 className="spinner" size={14} />
+                            ) : (
+                              <Unlink size={14} />
+                            )}
+                            Disconnect
+                          </button>
+                        ) : (
+                          <button
+                            className="chain-btn connect"
+                            disabled={isChainLoading}
+                            onClick={() => handleChainAction(chain, "connect")}
+                          >
+                            {isChainLoading ? (
+                              <Loader2 className="spinner" size={14} />
+                            ) : (
+                              <LinkIcon size={14} />
+                            )}
+                            Connect
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            {/* Validation logic */}
+
+            {whitelistState !== "WHITELISTED_PRIMARY" &&
+              isConnected &&
+              rootAddress && (
+                <div
+                  className="info-box"
+                  style={{ backgroundColor: "var(--error-bg)", border: "none" }}
+                >
+                  <AlertCircle size={20} color="var(--error)" />
+                  <p style={{ color: "var(--error-text)", margin: 0 }}>
+                    Only the Whitelisted Identity owner can connect/disconnect
+                    addresses.
+                  </p>
+                </div>
+              )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="widget-footer">
+          <p style={{ margin: 0 }}>Supported Networks: Celo, XDC, Fuse</p>
+        </div>
+      </div>
+    </div>
+  );
+}

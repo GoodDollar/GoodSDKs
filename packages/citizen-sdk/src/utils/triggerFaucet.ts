@@ -139,7 +139,7 @@ export async function triggerFaucet({
       return "skipped"
     }
 
-    // Simulate faucet call for gas estimate + revert check
+    // Simulate faucet call for revert check + write request preparation
     const { request } = await publicClient.simulateContract({
       address: faucetAddress,
       abi: faucetABI,
@@ -149,13 +149,31 @@ export async function triggerFaucet({
       chain: walletClient.chain,
     })
 
-    // Optional guards: gas should be payable and <= toppingAmount
-    const gasLimit: bigint | undefined = (request as any)?.gas
-    if (typeof gasLimit === "bigint") {
-      if (balance < gasLimit)
-        throw new Error("Not enough balance to pay for gas")
-      if (gasLimit > toppingAmount)
-        throw new Error("Gas limit exceeds topping amount")
+    // Estimate tx fee in wei using gas units * per-gas price.
+    const estimatedGas = await publicClient.estimateContractGas({
+      address: faucetAddress,
+      abi: faucetABI,
+      functionName: "topWallet",
+      args: [account],
+      account,
+    })
+
+    const fees = await publicClient.estimateFeesPerGas().catch(() => undefined)
+    const perGasWei =
+      fees?.maxFeePerGas ??
+      fees?.gasPrice ??
+      chainConfigs[chainId]?.defaultGasPrice
+
+    if (typeof perGasWei !== "bigint") {
+      throw new Error("Unable to determine per-gas price for faucet top-up")
+    }
+
+    const estimatedTxFeeWei = estimatedGas * perGasWei
+    if (balance < estimatedTxFeeWei) {
+      throw new Error("Not enough balance to pay for estimated gas fee")
+    }
+    if (estimatedTxFeeWei > toppingAmount) {
+      throw new Error("Estimated gas fee exceeds topping amount")
     }
 
     // Send tx (user signs)

@@ -1,11 +1,12 @@
 {
-  "name": "@goodsdks/react-hooks",
-  "version": "1.0.3",
+  "name": "@goodsdks/good-reserve",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
     "dev": "tsc --watch",
-    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -26,26 +27,17 @@
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "@types/react": "^19",
+    "@vitest/ui": "^4.0.18",
+    "tsup": "^8.3.5",
     "typescript": "latest",
     "viem": "latest",
-    "wagmi": "latest"
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
-    "viem": "*",
-    "wagmi": "*"
-  },
-  "dependencies": {
-    "@goodsdks/citizen-sdk": "*",
-    "@goodsdks/streaming-sdk": "*",
-    "@tanstack/react-query": "^4.36.1",
-    "@goodsdks/good-reserve": "workspace:*",
-    "lz-string": "^1.5.0",
-    "react": "^19.1.1",
-    "tsup": "^8.4.0"
+    "viem": "*"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "GoodDollar Reserve SDK — buy and sell G$ through the reserve using viem"
 }

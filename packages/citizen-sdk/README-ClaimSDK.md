@@ -94,6 +94,52 @@ if (amount > 0n) {
 > switch networks and then re-run `ClaimSDK.init` so the SDK binds to that
 > environment before calling `claimSDK.claim()` again.
 
+## Faucet Flow Example (Faucet-Only)
+
+As a way to assist users when first interacting with your dApp and not having to pay for transactions,
+you can call `triggerFaucet` directly as a pre-step before sending your transaction.
+Be aware of strong faucet limits and should not be relied on for expected continous transaction by the user
+(A single daily UBI claim of G$, swapped to gas token will almost always give more!)
+
+```ts
+import {
+  triggerFaucet,
+  SupportedChains,
+  chainConfigs,
+} from "@goodsdks/citizen-sdk"
+import { createPublicClient, createWalletClient, custom, http } from "viem"
+
+const chainId = SupportedChains.CELO
+const env = "production"
+const faucetAddress = chainConfigs[chainId].contracts[env]?.faucetContract
+if (!faucetAddress) throw new Error("Missing faucet address for selected env")
+
+const publicClient = createPublicClient({
+  transport: http(chainConfigs[chainId].rpcUrls[0]!),
+})
+
+const walletClient = createWalletClient({
+  transport: custom(window.ethereum),
+})
+
+const [account] = await walletClient.getAddresses()
+if (!account) throw new Error("No connected wallet account")
+
+const faucetResult = await triggerFaucet({
+  chainId,
+  account,
+  publicClient,
+  walletClient,
+  faucetAddress,
+  env,
+})
+
+console.log("Faucet result:", faucetResult)
+// "skipped" | "topped_via_contract" | "topped_via_api" | "error"
+```
+
+For claim-specific flows, `claimSDK.claim()` already includes faucet handling.
+
 ## Connected Accounts
 
 Users can connect secondary wallets to their main whitelisted account. When a connected account attempts to claim:

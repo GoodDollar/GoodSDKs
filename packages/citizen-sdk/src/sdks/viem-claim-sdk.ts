@@ -165,7 +165,6 @@ export class ClaimSDK {
     return this.chainId
   }
 
-
   private async readChainEntitlement(
     chainId: SupportedChains,
     client?: PublicClient,
@@ -186,8 +185,9 @@ export class ClaimSDK {
       altClient = resolvedClient
     }
 
-    const { root: rootAddress } =
-      await this.identitySDK.getWhitelistedRoot(this.account)
+    const { root: rootAddress } = await this.identitySDK.getWhitelistedRoot(
+      this.account,
+    )
 
     return this.readContract<bigint>(
       {
