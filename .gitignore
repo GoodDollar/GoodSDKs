@@ -43,3 +43,4 @@ apps/demo-reserve-swap/tsconfig.tsbuildinfo
 e2e.log 
 .bounties
 codex-resume
+.codex 
