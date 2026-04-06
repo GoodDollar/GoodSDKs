@@ -39,7 +39,9 @@ async function canClaim(
   toppingAmount: bigint,
   minTopping: number,
 ): Promise<boolean> {
-  const fees = await publicClient.estimateFeesPerGas().catch(() => undefined)
+  const fees = await publicClient
+    .estimateFeesPerGas()
+    .catch((error) => console.log("Error estimating fees per gas:", error))
   const gasPrice =
     fees?.maxFeePerGas ??
     fees?.gasPrice ??
