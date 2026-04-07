@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { zeroAddress } from "viem"
 import { IdentitySDK } from "../src/sdks/viem-identity-sdk"
+import * as rpcFallback from "../src/utils/rpcFallback"
 import { SupportedChains, WALLET_LINK_SECURITY_MESSAGES } from "../src/constants"
 
 const MOCK_ROOT_ACCOUNT = "0x1111111111111111111111111111111111111111"
@@ -136,18 +137,28 @@ describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
       )
     })
 
-    it("should return a headless error entry when checking all chains without providing publicClients", async () => {
-      publicClient.readContract.mockResolvedValueOnce(MOCK_ROOT_ACCOUNT)
+    it("uses fallback clients when publicClients are omitted", async () => {
+      const fallbackClientSpy = vi
+        .spyOn(rpcFallback, "getRpcFallbackClient")
+        .mockReturnValue(publicClient)
+
+      publicClient.readContract
+        .mockResolvedValueOnce(MOCK_ROOT_ACCOUNT) // CELO
+        .mockResolvedValueOnce(zeroAddress)       // FUSE
+        .mockResolvedValueOnce(zeroAddress)       // XDC
 
       const result = await sdk.checkConnectedStatus(MOCK_CHILD_ACCOUNT)
 
-      const sdkChainEntry = result.find(r => r.chainId === SupportedChains.CELO)
-      const headlessFailedEntry = result.find(r => r.chainId !== SupportedChains.CELO)
+      expect(fallbackClientSpy).toHaveBeenCalled()
+
+      const sdkChainEntry = result.find((r) => r.chainId === SupportedChains.CELO)
+      const otherChainEntry = result.find((r) => r.chainId !== SupportedChains.CELO)
 
       expect(sdkChainEntry?.isConnected).toBe(true)
+      expect(otherChainEntry?.isConnected).toBe(false)
+      expect(otherChainEntry?.error).toBeUndefined()
 
-      expect(headlessFailedEntry?.isConnected).toBe(false)
-      expect(headlessFailedEntry?.error).toContain("No public client provided")
+      fallbackClientSpy.mockRestore()
     })
   })
 

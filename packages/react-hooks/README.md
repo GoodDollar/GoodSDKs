@@ -88,6 +88,7 @@ These hooks re-run whenever the connected wallet, public client, or environment 
 ### Wallet-Link (IdentityV4)
 
 All wallet-link hooks live in a dedicated file (`wagmi-wallet-link-sdk.ts`) and are exported from the package root.
+They build on the identity SDK initialised via `useIdentitySDK` (see the Identity & Claim section above), so the Wagmi public and wallet clients must already be configured.
 
 #### `useConnectAccount(sdk)`
 
