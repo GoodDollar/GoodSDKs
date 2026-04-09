@@ -26,121 +26,14 @@ export const POOL_ABI = parseAbi([
   'function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)',
 ]);
 
-export const POSITION_MANAGER_ABI = [
-  {
-    inputs: [
-      {
-        components: [
-          { internalType: 'address', name: 'token0', type: 'address' },
-          { internalType: 'address', name: 'token1', type: 'address' },
-          { internalType: 'uint24', name: 'fee', type: 'uint24' },
-          { internalType: 'int24', name: 'tickLower', type: 'int24' },
-          { internalType: 'int24', name: 'tickUpper', type: 'int24' },
-          { internalType: 'uint256', name: 'amount0Desired', type: 'uint256' },
-          { internalType: 'uint256', name: 'amount1Desired', type: 'uint256' },
-          { internalType: 'uint256', name: 'amount0Min', type: 'uint256' },
-          { internalType: 'uint256', name: 'amount1Min', type: 'uint256' },
-          { internalType: 'address', name: 'recipient', type: 'address' },
-          { internalType: 'uint256', name: 'deadline', type: 'uint256' },
-        ],
-        internalType: 'struct INonfungiblePositionManager.MintParams',
-        name: 'params',
-        type: 'tuple',
-      },
-    ],
-    name: 'mint',
-    outputs: [
-      { internalType: 'uint256', name: 'tokenId', type: 'uint256' },
-      { internalType: 'uint128', name: 'liquidity', type: 'uint128' },
-      { internalType: 'uint256', name: 'amount0', type: 'uint256' },
-      { internalType: 'uint256', name: 'amount1', type: 'uint256' },
-    ],
-    stateMutability: 'payable',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'address', name: 'owner', type: 'address' }],
-    name: 'balanceOf',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { internalType: 'address', name: 'owner', type: 'address' },
-      { internalType: 'uint256', name: 'index', type: 'uint256' },
-    ],
-    name: 'tokenOfOwnerByIndex',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'uint256', name: 'tokenId', type: 'uint256' }],
-    name: 'positions',
-    outputs: [
-      { internalType: 'uint96', name: 'nonce', type: 'uint96' },
-      { internalType: 'address', name: 'operator', type: 'address' },
-      { internalType: 'address', name: 'token0', type: 'address' },
-      { internalType: 'address', name: 'token1', type: 'address' },
-      { internalType: 'uint24', name: 'fee', type: 'uint24' },
-      { internalType: 'int24', name: 'tickLower', type: 'int24' },
-      { internalType: 'int24', name: 'tickUpper', type: 'int24' },
-      { internalType: 'uint128', name: 'liquidity', type: 'uint128' },
-      { internalType: 'uint256', name: 'feeGrowthInside0LastX128', type: 'uint256' },
-      { internalType: 'uint256', name: 'feeGrowthInside1LastX128', type: 'uint256' },
-      { internalType: 'uint128', name: 'tokensOwed0', type: 'uint128' },
-      { internalType: 'uint128', name: 'tokensOwed1', type: 'uint128' },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [
-      {
-        components: [
-          { internalType: 'uint256', name: 'tokenId', type: 'uint256' },
-          { internalType: 'uint128', name: 'liquidity', type: 'uint128' },
-          { internalType: 'uint256', name: 'amount0Min', type: 'uint256' },
-          { internalType: 'uint256', name: 'amount1Min', type: 'uint256' },
-          { internalType: 'uint256', name: 'deadline', type: 'uint256' },
-        ],
-        internalType: 'struct INonfungiblePositionManager.DecreaseLiquidityParams',
-        name: 'params',
-        type: 'tuple',
-      },
-    ],
-    name: 'decreaseLiquidity',
-    outputs: [
-      { internalType: 'uint256', name: 'amount0', type: 'uint256' },
-      { internalType: 'uint256', name: 'amount1', type: 'uint256' },
-    ],
-    stateMutability: 'payable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      {
-        components: [
-          { internalType: 'uint256', name: 'tokenId', type: 'uint256' },
-          { internalType: 'address', name: 'recipient', type: 'address' },
-          { internalType: 'uint128', name: 'amount0Max', type: 'uint128' },
-          { internalType: 'uint128', name: 'amount1Max', type: 'uint128' },
-        ],
-        internalType: 'struct INonfungiblePositionManager.CollectParams',
-        name: 'params',
-        type: 'tuple',
-      },
-    ],
-    name: 'collect',
-    outputs: [
-      { internalType: 'uint256', name: 'amount0', type: 'uint256' },
-      { internalType: 'uint256', name: 'amount1', type: 'uint256' },
-    ],
-    stateMutability: 'payable',
-    type: 'function',
-  },
-] as const;
+export const POSITION_MANAGER_ABI = parseAbi([
+  'function mint((address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) params) payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)',
+  'function balanceOf(address owner) view returns (uint256)',
+  'function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)',
+  'function positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)',
+  'function decreaseLiquidity((uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) params) payable returns (uint256 amount0, uint256 amount1)',
+  'function collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max) params) payable returns (uint256 amount0, uint256 amount1)',
+]);
 
 export function tickToSqrtPrice(tick: number): number {
   return Math.sqrt(1.0001 ** tick);

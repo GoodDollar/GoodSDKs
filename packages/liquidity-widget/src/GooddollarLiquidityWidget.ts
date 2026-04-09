@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { createWalletClient, createPublicClient, custom, http, formatEther, parseEther } from 'viem';
+import { createWalletClient, createPublicClient, custom, http, formatEther } from 'viem';
 import type { PublicClient, WalletClient } from 'viem';
 import { celo } from 'viem/chains';
 
@@ -13,6 +13,7 @@ import {
 import type { TxFlowPhase, TxStepInfo, PositionData, WidgetTheme } from './liquidity/types';
 import { loadPoolData, loadUserBalancesAndAllowances, getUserPositions, formatBigIntDisplay, formatAmount } from './liquidity/pool-service';
 import { approveToken, addLiquidity, parseTxError } from './liquidity/tx-service';
+import { safeParseEther, validateInputs } from './liquidity/validation';
 import { RANGE_PRESETS } from './liquidity/components/lw-range-presets';
 
 import './liquidity/components/lw-stepper';
@@ -24,6 +25,16 @@ import './liquidity/components/lw-position-card';
 import './liquidity/components/lw-positions-panel';
 
 type WidgetTab = 'add' | 'positions';
+
+export function updateStep(
+  steps: TxStepInfo[],
+  index: number,
+  patch: Partial<TxStepInfo>,
+): TxStepInfo[] {
+  const next = steps.slice();
+  next[index] = { ...next[index], ...patch };
+  return next;
+}
 
 @customElement('gooddollar-liquidity-widget')
 export class GooddollarLiquidityWidget extends LitElement {
@@ -50,6 +61,9 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   @property({ type: Object })
   theme: Partial<WidgetTheme> | undefined = undefined;
+
+  @property({ type: Number })
+  refreshInterval: number = 30_000;
 
   // ── Internal State ─────────────────────────────────────────────────
 
@@ -80,7 +94,36 @@ export class GooddollarLiquidityWidget extends LitElement {
   private walletClient: WalletClient | null = null;
   private publicClient: PublicClient | null = null;
   private userAddress: string | null = null;
-  private refreshInterval: ReturnType<typeof setInterval> | null = null;
+  private _refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  // ── Bigint helpers (avoid precision loss) ──────────────────────────
+
+  private static readonly Q96 = 2n ** 96n;
+  private static readonly Q192 = 2n ** 192n;
+
+  private static _pow10(decimals: number): bigint {
+    // decimals is small/constant in this widget; simple loop is fine.
+    let x = 1n;
+    for (let i = 0; i < decimals; i++) x *= 10n;
+    return x;
+  }
+
+  private static _formatFixed(value: bigint, decimals: number): string {
+    // Returns a base-10 string with `decimals` fractional digits.
+    const negative = value < 0n;
+    const v = negative ? -value : value;
+    const base = GooddollarLiquidityWidget._pow10(decimals);
+    const whole = v / base;
+    const frac = v % base;
+    const fracStr = frac.toString().padStart(decimals, '0');
+    return `${negative ? '-' : ''}${whole.toString()}${decimals > 0 ? `.${fracStr}` : ''}`;
+  }
+
+  private static _toFiniteNumber(value: string): number {
+    // Convert a decimal string to number, but never return NaN/Infinity.
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
 
   // ── Styles ─────────────────────────────────────────────────────────
 
@@ -196,18 +239,36 @@ export class GooddollarLiquidityWidget extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     this.selectedRange = this.defaultRange;
-    this.refreshInterval = setInterval(() => this.refreshData(), 30_000);
     this.refreshData();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this.refreshInterval) clearInterval(this.refreshInterval);
+    this._stopRefreshTimer();
   }
 
   updated(changed: Map<string, unknown>) {
     if (changed.has('web3Provider')) this.refreshData();
+    if (changed.has('refreshInterval')) this._syncRefreshTimer();
     if (changed.has('theme')) this._applyTheme();
+  }
+
+  private get _isConnected(): boolean {
+    return !!(this.web3Provider && this.web3Provider.isConnected && this.userAddress);
+  }
+
+  private _syncRefreshTimer() {
+    this._stopRefreshTimer();
+    if (this._isConnected && this.refreshInterval > 0) {
+      this._refreshTimer = setInterval(() => this.refreshData(), this.refreshInterval);
+    }
+  }
+
+  private _stopRefreshTimer() {
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
   }
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -400,6 +461,7 @@ export class GooddollarLiquidityWidget extends LitElement {
     }
 
     this.isLoading = false;
+    this._syncRefreshTimer();
   }
 
   private _resetUserData() {
@@ -430,13 +492,22 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   private _getGdPriceInUsdglo(): number {
     if (this.sqrtPriceX96 === 0n) return 0;
-    const sqrtPrice = Number(this.sqrtPriceX96) / (2 ** 96);
-    const rawPrice = sqrtPrice * sqrtPrice;
-    return IS_GD_TOKEN0 ? rawPrice : 1 / rawPrice;
+    // price = (sqrtPriceX96^2) / 2^192
+    // Compute as fixed-point bigint to avoid Number overflow/precision loss.
+    const scale = 18;
+    const scaledPrice = (this.sqrtPriceX96 * this.sqrtPriceX96 * GooddollarLiquidityWidget._pow10(scale)) / GooddollarLiquidityWidget.Q192;
+    const rawPrice = GooddollarLiquidityWidget._toFiniteNumber(GooddollarLiquidityWidget._formatFixed(scaledPrice, scale));
+    if (rawPrice <= 0) return 0;
+    return IS_GD_TOKEN0 ? rawPrice : (1 / rawPrice);
   }
 
   private _getSqrtPriceFloat(): number {
-    return Number(this.sqrtPriceX96) / (2 ** 96);
+    if (this.sqrtPriceX96 === 0n) return 0;
+    // sqrtPrice = sqrtPriceX96 / 2^96
+    // Keep this as a bounded float for UI math (range presets / input pairing).
+    const scale = 12;
+    const scaledSqrt = (this.sqrtPriceX96 * GooddollarLiquidityWidget._pow10(scale)) / GooddollarLiquidityWidget.Q96;
+    return GooddollarLiquidityWidget._toFiniteNumber(GooddollarLiquidityWidget._formatFixed(scaledSqrt, scale));
   }
 
   private _calcAmount1From0(amount0: number): number {
@@ -471,43 +542,23 @@ export class GooddollarLiquidityWidget extends LitElement {
     if (isFinite(gd) && gd >= 0) this.gdInput = formatAmount(gd);
   }
 
-  private _safeParseEther(value: string): bigint {
-    try {
-      if (!value || value.trim() === '' || value === '.') return 0n;
-      return parseEther(value);
-    } catch { return 0n; }
-  }
-
   // ── Validation ─────────────────────────────────────────────────────
 
   private _validateInputs(force = false) {
-    this.inputError = '';
-    const re = /^[0-9]*\.?[0-9]*$/;
-    if (this.gdInput && !re.test(this.gdInput)) { this.inputError = 'Invalid G$ value'; return; }
-    if (this.usdgloInput && !re.test(this.usdgloInput)) { this.inputError = 'Invalid USDGLO value'; return; }
-
-    const gdNum = parseFloat(this.gdInput || '0');
-    const usdgloNum = parseFloat(this.usdgloInput || '0');
-
-    if (force && (isNaN(gdNum) || gdNum <= 0 || isNaN(usdgloNum) || usdgloNum <= 0)) {
-      this.inputError = 'Please enter valid amounts';
-      return;
-    }
-    if (gdNum > 0 && this._safeParseEther(this.gdInput) > this.gdBalance) {
-      this.inputError = 'Insufficient G$ balance';
-      return;
-    }
-    if (usdgloNum > 0 && this._safeParseEther(this.usdgloInput) > this.usdgloBalance) {
-      this.inputError = 'Insufficient USDGLO balance';
-      return;
-    }
+    this.inputError = validateInputs({
+      gdInput: this.gdInput,
+      usdgloInput: this.usdgloInput,
+      gdBalance: this.gdBalance,
+      usdgloBalance: this.usdgloBalance,
+      force,
+    }) ?? '';
   }
 
   private _getButtonLabel(): string {
     if (this.txPhase === 'success') return 'Add More Liquidity';
 
-    const gdWei = this._safeParseEther(this.gdInput);
-    const usdgloWei = this._safeParseEther(this.usdgloInput);
+    const gdWei = safeParseEther(this.gdInput);
+    const usdgloWei = safeParseEther(this.usdgloInput);
 
     if (gdWei > 0n && this.gdAllowance < gdWei) return 'Approve & Add Liquidity';
     if (usdgloWei > 0n && this.usdgloAllowance < usdgloWei) return 'Approve & Add Liquidity';
@@ -531,13 +582,13 @@ export class GooddollarLiquidityWidget extends LitElement {
   }
 
   private _handleGdMax() {
-    this.gdInput = Number(formatEther(this.gdBalance)).toString();
+    this.gdInput = formatEther(this.gdBalance);
     this._calcUsdgloFromGd();
     this.inputError = '';
   }
 
   private _handleUsdgloMax() {
-    this.usdgloInput = Number(formatEther(this.usdgloBalance)).toString();
+    this.usdgloInput = formatEther(this.usdgloBalance);
     this._calcGdFromUsdglo();
     this.inputError = '';
   }
@@ -575,27 +626,25 @@ export class GooddollarLiquidityWidget extends LitElement {
     if (this.inputError) return;
 
     const account = this.userAddress as `0x${string}`;
-    const gdWei = this._safeParseEther(this.gdInput);
-    const usdgloWei = this._safeParseEther(this.usdgloInput);
+    const gdWei = safeParseEther(this.gdInput);
+    const usdgloWei = safeParseEther(this.usdgloInput);
 
     const needGdApproval = gdWei > 0n && this.gdAllowance < gdWei;
     const needUsdgloApproval = usdgloWei > 0n && this.usdgloAllowance < usdgloWei;
 
-    const steps: TxStepInfo[] = [
+    let steps: TxStepInfo[] = [
       { label: 'Approve G$', status: needGdApproval ? 'pending' : 'skipped' },
       { label: 'Approve USDGLO', status: needUsdgloApproval ? 'pending' : 'skipped' },
       { label: 'Add Liquidity', status: 'pending' },
     ];
-    this.txSteps = [...steps];
+    this.txSteps = steps;
     this.txError = '';
 
     try {
-      // Step 1: Approve G$
       if (needGdApproval) {
-        steps[0].status = 'active';
-        this.txSteps = [...steps];
         this.txPhase = 'approving-gd';
         this.txHash = '';
+        this.txSteps = updateStep(steps, 0, { status: 'active' });
 
         const hash = await approveToken(
           this.publicClient, this.walletClient, account,
@@ -606,18 +655,14 @@ export class GooddollarLiquidityWidget extends LitElement {
           },
         );
 
-        steps[0].status = 'completed';
-        steps[0].txHash = hash;
-        this.txSteps = [...steps];
+        this.txSteps = steps = updateStep(steps, 0, { status: 'completed', txHash: hash });
         await this.refreshData();
       }
 
-      // Step 2: Approve USDGLO
       if (needUsdgloApproval) {
-        steps[1].status = 'active';
-        this.txSteps = [...steps];
         this.txPhase = 'approving-usdglo';
         this.txHash = '';
+        this.txSteps = updateStep(steps, 1, { status: 'active' });
 
         const hash = await approveToken(
           this.publicClient, this.walletClient, account,
@@ -628,17 +673,13 @@ export class GooddollarLiquidityWidget extends LitElement {
           },
         );
 
-        steps[1].status = 'completed';
-        steps[1].txHash = hash;
-        this.txSteps = [...steps];
+        this.txSteps = steps = updateStep(steps, 1, { status: 'completed', txHash: hash });
         await this.refreshData();
       }
 
-      // Step 3: Mint
-      steps[2].status = 'active';
-      this.txSteps = [...steps];
       this.txPhase = 'minting';
       this.txHash = '';
+      this.txSteps = updateStep(steps, 2, { status: 'active' });
 
       const hash = await addLiquidity(
         this.publicClient, this.walletClient, account,
@@ -649,9 +690,7 @@ export class GooddollarLiquidityWidget extends LitElement {
         },
       );
 
-      steps[2].status = 'completed';
-      steps[2].txHash = hash;
-      this.txSteps = [...steps];
+      this.txSteps = updateStep(steps, 2, { status: 'completed', txHash: hash });
       this.txPhase = 'success';
       this.txHash = hash;
 

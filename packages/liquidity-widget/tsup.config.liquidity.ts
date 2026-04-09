@@ -8,7 +8,7 @@ export default defineConfig({
   splitting: false,
   sourcemap: false,
   clean: true,
-  dts: false,
+  dts: true,
   minify: true,
   target: "ESNext",
   outDir: "dist",
