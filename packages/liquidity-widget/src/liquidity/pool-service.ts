@@ -3,7 +3,7 @@ import { formatEther } from 'viem';
 import {
   POOL_ADDRESS, POOL_ABI, POSITION_MANAGER, POSITION_MANAGER_ABI,
   GD_TOKEN, USDGLO_TOKEN, POOL_FEE, IS_GD_TOKEN0, TOKEN0, TOKEN1,
-  tickToSqrtPrice,
+  tickToSqrtPrice, ERC20_ABI
 } from './constants';
 import type { PoolData, PositionData } from './types';
 
@@ -27,24 +27,31 @@ export async function loadUserBalancesAndAllowances(
   publicClient: PublicClient,
   userAddress: `0x${string}`,
 ) {
-  const [gdBalance, usdgloBalance, gdAllowance, usdgloAllowance] = await Promise.all([
-    publicClient.readContract({
-      address: GD_TOKEN, abi: (await import('./constants')).ERC20_ABI,
-      functionName: 'balanceOf', args: [userAddress],
-    }),
-    publicClient.readContract({
-      address: USDGLO_TOKEN, abi: (await import('./constants')).ERC20_ABI,
-      functionName: 'balanceOf', args: [userAddress],
-    }),
-    publicClient.readContract({
-      address: GD_TOKEN, abi: (await import('./constants')).ERC20_ABI,
-      functionName: 'allowance', args: [userAddress, POSITION_MANAGER],
-    }),
-    publicClient.readContract({
-      address: USDGLO_TOKEN, abi: (await import('./constants')).ERC20_ABI,
-      functionName: 'allowance', args: [userAddress, POSITION_MANAGER],
-    }),
-  ]);
+  const results = await publicClient.multicall({
+    contracts: [
+      {
+        address: GD_TOKEN, abi: ERC20_ABI,
+        functionName: 'balanceOf' as const, args: [userAddress],
+      },
+      {
+        address: USDGLO_TOKEN, abi: ERC20_ABI,
+        functionName: 'balanceOf' as const, args: [userAddress],
+      },
+      {
+        address: GD_TOKEN, abi: ERC20_ABI,
+        functionName: 'allowance' as const, args: [userAddress, POSITION_MANAGER],
+      },
+      {
+        address: USDGLO_TOKEN, abi: ERC20_ABI,
+        functionName: 'allowance' as const, args: [userAddress, POSITION_MANAGER],
+      },
+    ],
+  });
+
+  const gdBalance = results[0].status === 'success' ? results[0].result as bigint : 0n;
+  const usdgloBalance = results[1].status === 'success' ? results[1].result as bigint : 0n;
+  const gdAllowance = results[2].status === 'success' ? results[2].result as bigint : 0n;
+  const usdgloAllowance = results[3].status === 'success' ? results[3].result as bigint : 0n;
 
   return { gdBalance, usdgloBalance, gdAllowance, usdgloAllowance };
 }
@@ -68,26 +75,36 @@ export async function getUserPositions(
 
   if (positionCount === 0n) return [];
 
-  const tokenIds: bigint[] = [];
-  for (let i = 0n; i < positionCount; i++) {
-    const tokenId = await publicClient.readContract({
+  const tokenIdResults = await publicClient.multicall({
+    contracts: Array.from({ length: Number(positionCount) }, (_, i) => ({
       address: POSITION_MANAGER,
       abi: POSITION_MANAGER_ABI,
-      functionName: 'tokenOfOwnerByIndex',
-      args: [userAddress, i],
-    }) as bigint;
-    tokenIds.push(tokenId);
-  }
+      functionName: 'tokenOfOwnerByIndex' as const,
+      args: [userAddress, BigInt(i)],
+    })),
+  });
+
+  const tokenIds = tokenIdResults
+    .filter((r) => r.status === 'success')
+    .map((r) => r.result as bigint);
+
+  if (tokenIds.length === 0) return [];
+
+  const positionResults = await publicClient.multicall({
+    contracts: tokenIds.map((tokenId) => ({
+      address: POSITION_MANAGER,
+      abi: POSITION_MANAGER_ABI,
+      functionName: 'positions' as const,
+      args: [tokenId],
+    })),
+  });
 
   const positions: PositionData[] = [];
-  for (const tokenId of tokenIds) {
-    const pos = await publicClient.readContract({
-      address: POSITION_MANAGER,
-      abi: POSITION_MANAGER_ABI,
-      functionName: 'positions',
-      args: [tokenId],
-    }) as readonly [bigint, string, string, string, number, number, number, bigint, bigint, bigint, bigint, bigint];
+  for (let i = 0; i < tokenIds.length; i++) {
+    const res = positionResults[i];
+    if (res.status !== 'success') continue;
 
+    const pos = res.result as readonly [bigint, string, string, string, number, number, number, bigint, bigint, bigint, bigint, bigint];
     const [, , token0, token1, fee, tickLower, tickUpper, liquidity, , , tokensOwed0, tokensOwed1] = pos;
 
     const matchesPool =
@@ -103,7 +120,7 @@ export async function getUserPositions(
     );
 
     positions.push({
-      tokenId,
+      tokenId: tokenIds[i],
       token0, token1,
       fee, tickLower, tickUpper,
       liquidity,

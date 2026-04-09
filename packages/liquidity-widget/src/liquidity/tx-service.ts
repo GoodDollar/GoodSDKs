@@ -20,7 +20,7 @@ export async function approveToken(
   bufferPercent: number = 5,
   callbacks?: TxCallbacks,
 ): Promise<`0x${string}`> {
-  const bufferedAmount = amount + (amount * BigInt(bufferPercent) / 100n);
+  const bufferedAmount = amount + (amount * BigInt(Math.round(bufferPercent * 100)) / 10000n);
 
   const { request } = await publicClient.simulateContract({
     account,
@@ -92,6 +92,10 @@ export async function removeLiquidity(
   liquidity: bigint,
   callbacks?: TxCallbacks,
 ): Promise<`0x${string}`> {
+  if (liquidity > MAX_UINT128) {
+    throw new Error('Liquidity value exceeds uint128 maximum');
+  }
+
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
 
   const { request: decreaseReq } = await publicClient.simulateContract({
@@ -101,7 +105,7 @@ export async function removeLiquidity(
     functionName: 'decreaseLiquidity',
     args: [{
       tokenId,
-      liquidity: BigInt(liquidity) as unknown as bigint & { __brand: 'uint128' },
+      liquidity: liquidity as unknown as bigint & { __brand: 'uint128' },
       amount0Min: 0n,
       amount1Min: 0n,
       deadline,
