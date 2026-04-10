@@ -2240,8 +2240,8 @@ __metadata:
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
   dependencies:
     "@goodsdks/citizen-sdk": "npm:*"
-    "@goodsdks/streaming-sdk": "npm:*"
     "@goodsdks/good-reserve": "workspace:*"
+    "@goodsdks/streaming-sdk": "npm:*"
     "@repo/typescript-config": "workspace:*"
     "@tanstack/react-query": "npm:^4.36.1"
     "@types/react": "npm:^19"
@@ -10751,6 +10751,33 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"demo-reserve-swap@workspace:apps/demo-reserve-swap":
+  version: 0.0.0-use.local
+  resolution: "demo-reserve-swap@workspace:apps/demo-reserve-swap"
+  dependencies:
+    "@eslint/js": "npm:^9.17.0"
+    "@goodsdks/good-reserve": "workspace:*"
+    "@goodsdks/react-hooks": "workspace:*"
+    "@reown/appkit": "npm:^1.7.2"
+    "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
+    "@tanstack/react-query": "npm:^5.64.2"
+    "@types/react": "npm:^18.3.18"
+    "@types/react-dom": "npm:^18.3.5"
+    "@vitejs/plugin-react": "npm:^4.3.4"
+    eslint: "npm:^9.17.0"
+    eslint-plugin-react-hooks: "npm:^5.0.0"
+    eslint-plugin-react-refresh: "npm:^0.4.16"
+    globals: "npm:^15.14.0"
+    react: "npm:^18.3.1"
+    react-dom: "npm:^18.3.1"
+    typescript: "npm:~5.6.2"
+    typescript-eslint: "npm:^8.18.2"
+    viem: "npm:^2.22.10"
+    vite: "npm:6.3.5"
+    wagmi: "npm:^2.14.8"
+  languageName: unknown
+  linkType: soft
+
 "demo-streaming-app@workspace:apps/demo-streaming-app":
   version: 0.0.0-use.local
   resolution: "demo-streaming-app@workspace:apps/demo-streaming-app"
@@ -10784,30 +10811,6 @@ __metadata:
     viem: "npm:^1.21.4"
     vite: "npm:6.3.5"
     wagmi: "npm:^1.4.13"
-"demo-reserve-swap@workspace:apps/demo-reserve-swap":
-  version: 0.0.0-use.local
-  resolution: "demo-reserve-swap@workspace:apps/demo-reserve-swap"
-  dependencies:
-    "@eslint/js": "npm:^9.17.0"
-    "@goodsdks/good-reserve": "workspace:*"
-    "@goodsdks/react-hooks": "workspace:*"
-    "@reown/appkit": "npm:^1.7.2"
-    "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
-    "@tanstack/react-query": "npm:^5.64.2"
-    "@types/react": "npm:^18.3.18"
-    "@types/react-dom": "npm:^18.3.5"
-    "@vitejs/plugin-react": "npm:^4.3.4"
-    eslint: "npm:^9.17.0"
-    eslint-plugin-react-hooks: "npm:^5.0.0"
-    eslint-plugin-react-refresh: "npm:^0.4.16"
-    globals: "npm:^15.14.0"
-    react: "npm:^18.3.1"
-    react-dom: "npm:^18.3.1"
-    typescript: "npm:~5.6.2"
-    typescript-eslint: "npm:^8.18.2"
-    viem: "npm:^2.22.10"
-    vite: "npm:6.3.5"
-    wagmi: "npm:^2.14.8"
   languageName: unknown
   linkType: soft
 
