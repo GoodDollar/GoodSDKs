@@ -4,7 +4,7 @@ The `gooddollar-liquidity-widget` web component provides a simple and interactiv
 
 ## Integrating The Component
 
-Can be used in any website, for a quick setup:
+This component can be used on any website. For a quick setup:
 
 1. **Download the Script**: Download the `index.global.js` file from the project releases or build it from the source.
 2. **Include in HTML**: Add the script to your HTML file.
@@ -61,7 +61,7 @@ Customize the `gooddollar-liquidity-widget` using these properties:
   Defines the function called when the "Connect Wallet" button is clicked.
 
 - **`web3Provider`**: _(Set via JavaScript property)_  
-  The web3Provider object when the wallet is connected. Wallet connection logic should be handled outside of this component.
+  The web3Provider object to use when the wallet is connected. Wallet connection logic should be handled outside of this component.
 
 - **`explorerBaseUrl`**: _(String, default: `"https://celoscan.io"`)_  
   Base URL used for linking transaction hashes to a block explorer.
@@ -74,6 +74,9 @@ Customize the `gooddollar-liquidity-widget` using these properties:
 
 - **`showPositions`**: _(Boolean, default: `true`)_  
   Whether to show the "My Positions" tab, which lists the user's existing liquidity positions.
+
+- **`refreshInterval`**: _(Number, default: `30000`)_  
+  Interval in milliseconds for automatically refreshing pool data and user balances. Set to `0` to disable auto-refresh.
 
 - **`theme`**: _(Object, optional)_  
   Override visual styling. Accepts an object with any of the following keys:

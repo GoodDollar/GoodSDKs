@@ -3,8 +3,10 @@ import { formatEther } from 'viem';
 import {
   POOL_ADDRESS, POOL_ABI, POSITION_MANAGER, POSITION_MANAGER_ABI,
   GD_TOKEN, USDGLO_TOKEN, POOL_FEE, IS_GD_TOKEN0, TOKEN0, TOKEN1,
-  tickToSqrtPrice, ERC20_ABI
+  ERC20_ABI
 } from './constants';
+import { computeGdPriceFromSqrtPrice, computeSqrtPriceFloat } from './price-math';
+import { getAmountsForPositionApprox } from './liquidity-math';
 import type { PoolData, PositionData } from './types';
 
 export async function loadPoolData(publicClient: PublicClient): Promise<PoolData> {
@@ -16,11 +18,10 @@ export async function loadPoolData(publicClient: PublicClient): Promise<PoolData
 
   const sqrtPriceX96 = slot0[0];
   const currentTick = slot0[1];
-  const sqrtPrice = Number(sqrtPriceX96) / (2 ** 96);
-  const rawPrice = sqrtPrice * sqrtPrice;
-  const gdPriceInUsdglo = rawPrice === 0 ? 0 : (IS_GD_TOKEN0 ? rawPrice : 1 / rawPrice);
+  const gdPriceInUsdglo = computeGdPriceFromSqrtPrice(sqrtPriceX96);
+  const sqrtPriceFloat = computeSqrtPriceFloat(sqrtPriceX96);
 
-  return { sqrtPriceX96, currentTick, price: rawPrice, gdPriceInUsdglo };
+  return { sqrtPriceX96, currentTick, gdPriceInUsdglo, sqrtPriceFloat };
 }
 
 export async function loadUserBalancesAndAllowances(
@@ -115,7 +116,7 @@ export async function getUserPositions(
     if (!matchesPool) continue;
     if (liquidity === 0n && tokensOwed0 === 0n && tokensOwed1 === 0n) continue;
 
-    const { amount0, amount1 } = calculatePositionAmounts(
+    const { amount0, amount1 } = getAmountsForPositionApprox(
       liquidity, tickLower, tickUpper, currentTick,
     );
 
@@ -133,39 +134,10 @@ export async function getUserPositions(
   return positions;
 }
 
-function calculatePositionAmounts(
-  liquidity: bigint,
-  tickLower: number,
-  tickUpper: number,
-  currentTick: number,
-): { amount0: bigint; amount1: bigint } {
-  if (liquidity === 0n) return { amount0: 0n, amount1: 0n };
-
-  const sqrtPriceLower = tickToSqrtPrice(tickLower);
-  const sqrtPriceUpper = tickToSqrtPrice(tickUpper);
-  const sqrtPriceCurrent = tickToSqrtPrice(currentTick);
-
-  const L = Number(liquidity);
-  let amount0 = 0;
-  let amount1 = 0;
-
-  if (currentTick < tickLower) {
-    amount0 = L * (sqrtPriceUpper - sqrtPriceLower) / (sqrtPriceLower * sqrtPriceUpper);
-  } else if (currentTick >= tickUpper) {
-    amount1 = L * (sqrtPriceUpper - sqrtPriceLower);
-  } else {
-    amount0 = L * (sqrtPriceUpper - sqrtPriceCurrent) / (sqrtPriceCurrent * sqrtPriceUpper);
-    amount1 = L * (sqrtPriceCurrent - sqrtPriceLower);
-  }
-
-  return {
-    amount0: BigInt(Math.floor(amount0)),
-    amount1: BigInt(Math.floor(amount1)),
-  };
-}
-
 export function formatBigIntDisplay(num: bigint): string {
-  return Intl.NumberFormat().format(Number(formatEther(num)));
+  const n = Number(formatEther(num));
+  if (!Number.isFinite(n)) return '0';
+  return Intl.NumberFormat().format(n);
 }
 
 export function formatAmount(num: number): string {

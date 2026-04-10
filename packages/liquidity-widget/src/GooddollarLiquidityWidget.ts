@@ -10,10 +10,11 @@ import {
   FULL_RANGE_TICK_LOWER, FULL_RANGE_TICK_UPPER,
   tickToSqrtPrice,
 } from './liquidity/constants';
-import type { TxFlowPhase, TxStepInfo, PositionData, WidgetTheme } from './liquidity/types';
+import type { TxFlowPhase, TxStepInfo, PositionData, PoolData, WidgetTheme } from './liquidity/types';
 import { loadPoolData, loadUserBalancesAndAllowances, getUserPositions, formatBigIntDisplay, formatAmount } from './liquidity/pool-service';
 import { approveToken, addLiquidity, parseTxError } from './liquidity/tx-service';
 import { safeParseEther, validateInputs } from './liquidity/validation';
+import { buildTxSteps } from './liquidity/tx-steps';
 import { RANGE_PRESETS } from './liquidity/components/lw-range-presets';
 
 import './liquidity/components/lw-stepper';
@@ -74,7 +75,7 @@ export class GooddollarLiquidityWidget extends LitElement {
   @state() private usdgloBalance = 0n;
   @state() private gdAllowance = 0n;
   @state() private usdgloAllowance = 0n;
-  @state() private sqrtPriceX96 = 0n;
+  @state() private poolData: PoolData | null = null;
   @state() private currentTick = 0;
   @state() private isLoading = false;
   @state() private inputError = '';
@@ -95,35 +96,6 @@ export class GooddollarLiquidityWidget extends LitElement {
   private publicClient: PublicClient | null = null;
   private userAddress: string | null = null;
   private _refreshTimer: ReturnType<typeof setInterval> | null = null;
-
-  // ── Bigint helpers (avoid precision loss) ──────────────────────────
-
-  private static readonly Q96 = 2n ** 96n;
-  private static readonly Q192 = 2n ** 192n;
-
-  private static _pow10(decimals: number): bigint {
-    // decimals is small/constant in this widget; simple loop is fine.
-    let x = 1n;
-    for (let i = 0; i < decimals; i++) x *= 10n;
-    return x;
-  }
-
-  private static _formatFixed(value: bigint, decimals: number): string {
-    // Returns a base-10 string with `decimals` fractional digits.
-    const negative = value < 0n;
-    const v = negative ? -value : value;
-    const base = GooddollarLiquidityWidget._pow10(decimals);
-    const whole = v / base;
-    const frac = v % base;
-    const fracStr = frac.toString().padStart(decimals, '0');
-    return `${negative ? '-' : ''}${whole.toString()}${decimals > 0 ? `.${fracStr}` : ''}`;
-  }
-
-  private static _toFiniteNumber(value: string): number {
-    // Convert a decimal string to number, but never return NaN/Infinity.
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
 
   // ── Styles ─────────────────────────────────────────────────────────
 
@@ -275,7 +247,7 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   render() {
     const isConnected = !!(this.web3Provider && this.web3Provider.isConnected && this.userAddress);
-    const gdPrice = this._getGdPriceInUsdglo();
+    const gdPrice = this.poolData?.gdPriceInUsdglo ?? 0;
 
     return html`
       <div class="container">
@@ -433,7 +405,7 @@ export class GooddollarLiquidityWidget extends LitElement {
 
     try {
       const pool = await loadPoolData(this.publicClient);
-      this.sqrtPriceX96 = pool.sqrtPriceX96;
+      this.poolData = pool;
       this.currentTick = pool.currentTick;
     } catch (e) {
       console.error('Error loading pool data:', e);
@@ -490,28 +462,8 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   // ── Price & Amount Math ────────────────────────────────────────────
 
-  private _getGdPriceInUsdglo(): number {
-    if (this.sqrtPriceX96 === 0n) return 0;
-    // price = (sqrtPriceX96^2) / 2^192
-    // Compute as fixed-point bigint to avoid Number overflow/precision loss.
-    const scale = 18;
-    const scaledPrice = (this.sqrtPriceX96 * this.sqrtPriceX96 * GooddollarLiquidityWidget._pow10(scale)) / GooddollarLiquidityWidget.Q192;
-    const rawPrice = GooddollarLiquidityWidget._toFiniteNumber(GooddollarLiquidityWidget._formatFixed(scaledPrice, scale));
-    if (rawPrice <= 0) return 0;
-    return IS_GD_TOKEN0 ? rawPrice : (1 / rawPrice);
-  }
-
-  private _getSqrtPriceFloat(): number {
-    if (this.sqrtPriceX96 === 0n) return 0;
-    // sqrtPrice = sqrtPriceX96 / 2^96
-    // Keep this as a bounded float for UI math (range presets / input pairing).
-    const scale = 12;
-    const scaledSqrt = (this.sqrtPriceX96 * GooddollarLiquidityWidget._pow10(scale)) / GooddollarLiquidityWidget.Q96;
-    return GooddollarLiquidityWidget._toFiniteNumber(GooddollarLiquidityWidget._formatFixed(scaledSqrt, scale));
-  }
-
   private _calcAmount1From0(amount0: number): number {
-    const sqC = this._getSqrtPriceFloat();
+    const sqC = this.poolData?.sqrtPriceFloat ?? 0;
     const sqL = tickToSqrtPrice(this.tickLower);
     const sqU = tickToSqrtPrice(this.tickUpper);
     if (sqU <= sqL || sqC <= sqL || sqC >= sqU) return 0;
@@ -520,7 +472,7 @@ export class GooddollarLiquidityWidget extends LitElement {
   }
 
   private _calcAmount0From1(amount1: number): number {
-    const sqC = this._getSqrtPriceFloat();
+    const sqC = this.poolData?.sqrtPriceFloat ?? 0;
     const sqL = tickToSqrtPrice(this.tickLower);
     const sqU = tickToSqrtPrice(this.tickUpper);
     if (sqU <= sqL || sqC >= sqU || sqC <= sqL) return 0;
@@ -530,14 +482,14 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   private _calcUsdgloFromGd() {
     const gd = parseFloat(this.gdInput);
-    if (isNaN(gd) || gd <= 0 || this.sqrtPriceX96 === 0n) { this.usdgloInput = ''; return; }
+    if (isNaN(gd) || gd <= 0 || !this.poolData) { this.usdgloInput = ''; return; }
     const usdglo = IS_GD_TOKEN0 ? this._calcAmount1From0(gd) : this._calcAmount0From1(gd);
     if (isFinite(usdglo) && usdglo >= 0) this.usdgloInput = formatAmount(usdglo);
   }
 
   private _calcGdFromUsdglo() {
     const u = parseFloat(this.usdgloInput);
-    if (isNaN(u) || u <= 0 || this.sqrtPriceX96 === 0n) { this.gdInput = ''; return; }
+    if (isNaN(u) || u <= 0 || !this.poolData) { this.gdInput = ''; return; }
     const gd = IS_GD_TOKEN0 ? this._calcAmount0From1(u) : this._calcAmount1From0(u);
     if (isFinite(gd) && gd >= 0) this.gdInput = formatAmount(gd);
   }
@@ -629,14 +581,14 @@ export class GooddollarLiquidityWidget extends LitElement {
     const gdWei = safeParseEther(this.gdInput);
     const usdgloWei = safeParseEther(this.usdgloInput);
 
-    const needGdApproval = gdWei > 0n && this.gdAllowance < gdWei;
-    const needUsdgloApproval = usdgloWei > 0n && this.usdgloAllowance < usdgloWei;
+    const { steps: initialSteps, needGdApproval, needUsdgloApproval } = buildTxSteps({
+      gdWei,
+      usdgloWei,
+      gdAllowance: this.gdAllowance,
+      usdgloAllowance: this.usdgloAllowance,
+    });
 
-    let steps: TxStepInfo[] = [
-      { label: 'Approve G$', status: needGdApproval ? 'pending' : 'skipped' },
-      { label: 'Approve USDGLO', status: needUsdgloApproval ? 'pending' : 'skipped' },
-      { label: 'Add Liquidity', status: 'pending' },
-    ];
+    let steps: TxStepInfo[] = initialSteps;
     this.txSteps = steps;
     this.txError = '';
 

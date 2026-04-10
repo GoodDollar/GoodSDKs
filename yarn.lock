@@ -2193,6 +2193,18 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@goodsdks/liquidity-widget@workspace:packages/liquidity-widget":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/liquidity-widget@workspace:packages/liquidity-widget"
+  dependencies:
+    "@repo/typescript-config": "workspace:*"
+    lit: "npm:^3.1.0"
+    tsup: "npm:^8.3.5"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+  languageName: unknown
+  linkType: soft
+
 "@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
