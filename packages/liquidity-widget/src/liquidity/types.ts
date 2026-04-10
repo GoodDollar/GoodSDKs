@@ -47,6 +47,6 @@ export interface WidgetTheme {
 export interface PoolData {
   sqrtPriceX96: bigint;
   currentTick: number;
-  price: number;
   gdPriceInUsdglo: number;
+  sqrtPriceFloat: number;
 }
