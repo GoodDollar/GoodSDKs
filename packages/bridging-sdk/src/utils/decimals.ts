@@ -1,4 +1,3 @@
-import { formatUnits, parseUnits } from "viem"
 import { SUPPORTED_CHAINS, NORMALIZED_DECIMALS } from "../constants"
 import type { ChainId } from "../types"
 
@@ -22,4 +21,3 @@ export function normalizeAmount(amount: bigint, fromChainId: ChainId): bigint {
   return amount * (10n ** BigInt(decimalShift))
 }
 
-export { formatUnits, parseUnits } from "viem"

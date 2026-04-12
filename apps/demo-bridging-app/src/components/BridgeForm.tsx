@@ -1,9 +1,15 @@
-import { useState, useEffect } from "react"
-import { useAccount, useBalance, useChainId, useSwitchChain } from "wagmi"
+import { useState, useEffect, useCallback } from "react"
+import { useAccount, useChainId, useSwitchChain } from "wagmi"
 import { parseUnits } from "viem"
-import { useBridgingSDK, useBridgeFee } from "@goodsdks/react-hooks"
+import { useBridgingSDK } from "@goodsdks/react-hooks"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
-import type { BridgeProtocol, ChainId } from "@goodsdks/bridging-sdk"
+import type {
+  BridgeProtocol,
+  ChainId,
+  BridgeConfig,
+  BridgeQuoteResult,
+  BridgeStatus,
+} from "@goodsdks/bridging-sdk"
 
 interface BridgeFormProps {
   defaultProtocol: BridgeProtocol
@@ -15,21 +21,24 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   const walletChainId = useChainId() as ChainId
   const { switchChain } = useSwitchChain()
 
-  // fromChain always tracks the wallet's actual connected chain
   const fromChain: ChainId = SUPPORTED_CHAINS[walletChainId] ? walletChainId : 42220
   const [toChain, setToChain] = useState<ChainId>(() => {
     return (Object.keys(SUPPORTED_CHAINS).map(Number).find((id) => id !== fromChain) as ChainId) ?? 1
   })
+
   const [amount, setAmount] = useState("")
   const [recipient, setRecipient] = useState("")
-  const [isBridging, setIsBridging] = useState(false)
-  const [isApproving, setIsApproving] = useState(false)
-  const [allowance, setAllowance] = useState<bigint>(0n)
-  const [_fromBalanceStr, setFromBalanceStr] = useState("0")
-  const [toBalanceStr, setToBalanceStr] = useState("0")
-  const [error, setError] = useState<string | null>(null)
+  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null)
 
-  // Reset toChain if it matches the (new) fromChain after wallet network switch
+  // Base config: balances, allowance, fees, limits
+  const [config, setConfig] = useState<BridgeConfig | null>(null)
+  const [configLoading, setConfigLoading] = useState(false)
+
+  // Quote: validation result for the current amount/route
+  const [quoteResult, setQuoteResult] = useState<BridgeQuoteResult | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
+
+  // Reset toChain when wallet switches to it
   useEffect(() => {
     if (toChain === fromChain) {
       const fallback = (Object.keys(SUPPORTED_CHAINS).map(Number).find((id) => id !== fromChain) as ChainId) ?? 1
@@ -37,162 +46,117 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
     }
   }, [fromChain])
 
-  // Fetch allowance
-  useEffect(() => {
-    if (!sdk || !address) return
-
-    const fetchData = async () => {
-      try {
-        const allow = await sdk.getAllowance(address)
-        setAllowance(allow)
-      } catch (err) {
-        console.error("Failed to fetch allowance:", err)
-      }
-    }
-
-    fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
-  }, [sdk, address, fromChain])
-
-  // Get cross-chain balances using standard Wagmi hook
-  const { data: nativeBalanceData } = useBalance({
-    address: address,
-    chainId: fromChain,
-    query: { refetchInterval: 30000 }
-  });
-
-  const { data: fromBalanceData } = useBalance({
-    address: address,
-    chainId: fromChain,
-    token: SUPPORTED_CHAINS[fromChain].tokenAddress,
-    query: { refetchInterval: 30000 }
-  });
-
-  const { data: toBalanceData } = useBalance({
-    address: address,
-    chainId: toChain,
-    token: SUPPORTED_CHAINS[toChain].tokenAddress,
-    query: { refetchInterval: 30000 }
-  });
-
-  useEffect(() => {
-    if (fromBalanceData) setFromBalanceStr(fromBalanceData.formatted)
-    else setFromBalanceStr("0")
-  }, [fromBalanceData])
-
-  useEffect(() => {
-    if (toBalanceData) setToBalanceStr(toBalanceData.formatted)
-    else setToBalanceStr("0")
-  }, [toBalanceData])
-
-  const balance = fromBalanceData ? { formatted: fromBalanceData.formatted, value: fromBalanceData.value } : undefined;
-
-  // Get fee estimate
-  const { fee, loading: feeLoading, error: feeError } = useBridgeFee(
-    fromChain,
-    toChain,
-    defaultProtocol
-  )
-
-  // Set recipient to connected address if not set
+  // Set recipient to connected address by default
   useEffect(() => {
     if (address && !recipient) {
       setRecipient(address)
     }
   }, [address, recipient])
 
-  const handleApprove = async () => {
-    if (!sdk) return
+  // Fetch base config once and on interval
+  const refreshConfig = useCallback(async () => {
+    if (!sdk || !address) return
     try {
-      setIsApproving(true)
-      setError(null)
-      const decimals = SUPPORTED_CHAINS[fromChain].decimals
-      const amountInWei = parseUnits(amount, decimals)
-      await sdk.approve(amountInWei)
-      
-      // Refresh allowance
-      if (address) {
-        const allow = await sdk.getAllowance(address)
-        setAllowance(allow)
-      }
+      setConfigLoading(true)
+      const cfg = await sdk.getBridgeConfig(address)
+      setConfig(cfg)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Approval failed")
+      console.error("Failed to load bridge config:", err)
     } finally {
-      setIsApproving(false)
+      setConfigLoading(false)
     }
-  }
+  }, [sdk, address, fromChain])
+
+  useEffect(() => {
+    refreshConfig()
+    const interval = setInterval(refreshConfig, 30000)
+    return () => clearInterval(interval)
+  }, [refreshConfig])
+
+  // Re-evaluate quote whenever amount, route, or config changes
+  useEffect(() => {
+    if (!sdk || !address || !config || !amount) {
+      setQuoteResult(null)
+      return
+    }
+
+    const decimals = SUPPORTED_CHAINS[fromChain]?.decimals ?? 18
+    let amountInWei: bigint
+    try {
+      amountInWei = parseUnits(amount, decimals)
+      if (amountInWei <= 0n) {
+        setQuoteResult(null)
+        return
+      }
+    } catch {
+      setQuoteResult(null)
+      return
+    }
+
+    let cancelled = false
+    const run = async () => {
+      setQuoteLoading(true)
+      try {
+        const result = await sdk.getQuote(
+          amountInWei,
+          fromChain,
+          toChain,
+          (recipient || address) as `0x${string}`,
+          defaultProtocol,
+          config.allowance,
+        )
+        if (!cancelled) setQuoteResult(result)
+      } catch (err) {
+        if (!cancelled) console.error("getQuote failed:", err)
+      } finally {
+        if (!cancelled) setQuoteLoading(false)
+      }
+    }
+
+    run()
+    return () => { cancelled = true }
+  }, [sdk, address, config, amount, fromChain, toChain, recipient, defaultProtocol])
 
   const handleBridge = async () => {
-    if (!sdk || !address) return
+    if (!sdk || !quoteResult?.quote) return
+    setBridgeStatus(null)
 
     try {
-      setIsBridging(true)
-      setError(null)
-
-      const decimals = SUPPORTED_CHAINS[fromChain].decimals
-      const amountInWei = parseUnits(amount, decimals)
-
-      if (amountInWei <= 0n) {
-        throw new Error("Amount must be greater than 0")
-      }
-
-      const canBridgeResult = await sdk.canBridge(address, amountInWei, toChain)
-      if (!canBridgeResult.isWithinLimit) {
-        let errMsg = canBridgeResult.error || "Bridge limit exceeded"
-        if (errMsg.includes("BRIDGE_LIMITS")) {
-          errMsg = "Amount is outside the allowed bridge limits (check minimum amount or daily limit)."
-        }
-        throw new Error(errMsg)
-      }
-
-      // Check native balance covers the bridge fee
-      if (fee && nativeBalanceData) {
-        if (nativeBalanceData.value < fee.amount) {
-          const symbol = SUPPORTED_CHAINS[fromChain].nativeCurrency.symbol
-          throw new Error(
-            `Insufficient ${symbol} to pay the bridge fee. Need ${fee.formatted.split(" ")[0]} ${symbol} but only have ${nativeBalanceData.formatted} ${symbol}.`
-          )
-        }
-      }
-
-      await sdk.bridgeTo(
-        recipient as `0x${string}`,
-        toChain,
-        amountInWei,
-        defaultProtocol,
-      )
-
+      await sdk.doBridge(quoteResult.quote, (status) => {
+        setBridgeStatus(status)
+      })
       setAmount("")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Bridge failed")
-    } finally {
-      setIsBridging(false)
-    }
-  }
-
-  const handleMaxAmount = () => {
-    if (balance) {
-      setAmount(balance.formatted)
+      await refreshConfig()
+    } catch {
+      // Status already updated via onStatus callback
     }
   }
 
   const handleSwapChains = () => {
-    // fromChain is derived from the connected wallet — switching direction means switching the wallet chain
     switchChain({ chainId: toChain })
   }
 
-  const getEstimatedReceive = () => {
-    if (!amount) return "0.00"
-    const val = parseFloat(amount)
-    // Simple estimation: subtract 0.1% protocol fee + hypothetical network fee
-    const estimate = val * 0.999 - (fee ? 0.01 : 0) 
-    return Math.max(0, estimate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const handleMaxAmount = () => {
+    if (!config) return
+    const decimals = SUPPORTED_CHAINS[fromChain]?.decimals ?? 18
+    const formatted = Number(config.tokenBalance) / Math.pow(10, decimals)
+    setAmount(formatted.toFixed(decimals > 2 ? 6 : 2))
   }
 
-  const decimals = SUPPORTED_CHAINS[fromChain].decimals
-  const amountInWei = amount ? parseUnits(amount, decimals) : 0n
-  const needsApproval = amountInWei > allowance
+  // Derived display values
+  const decimals = SUPPORTED_CHAINS[fromChain]?.decimals ?? 18
+  const tokenBalanceFormatted = config
+    ? (Number(config.tokenBalance) / Math.pow(10, decimals)).toFixed(2)
+    : "0.00"
+
+  const blockingRequirements = quoteResult?.requirements.filter(
+    (r) => r.type !== "insufficient_allowance",
+  ) ?? []
+  const needsApproval = quoteResult?.needsApproval ?? false
+  const canSubmit = quoteResult?.canBridge && !bridgeStatus
+
+  const isBusy =
+    bridgeStatus?.step === "approving" || bridgeStatus?.step === "bridging"
 
   return (
     <div className="space-y-8">
@@ -212,7 +176,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
           </div>
         </div>
 
-        <button 
+        <button
           onClick={handleSwapChains}
           className="w-12 h-12 rounded-2xl bg-white border border-slate-100 shadow-md flex items-center justify-center hover:bg-slate-50 transition-all z-10 active:scale-95 mt-8"
         >
@@ -232,8 +196,8 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
                 <span className="font-bold text-slate-900">G$ {SUPPORTED_CHAINS[toChain].name}</span>
               </div>
             </div>
-            <select 
-              value={toChain} 
+            <select
+              value={toChain}
               onChange={(e) => setToChain(Number(e.target.value) as ChainId)}
               className="absolute inset-0 opacity-0 cursor-pointer"
             >
@@ -253,12 +217,14 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
         <div>
           <div className="flex justify-between mb-3 px-1">
             <label className="text-slate-900 font-bold text-lg">Amount to send</label>
-            <span className="text-slate-400 font-semibold">Balance: {balance?.formatted || "0.00"} G$</span>
+            <span className="text-slate-400 font-semibold">
+              Balance: {configLoading ? "..." : tokenBalanceFormatted} G$
+            </span>
           </div>
           <div className="relative group">
             <div className="absolute left-5 top-1/2 -translate-y-1/2 flex items-center gap-3 pointer-events-none">
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleMaxAmount(); }}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleMaxAmount() }}
                 className="bg-blue-50 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-lg border border-blue-100 flex items-center justify-center hover:bg-blue-100 transition-colors pointer-events-auto"
               >
                 Max
@@ -275,10 +241,10 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
             />
           </div>
 
-          {/* Fee Estimate Display */}
+          {/* Fee display from quote */}
           {amount && (
             <div className="mt-3 px-1">
-              {feeLoading ? (
+              {quoteLoading ? (
                 <div className="flex items-center gap-2 text-slate-400 text-sm">
                   <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -286,68 +252,70 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
                   </svg>
                   Estimating bridge fee...
                 </div>
-              ) : fee ? (
+              ) : quoteResult?.quote ? (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500 font-medium">Estimated bridge fee:</span>
                   <span className="text-slate-700 font-semibold">
-                    {parseFloat(fee.formatted.split(" ")[0]).toFixed(6)} {SUPPORTED_CHAINS[fromChain].name}
+                    {parseFloat(quoteResult.quote.feeInNative.split(" ")[0]).toFixed(6)}{" "}
+                    {SUPPORTED_CHAINS[fromChain].nativeCurrency.symbol}
                   </span>
                 </div>
               ) : null}
             </div>
           )}
         </div>
-
-        <div>
-          <div className="flex justify-between mb-3 px-1">
-            <label className="text-slate-900 font-bold text-lg">You will receive on {SUPPORTED_CHAINS[toChain].name.toUpperCase()}</label>
-            <span className="text-slate-400 font-semibold">Balance: {parseFloat(toBalanceStr).toFixed(2)} G$</span>
-          </div>
-          <div className="relative">
-            <input
-              type="text"
-              readOnly
-              value={`${getEstimatedReceive()} G$`}
-              className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-6 px-6 text-2xl font-bold text-slate-900 outline-none"
-            />
-          </div>
-        </div>
       </div>
 
-      {/* Action Button */}
-      {needsApproval ? (
-        <button
-          onClick={handleApprove}
-          disabled={!amount || isApproving || sdkLoading}
-          className="premium-button w-full text-xl py-5 !bg-blue-600 mb-4"
-        >
-          {isApproving ? (
-            <span className="flex items-center justify-center gap-3">
-              <svg className="animate-spin h-6 w-6 text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Approving G$...
-            </span>
-          ) : (
-            `Approve G$ on ${SUPPORTED_CHAINS[fromChain].name}`
-          )}
-        </button>
-      ) : null}
+      {/* Requirements — non-approval blocking issues */}
+      {blockingRequirements.length > 0 && (
+        <div className="space-y-2">
+          {blockingRequirements.map((req, i) => (
+            <div key={i} className="bg-red-50 text-red-600 p-3 rounded-xl font-medium text-sm border border-red-100">
+              {req.message}
+            </div>
+          ))}
+        </div>
+      )}
 
+      {/* Approval notice */}
+      {needsApproval && blockingRequirements.length === 0 && (
+        <div className="bg-blue-50 text-blue-700 p-3 rounded-xl font-medium text-sm border border-blue-100">
+          Token approval required — doBridge will handle it automatically before bridging.
+        </div>
+      )}
+
+      {/* Bridge status feedback */}
+      {bridgeStatus && (
+        <div className={`p-4 rounded-2xl font-medium text-center border ${
+          bridgeStatus.step === "completed"
+            ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+            : bridgeStatus.step === "failed"
+            ? "bg-red-50 text-red-600 border-red-100"
+            : "bg-blue-50 text-blue-700 border-blue-100"
+        }`}>
+          {bridgeStatus.step === "approving" && "Approving G$ spending..."}
+          {bridgeStatus.step === "bridging" && "Submitting bridge transaction..."}
+          {bridgeStatus.step === "completed" && "Bridge submitted successfully!"}
+          {bridgeStatus.step === "failed" && (bridgeStatus.error || "Transaction failed")}
+        </div>
+      )}
+
+      {/* Bridge button */}
       <button
         onClick={handleBridge}
-        disabled={!amount || isBridging || sdkLoading || needsApproval}
+        disabled={!amount || isBusy || sdkLoading || !canSubmit}
         className="premium-button w-full text-xl py-5"
       >
-        {isBridging ? (
+        {isBusy ? (
           <span className="flex items-center justify-center gap-3">
             <svg className="animate-spin h-6 w-6 text-white" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            Bridging...
+            {bridgeStatus?.step === "approving" ? "Approving..." : "Bridging..."}
           </span>
+        ) : needsApproval ? (
+          `Approve & Bridge to ${SUPPORTED_CHAINS[toChain].name}`
         ) : (
           `Bridge to ${SUPPORTED_CHAINS[toChain].name}`
         )}
@@ -357,24 +325,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
       <div className="pt-4 border-t border-slate-100 text-center space-y-2">
         <p className="text-slate-500 font-medium">Protocol Fee: 0.10% of bridged G$ amount</p>
         <p className="text-slate-500 font-medium">Provider: {BRIDGE_PROTOCOLS[defaultProtocol]}</p>
-        {fee && (
-          <p className="text-slate-400 text-sm italic">
-            Bridge fee (pre-execution): {parseFloat(fee.formatted.split(" ")[0]).toFixed(10)} {SUPPORTED_CHAINS[fromChain].name}
-          </p>
-        )}
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-2xl font-medium text-center border border-red-100">
-          {error}
-        </div>
-      )}
-      {feeError && (
-        <div className="bg-orange-50 text-orange-600 p-4 rounded-2xl font-medium text-center border border-orange-100">
-          {feeError}
-        </div>
-      )}
     </div>
   )
 }

@@ -287,68 +287,28 @@ const { status, loading, error } = useBridgeTransactionStatus("0xHash", "AXELAR"
 #### Decimal Conversion
 
 ```typescript
-import { 
-  normalizeAmount, 
-  denormalizeAmount, 
-  formatAmount, 
-  parseAmount 
-} from "@goodsdks/bridging-sdk"
+import { normalizeAmount } from "@goodsdks/bridging-sdk"
+import { formatUnits, parseUnits } from "viem"
 
-// Convert between native and normalized decimals
+// Normalize to 18-decimal format for limit checks
 const normalized = normalizeAmount(amount, fromChainId)
-const denormalized = denormalizeAmount(normalized, toChainId)
 
-// Format for display
-const formatted = formatAmount(1000000000000000000n, 18) // "1.0"
+// Format for display using viem
+const formatted = formatUnits(1000000000000000000n, 18) // "1.0"
 
-// Parse user input
-const parsed = parseAmount("1.5", 18) // 1500000000000000000n
-```
-
-#### Fee Management
-
-```typescript
-import { 
-  validateFeeCoverage, 
-  validateSufficientBalance,
-  formatFee 
-} from "@goodsdks/bridging-sdk"
-
-// Validate fee coverage
-const validation = validateFeeCoverage(msgValue, requiredFee)
-
-// Validate sufficient balance
-const balanceCheck = validateSufficientBalance(
-  userBalance, 
-  bridgeAmount, 
-  fee
-)
-
-// Format for display
-const formatted = formatFee(fee, chainId)
+// Parse user input using viem
+const parsed = parseUnits("1.5", 18) // 1500000000000000000n
 ```
 
 #### Transaction Tracking
 
 ```typescript
-import { 
-  pollTransactionStatus, 
-  formatTimestamp,
-  getTimeElapsed,
-  getStatusLabel 
-} from "@goodsdks/bridging-sdk"
+// Get status via SDK method
+const status = await sdk.getTransactionStatus(txHash, "AXELAR")
+// Returns: { status: "pending" | "completed" | "failed", srcTxHash?, dstTxHash?, timestamp? }
 
-// Poll until completion
-const finalStatus = await pollTransactionStatus(
-  txHash, 
-  "AXELAR",
-  (status) => console.log("Status update:", status)
-)
-
-// Format for display
-const timestamp = formatTimestamp(status.timestamp)
-const elapsed = getTimeElapsed(status.timestamp)
-const label = getStatusLabel(status)
+// Get human-readable label
+const label = BridgingSDK.getStatusLabel(status) // "Pending" | "Completed" | "Failed"
 ```
 
 ## Supported Chains
@@ -392,11 +352,11 @@ try {
 
 ## Best Practices
 
-1. **Always estimate fees before bridging**
-2. **Validate user balance includes both amount and fees**
-3. **Handle decimal conversions properly**
-4. **Track transaction status for user feedback**
-5. **Provide explorer links for transparency**
+1. **Call `sdk.initialize()` after construction** — fetches and caches fees so `bridgeTo` calls don't incur an extra round trip
+2. **Check `canBridge` before submitting** — validates on-chain bridge limits for the user's amount
+3. **Handle decimal conversions properly** — use `normalizeAmount` for limit checks, viem's `parseUnits`/`formatUnits` for display
+4. **Track transaction status for user feedback** — poll `getTransactionStatus` and show the explorer link
+5. **Provide explorer links for transparency** — use `sdk.explorerLink(txHash, protocol)`
 
 ## Demo Application
 

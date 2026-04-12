@@ -31,6 +31,11 @@ import type {
   GoodServerFeeResponse,
   LayerZeroScanResponse,
   AxelarscanResponse,
+  BridgeConfig,
+  BridgeQuote,
+  BridgeQuoteResult,
+  BridgeRequirement,
+  BridgeStatus,
 } from "./types"
 
 import { MESSAGE_PASSING_BRIDGE_ABI } from "./abi"
@@ -312,6 +317,223 @@ export class BridgingSDK {
       },
       feeEstimate.fee,
     )
+  }
+
+  /**
+   * Returns base state needed for the bridge UI: balances, fees cache, allowance, and on-chain limits.
+   * Call once on load and refresh periodically.
+   */
+  async getBridgeConfig(address: Address): Promise<BridgeConfig> {
+    // Ensure fees are cached
+    const now = Date.now()
+    if (!this.fees || now - this.lastFeeFetchTime > this.FEE_CACHE_TTL) {
+      try {
+        await this.initialize()
+      } catch (err) {
+        if (!this.fees) throw err
+        console.warn("Using stale fee cache:", err)
+      }
+    }
+
+    const contractAddress = BRIDGE_CONTRACT_ADDRESSES[this.currentChainId]
+
+    const [tokenBalance, nativeBalance, allowance, routeLimits] = await Promise.all([
+      this.getG$Balance(address),
+      this.publicClient.getBalance({ address }),
+      contractAddress
+        ? this.getAllowance(address)
+        : Promise.resolve(0n),
+      contractAddress
+        ? (this.publicClient.readContract({
+            address: contractAddress as Address,
+            abi: MESSAGE_PASSING_BRIDGE_ABI,
+            functionName: "bridgeLimits",
+          }) as Promise<[bigint, bigint, bigint, bigint, boolean]>)
+            .then(([dailyLimit, txLimit, accountDailyLimit, minAmount, onlyWhitelisted]) => ({
+              dailyLimit,
+              txLimit,
+              accountDailyLimit,
+              minAmount,
+              onlyWhitelisted,
+            }))
+            .catch(() => null)
+        : Promise.resolve(null),
+    ])
+
+    return {
+      supportedChains: SUPPORTED_CHAINS,
+      currentChainId: this.currentChainId,
+      tokenBalance,
+      nativeBalance,
+      allowance,
+      fees: this.fees,
+      routeLimits,
+    }
+  }
+
+  /**
+   * Evaluates whether a bridge operation can proceed and returns a validated quote.
+   * Checks token balance, native balance for fee, allowance, bridge limits, and route availability.
+   * Pass currentAllowance from a recent getBridgeConfig call (or 0n to force a re-check).
+   */
+  async getQuote(
+    amount: bigint,
+    fromChain: ChainId,
+    toChain: ChainId,
+    recipient: Address,
+    protocol: BridgeProtocol,
+    currentAllowance: bigint,
+  ): Promise<BridgeQuoteResult> {
+    const requirements: BridgeRequirement[] = []
+
+    // Check route availability and get fee estimate first — if this fails, nothing else matters
+    let feeEstimate: FeeEstimate
+    try {
+      feeEstimate = await this.estimateFee(toChain, protocol, fromChain)
+    } catch (err) {
+      requirements.push({
+        type: "route_unavailable",
+        message: err instanceof Error ? err.message : "Route not available for the selected chains and protocol",
+      })
+      return { quote: null, needsApproval: false, canBridge: false, requirements }
+    }
+
+    // Check wallet is on the correct source chain
+    if (fromChain !== this.currentChainId) {
+      requirements.push({
+        type: "wrong_chain",
+        message: `Wallet is on ${SUPPORTED_CHAINS[this.currentChainId]?.name ?? this.currentChainId} — switch to ${SUPPORTED_CHAINS[fromChain]?.name ?? fromChain} to bridge from it`,
+      })
+    }
+
+    // Fetch token and native balances in parallel
+    const [tokenBalance, nativeBalance] = await Promise.all([
+      this.getG$Balance(recipient),
+      this.publicClient.getBalance({ address: recipient }),
+    ])
+
+    if (tokenBalance < amount) {
+      requirements.push({
+        type: "insufficient_token_balance",
+        message: `Insufficient G$ balance. Required: ${amount.toString()}, available: ${tokenBalance.toString()}`,
+      })
+    }
+
+    if (nativeBalance < feeEstimate.fee) {
+      const chainName = SUPPORTED_CHAINS[this.currentChainId]?.name ?? "native"
+      requirements.push({
+        type: "insufficient_native_balance",
+        message: `Insufficient ${chainName} to cover the bridge fee. Required: ${feeEstimate.feeInNative}`,
+      })
+    }
+
+    // Approval check (non-blocking — doBridge handles the approval step)
+    const needsApproval = currentAllowance < amount
+    if (needsApproval) {
+      requirements.push({
+        type: "insufficient_allowance",
+        message: `Token approval needed before bridging`,
+      })
+    }
+
+    // On-chain bridge limits check
+    try {
+      const canBridgeResult = await this.canBridge(recipient, amount, toChain)
+      if (!canBridgeResult.isWithinLimit) {
+        let msg = canBridgeResult.error || "Amount is outside bridge limits"
+        if (msg.includes("BRIDGE_LIMITS")) {
+          msg = "Amount is outside the allowed bridge limits (check minimum amount or daily limit)"
+        }
+        requirements.push({
+          type: "exceeds_limit",
+          message: msg,
+        })
+      }
+    } catch {
+      // canBridge failure is non-fatal — proceed with warning
+    }
+
+    // Blocking requirements are everything except the allowance (which doBridge resolves)
+    const blockingReqs = requirements.filter((r) => r.type !== "insufficient_allowance")
+    if (blockingReqs.length > 0) {
+      return { quote: null, needsApproval, canBridge: false, requirements }
+    }
+
+    const quote: BridgeQuote = {
+      fee: feeEstimate.fee,
+      feeInNative: feeEstimate.feeInNative,
+      protocol,
+      target: recipient,
+      targetChainId: toChain,
+      amount,
+    }
+
+    return { quote, needsApproval, canBridge: !needsApproval, requirements }
+  }
+
+  /**
+   * Executes a bridge operation from a validated quote.
+   * Handles ERC-20 approval automatically if needed, then submits the bridge transaction.
+   * Use the optional onStatus callback to update UI during each step.
+   */
+  async doBridge(
+    quote: BridgeQuote,
+    onStatus?: (status: BridgeStatus) => void,
+  ): Promise<TransactionReceipt> {
+    if (!this.walletClient) throw new Error("Wallet client not initialized")
+
+    const accounts = await this.walletClient.getAddresses()
+    const account = accounts[0]
+    if (!account) throw new Error("No account found in wallet client")
+
+    let approveTxHash: Hash | undefined
+
+    // Step 1: Approve if the current allowance is still insufficient
+    const currentAllowance = await this.getAllowance(account)
+    if (currentAllowance < quote.amount) {
+      onStatus?.({ step: "approving" })
+      try {
+        const approveReceipt = await this.approve(quote.amount)
+        approveTxHash = approveReceipt.transactionHash
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "Approval failed"
+        onStatus?.({ step: "failed", approveTxHash, error })
+        throw err
+      }
+    }
+
+    // Step 2: Submit the bridge transaction
+    onStatus?.({ step: "bridging", approveTxHash })
+    try {
+      const fn =
+        quote.protocol === "LAYERZERO" && quote.adapterParams
+          ? ("bridgeToWithLzAdapterParams" as const)
+          : ("bridgeTo" as const)
+
+      const args =
+        fn === "bridgeToWithLzAdapterParams"
+          ? [quote.target, quote.targetChainId, quote.amount, quote.adapterParams!]
+          : [quote.target, quote.targetChainId, quote.amount, quote.protocol === "AXELAR" ? 0 : 1]
+
+      const receipt = await this.bridgeInternal({
+        targetChainId: quote.targetChainId,
+        protocol: quote.protocol,
+        fn,
+        args,
+      })
+
+      onStatus?.({
+        step: "completed",
+        approveTxHash,
+        bridgeTxHash: receipt.transactionHash,
+        receipt,
+      })
+      return receipt
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "Bridge failed"
+      onStatus?.({ step: "failed", approveTxHash, error })
+      throw err
+    }
   }
 
   /**
