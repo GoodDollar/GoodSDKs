@@ -61,11 +61,6 @@ export const API_ENDPOINTS = {
   AXELARSCAN: "https://api.axelarscan.io",
 } as const
 
-export const EXPLORER_URLS = {
-  LAYERZERO: (txHash: string) => `https://layerzeroscan.com/tx/${txHash}`,
-  AXELAR: (txHash: string) => `https://axelarscan.io/gmp/${txHash}`,
-} as const
-
 // Contract addresses will be populated from @gooddollar/bridge-contracts
 // These are placeholders that should be replaced with actual addresses
 // Contract addresses for MessagePassingBridge

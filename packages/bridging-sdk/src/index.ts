@@ -12,31 +12,27 @@ export type {
   TransactionStatus,
   BridgeHistory,
   BridgeTransaction,
+  FeeEstimate,
+  CanBridgeResult,
+  BridgeConfig,
+  BridgeQuote,
+  BridgeQuoteResult,
+  BridgeRequirement,
+  BridgeRequirementType,
+  BridgeRouteLimits,
+  BridgeStatus,
   GoodServerFeeResponse,
   LayerZeroScanResponse,
   AxelarscanResponse,
 } from "./types"
 
 // Utilities
-export { normalizeAmount, formatUnits, parseUnits } from "./utils/decimals"
-
-export {
-  fetchFeeEstimates,
-  parseNativeFee,
-  getFeeEstimate,
-  getAllFeeEstimates,
-  validateFeeCoverage,
-  formatFee,
-  calculateTotalCost,
-  validateSufficientBalance,
-} from "./utils/fees"
+export { normalizeAmount } from "./utils/decimals"
 
 // Constants
 export {
   SUPPORTED_CHAINS,
   BRIDGE_PROTOCOLS,
   API_ENDPOINTS,
-  EXPLORER_URLS,
   BRIDGE_CONTRACT_ADDRESSES,
-  NORMALIZED_DECIMALS,
 } from "./constants"

@@ -1,5 +1,62 @@
 import type { Address, Hash, TransactionReceipt } from "viem"
 
+export type BridgeRequirementType =
+  | "insufficient_token_balance"
+  | "insufficient_native_balance"
+  | "insufficient_allowance"
+  | "below_min_amount"
+  | "exceeds_limit"
+  | "route_unavailable"
+  | "wrong_chain"
+
+export interface BridgeRequirement {
+  type: BridgeRequirementType
+  message: string
+}
+
+export interface BridgeRouteLimits {
+  minAmount: bigint
+  dailyLimit: bigint
+  txLimit: bigint
+  accountDailyLimit: bigint
+  onlyWhitelisted: boolean
+}
+
+export interface BridgeConfig {
+  supportedChains: Record<number, BridgeChain>
+  currentChainId: ChainId
+  tokenBalance: bigint
+  nativeBalance: bigint
+  allowance: bigint
+  fees: GoodServerFeeResponse | null
+  routeLimits: BridgeRouteLimits | null
+}
+
+export interface BridgeQuote {
+  fee: bigint
+  feeInNative: string
+  protocol: BridgeProtocol
+  target: Address
+  targetChainId: ChainId
+  amount: bigint
+  adapterParams?: `0x${string}`
+}
+
+export interface BridgeQuoteResult {
+  quote: BridgeQuote | null
+  needsApproval: boolean
+  canBridge: boolean
+  requirements: BridgeRequirement[]
+}
+
+export interface BridgeStatus {
+  step: "approving" | "bridging" | "completed" | "failed"
+  approveTxHash?: Hash
+  bridgeTxHash?: Hash
+  receipt?: TransactionReceipt
+  error?: string
+}
+
 export type BridgeProtocol = "AXELAR" | "LAYERZERO"
 
 export type ChainId = number
