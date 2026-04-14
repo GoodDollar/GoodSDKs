@@ -1,8 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { formatEther } from 'viem';
-import type { PositionData } from '../types';
-import { IS_GD_TOKEN0 } from '../constants';
+import type { PositionData } from '@goodsdks/liquidity-sdk';
+import { IS_GD_TOKEN0 } from '@goodsdks/liquidity-sdk';
 
 import './lw-position-card';
 import './lw-tooltip';

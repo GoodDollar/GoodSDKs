@@ -2,9 +2,9 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { RangePreset } from '../types';
 import {
-  FULL_RANGE_TICK_LOWER, FULL_RANGE_TICK_UPPER, TICK_SPACING,
-  POOL_FEE, nearestUsableTick,
-} from '../constants';
+  FULL_RANGE_TICK_LOWER, FULL_RANGE_TICK_UPPER,
+  nearestUsableTick,
+} from '@goodsdks/liquidity-sdk';
 
 import './lw-tooltip';
 

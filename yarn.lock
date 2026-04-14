@@ -2193,10 +2193,26 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@goodsdks/liquidity-sdk@npm:*, @goodsdks/liquidity-sdk@workspace:packages/liquidity-sdk":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/liquidity-sdk@workspace:packages/liquidity-sdk"
+  dependencies:
+    "@repo/typescript-config": "workspace:*"
+    tsup: "npm:^8.3.5"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+    wagmi: "npm:latest"
+  peerDependencies:
+    viem: "*"
+    wagmi: "*"
+  languageName: unknown
+  linkType: soft
+
 "@goodsdks/liquidity-widget@workspace:packages/liquidity-widget":
   version: 0.0.0-use.local
   resolution: "@goodsdks/liquidity-widget@workspace:packages/liquidity-widget"
   dependencies:
+    "@goodsdks/liquidity-sdk": "npm:*"
     "@repo/typescript-config": "workspace:*"
     lit: "npm:^3.1.0"
     tsup: "npm:^8.3.5"
