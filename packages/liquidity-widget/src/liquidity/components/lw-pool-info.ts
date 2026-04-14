@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { POOL_ADDRESS, POOL_FEE } from '../constants';
+import { POOL_ADDRESS, POOL_FEE } from '@goodsdks/liquidity-sdk';
 
 import './lw-tooltip';
 

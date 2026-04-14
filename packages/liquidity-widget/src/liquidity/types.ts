@@ -23,30 +23,8 @@ export interface RangePreset {
   concentrationMultiplier: number;
 }
 
-export interface PositionData {
-  tokenId: bigint;
-  token0: string;
-  token1: string;
-  fee: number;
-  tickLower: number;
-  tickUpper: number;
-  liquidity: bigint;
-  tokensOwed0: bigint;
-  tokensOwed1: bigint;
-  amount0: bigint;
-  amount1: bigint;
-  inRange: boolean;
-}
-
 export interface WidgetTheme {
   primaryColor: string;
   borderRadius: string;
   fontFamily: string;
-}
-
-export interface PoolData {
-  sqrtPriceX96: bigint;
-  currentTick: number;
-  gdPriceInUsdglo: number;
-  sqrtPriceFloat: number;
 }

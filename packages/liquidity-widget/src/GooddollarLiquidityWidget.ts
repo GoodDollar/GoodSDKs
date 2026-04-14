@@ -9,10 +9,12 @@ import {
   TICK_SPACING, DEFAULT_EXPLORER_URL, DEFAULT_APPROVAL_BUFFER,
   FULL_RANGE_TICK_LOWER, FULL_RANGE_TICK_UPPER,
   tickToSqrtPrice,
-} from './liquidity/constants';
-import type { TxFlowPhase, TxStepInfo, PositionData, PoolData, WidgetTheme } from './liquidity/types';
-import { loadPoolData, loadUserBalancesAndAllowances, getUserPositions, formatBigIntDisplay, formatAmount } from './liquidity/pool-service';
-import { approveToken, addLiquidity, parseTxError } from './liquidity/tx-service';
+  GooddollarLiquiditySDK,
+} from '@goodsdks/liquidity-sdk';
+import type { PoolData, PositionData } from '@goodsdks/liquidity-sdk';
+
+import type { TxFlowPhase, TxStepInfo, WidgetTheme } from './liquidity/types';
+import { formatBigIntDisplay, formatAmount } from './liquidity/format';
 import { safeParseEther, validateInputs } from './liquidity/validation';
 import { buildTxSteps } from './liquidity/tx-steps';
 import { RANGE_PRESETS } from './liquidity/components/lw-range-presets';
@@ -94,6 +96,7 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   private walletClient: WalletClient | null = null;
   private publicClient: PublicClient | null = null;
+  private sdk: GooddollarLiquiditySDK | null = null;
   private userAddress: string | null = null;
   private _refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -393,18 +396,30 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   // ── Data Loading ───────────────────────────────────────────────────
 
-  private async refreshData() {
+  private _ensureSDK(): GooddollarLiquiditySDK | null {
     if (!this.publicClient) {
       this.publicClient = createPublicClient({
         chain: celo,
         transport: http(),
       }) as unknown as PublicClient;
     }
+    if (!this.sdk) {
+      this.sdk = new GooddollarLiquiditySDK(this.publicClient);
+    }
+    if (this.walletClient) {
+      this.sdk.setWalletClient(this.walletClient);
+    }
+    return this.sdk;
+  }
+
+  private async refreshData() {
+    const sdk = this._ensureSDK();
+    if (!sdk) return;
 
     this.isLoading = true;
 
     try {
-      const pool = await loadPoolData(this.publicClient);
+      const pool = await sdk.loadPoolData();
       this.poolData = pool;
       this.currentTick = pool.currentTick;
     } catch (e) {
@@ -414,10 +429,11 @@ export class GooddollarLiquidityWidget extends LitElement {
     try {
       if (this.web3Provider && this.web3Provider.isConnected) {
         this.walletClient = createWalletClient({ chain: celo, transport: custom(this.web3Provider) });
+        sdk.setWalletClient(this.walletClient);
         const accounts = await this.web3Provider.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
           this.userAddress = accounts[0];
-          const data = await loadUserBalancesAndAllowances(this.publicClient, this.userAddress as `0x${string}`);
+          const data = await sdk.loadUserBalancesAndAllowances(this.userAddress as `0x${string}`);
           this.gdBalance = data.gdBalance;
           this.usdgloBalance = data.usdgloBalance;
           this.gdAllowance = data.gdAllowance;
@@ -446,11 +462,11 @@ export class GooddollarLiquidityWidget extends LitElement {
   }
 
   private async _loadPositions() {
-    if (!this.publicClient || !this.userAddress) return;
+    const sdk = this.sdk;
+    if (!sdk || !this.userAddress) return;
     this.positionsLoading = true;
     try {
-      this.positions = await getUserPositions(
-        this.publicClient,
+      this.positions = await sdk.getUserPositions(
         this.userAddress as `0x${string}`,
         this.currentTick,
       );
@@ -565,7 +581,8 @@ export class GooddollarLiquidityWidget extends LitElement {
   // ── Main Transaction Flow ──────────────────────────────────────────
 
   async _handleMainAction() {
-    if (!this.walletClient || !this.publicClient || !this.userAddress) return;
+    const sdk = this.sdk;
+    if (!sdk || !this.walletClient || !this.userAddress) return;
 
     if (this.txPhase === 'success') {
       this.txPhase = 'idle';
@@ -577,7 +594,6 @@ export class GooddollarLiquidityWidget extends LitElement {
     this._validateInputs(true);
     if (this.inputError) return;
 
-    const account = this.userAddress as `0x${string}`;
     const gdWei = safeParseEther(this.gdInput);
     const usdgloWei = safeParseEther(this.usdgloInput);
 
@@ -598,8 +614,7 @@ export class GooddollarLiquidityWidget extends LitElement {
         this.txHash = '';
         this.txSteps = updateStep(steps, 0, { status: 'active' });
 
-        const hash = await approveToken(
-          this.publicClient, this.walletClient, account,
+        const hash = await sdk.approveToken(
           GD_TOKEN, gdWei, this.approvalBuffer,
           {
             onHash: (h) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'approve-gd'); },
@@ -616,8 +631,7 @@ export class GooddollarLiquidityWidget extends LitElement {
         this.txHash = '';
         this.txSteps = updateStep(steps, 1, { status: 'active' });
 
-        const hash = await approveToken(
-          this.publicClient, this.walletClient, account,
+        const hash = await sdk.approveToken(
           USDGLO_TOKEN, usdgloWei, this.approvalBuffer,
           {
             onHash: (h) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'approve-usdglo'); },
@@ -633,8 +647,7 @@ export class GooddollarLiquidityWidget extends LitElement {
       this.txHash = '';
       this.txSteps = updateStep(steps, 2, { status: 'active' });
 
-      const hash = await addLiquidity(
-        this.publicClient, this.walletClient, account,
+      const hash = await sdk.addLiquidity(
         gdWei, usdgloWei, this.tickLower, this.tickUpper,
         {
           onHash: (h) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'mint'); },
@@ -655,7 +668,7 @@ export class GooddollarLiquidityWidget extends LitElement {
 
     } catch (error: any) {
       this.txPhase = 'error';
-      this.txError = parseTxError(error);
+      this.txError = GooddollarLiquiditySDK.parseTxError(error);
       this._emitTxEvent('lw-tx-failed', this.txHash, this.txPhase, error);
     }
   }
@@ -669,7 +682,7 @@ export class GooddollarLiquidityWidget extends LitElement {
   }
 
   private _emitTxEvent(name: string, hash: string, step: string, error?: any) {
-    this._emitEvent(name, { hash, step, ...(error ? { error: parseTxError(error) } : {}) });
+    this._emitEvent(name, { hash, step, ...(error ? { error: GooddollarLiquiditySDK.parseTxError(error) } : {}) });
   }
 }
 
