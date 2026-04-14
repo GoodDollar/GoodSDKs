@@ -116,10 +116,12 @@ export class LwPositionCard extends LitElement {
   explorerUrl: string = 'https://celoscan.io';
 
   private _fmt(val: bigint): string {
-    const n = Number(formatEther(val));
-    if (n === 0) return '0';
-    if (n < 0.0001) return '<0.0001';
-    return Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(n);
+    if (val === 0n) return '0';
+    const [whole, frac = ''] = formatEther(val).split('.');
+    if (whole === '0' && !/[1-9]/.test(frac.slice(0, 4))) return '<0.0001';
+    const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const trimmedFrac = frac.slice(0, 4).replace(/0+$/, '');
+    return trimmedFrac ? `${grouped}.${trimmedFrac}` : grouped;
   }
 
   render() {
