@@ -29,6 +29,8 @@ export interface WalletLinkOptions {
   onHash?: (hash: `0x${string}`) => void
 }
 
+export type WalletLinkAction = "connectAccount" | "disconnectAccount"
+
 export interface ConnectedAccountStatus {
   isConnected: boolean
   root: Address

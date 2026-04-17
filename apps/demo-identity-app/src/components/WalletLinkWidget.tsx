@@ -10,7 +10,7 @@ export const WalletLinkWidget = () => {
     ? (targetAddress as Address)
     : undefined
 
-  const { connectAccount, disconnectAccount, connectedStatus } = useWalletLink(
+  const { actions, connectedStatus } = useWalletLink(
     "development",
     parsedAddress,
   )
@@ -26,7 +26,7 @@ export const WalletLinkWidget = () => {
     }
 
     try {
-      await connectAccount.connect(parsedAddress)
+      await actions.connect(parsedAddress)
       connectedStatus.refetch()
     } catch (err) {
       console.error("Connect failed", err)
@@ -40,7 +40,7 @@ export const WalletLinkWidget = () => {
     }
 
     try {
-      await disconnectAccount.disconnect(parsedAddress)
+      await actions.disconnect(parsedAddress)
       connectedStatus.refetch()
     } catch (err) {
       console.error("Disconnect failed", err)
@@ -57,15 +57,9 @@ export const WalletLinkWidget = () => {
   }
 
   if (
-    connectAccount.pendingSecurityConfirm ||
-    disconnectAccount.pendingSecurityConfirm
+    actions.pendingSecurityConfirm
   ) {
-    const pending =
-      connectAccount.pendingSecurityConfirm ||
-      disconnectAccount.pendingSecurityConfirm
-    const confirmFn = connectAccount.pendingSecurityConfirm
-      ? connectAccount.confirmSecurity
-      : disconnectAccount.confirmSecurity
+    const pending = actions.pendingSecurityConfirm
 
     return (
       <div
@@ -82,12 +76,12 @@ export const WalletLinkWidget = () => {
         </pre>
         <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
           <button
-            onClick={() => confirmFn(true)}
+            onClick={() => actions.confirmSecurity(true)}
             style={{ background: "red", color: "white", padding: "8px" }}
           >
             I Understand, Proceed
           </button>
-          <button onClick={() => confirmFn(false)} style={{ padding: "8px" }}>
+          <button onClick={() => actions.confirmSecurity(false)} style={{ padding: "8px" }}>
             Cancel
           </button>
         </div>
@@ -117,15 +111,15 @@ export const WalletLinkWidget = () => {
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             onClick={handleConnect}
-            disabled={connectAccount.loading || !parsedAddress}
+            disabled={actions.loading || !parsedAddress}
           >
-            {connectAccount.loading ? "Connecting..." : "Connect Wallet"}
+            {actions.loading ? "Connecting..." : "Connect Wallet"}
           </button>
           <button
             onClick={handleDisconnect}
-            disabled={disconnectAccount.loading || !parsedAddress}
+            disabled={actions.loading || !parsedAddress}
           >
-            {disconnectAccount.loading
+            {actions.loading
               ? "Disconnecting..."
               : "Disconnect Wallet"}
           </button>
@@ -135,20 +129,16 @@ export const WalletLinkWidget = () => {
         </div>
       </div>
 
-      {(connectAccount.error ||
-        disconnectAccount.error ||
-        connectedStatus.error) && (
+      {(actions.error || connectedStatus.error) && (
         <p style={{ color: "red" }}>
           Error:{" "}
-          {connectAccount.error ||
-            disconnectAccount.error ||
-            connectedStatus.error}
+          {actions.error || connectedStatus.error}
         </p>
       )}
 
-      {(connectAccount.txHash || disconnectAccount.txHash) && (
+      {actions.txHash && (
         <p style={{ color: "green" }}>
-          Tx Hash: {connectAccount.txHash || disconnectAccount.txHash}
+          Tx Hash: {actions.txHash}
         </p>
       )}
 

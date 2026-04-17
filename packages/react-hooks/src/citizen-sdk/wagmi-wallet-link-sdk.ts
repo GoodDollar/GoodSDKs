@@ -6,101 +6,22 @@ import type { WalletLinkOptions, ChainConnectedStatus } from "@goodsdks/citizen-
 
 import { useIdentitySDK } from "./wagmi-identity-sdk"
 
-type WalletLinkAction = (
-    sdk: IdentitySDK,
-    account: Address,
-    options?: WalletLinkOptions,
-) => Promise<void>
+type WalletLinkAction = "connectAccount" | "disconnectAccount"
 
-interface UseWalletLinkActionReturn {
-    run: (account: Address, options?: WalletLinkOptions) => Promise<void>
+export interface UseWalletLinkActionsReturn {
+    run: (
+        action: WalletLinkAction,
+        account: Address,
+        options?: WalletLinkOptions,
+    ) => Promise<void>
+    connect: (account: Address, options?: WalletLinkOptions) => Promise<void>
+    disconnect: (account: Address, options?: WalletLinkOptions) => Promise<void>
     loading: boolean
     error: string | null
     txHash: `0x${string}` | null
     pendingSecurityConfirm: { message: string } | null
     confirmSecurity: (confirmed: boolean) => void
     reset: () => void
-}
-
-const useWalletLinkAction = (
-    sdk: IdentitySDK | null,
-    action: WalletLinkAction,
-): UseWalletLinkActionReturn => {
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
-    const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
-    const [pendingSecurityMessage, setPendingSecurityMessage] = useState<string | null>(null)
-    const securityResolveRef = useRef<((confirmed: boolean) => void) | null>(null)
-
-    const reset = useCallback(() => {
-        setLoading(false)
-        setError(null)
-        setTxHash(null)
-        securityResolveRef.current = null
-        setPendingSecurityMessage(null)
-    }, [])
-
-    const confirmSecurity = useCallback((confirmed: boolean) => {
-        securityResolveRef.current?.(confirmed)
-        securityResolveRef.current = null
-        setPendingSecurityMessage(null)
-    }, [])
-
-    const run = useCallback(
-        async (account: Address, options?: WalletLinkOptions) => {
-            if (!sdk) {
-                setError("IdentitySDK not initialized")
-                return
-            }
-
-            setLoading(true)
-            setError(null)
-            setTxHash(null)
-
-            try {
-                await action(sdk, account, {
-                    ...options,
-                    onHash: (hash) => {
-                        setTxHash(hash)
-                        options?.onHash?.(hash)
-                    },
-                    onSecurityMessage:
-                        options?.onSecurityMessage ??
-                        (options?.skipSecurityMessage
-                            ? undefined
-                            : (message) =>
-                                new Promise<boolean>((resolve) => {
-                                    securityResolveRef.current = resolve
-                                    setPendingSecurityMessage(message)
-                                })),
-                })
-            } catch (err: any) {
-                setError(err instanceof Error ? err.message : String(err))
-            } finally {
-                setLoading(false)
-            }
-        },
-        [sdk, action],
-    )
-
-    return {
-        run,
-        loading,
-        error,
-        txHash,
-        pendingSecurityConfirm: pendingSecurityMessage
-            ? { message: pendingSecurityMessage }
-            : null,
-        confirmSecurity,
-        reset,
-    }
-}
-
-export interface UseWalletLinkActionsReturn
-    extends Omit<UseWalletLinkActionReturn, "run" | "pendingSecurityConfirm"> {
-    connect: UseWalletLinkActionReturn["run"]
-    disconnect: UseWalletLinkActionReturn["run"]
-    pendingSecurityConfirm: { message: string } | null
 }
 
 export const useWalletLinkActions = (
@@ -128,7 +49,7 @@ export const useWalletLinkActions = (
 
     const run = useCallback(
         async (
-            action: "connect" | "disconnect",
+            action: WalletLinkAction,
             account: Address,
             options?: WalletLinkOptions,
         ) => {
@@ -141,15 +62,10 @@ export const useWalletLinkActions = (
             setError(null)
             setTxHash(null)
 
-            const actionFn =
-                action === "connect"
-                    ? sdk.connectAccount.bind(sdk)
-                    : sdk.disconnectAccount.bind(sdk)
-
             try {
-                await actionFn(account, {
+                await sdk[action](account, {
                     ...options,
-                    onHash: (hash) => {
+                    onHash: (hash: `0x${string}`) => {
                         setTxHash(hash)
                         options?.onHash?.(hash)
                     },
@@ -174,17 +90,18 @@ export const useWalletLinkActions = (
 
     const connect = useCallback(
         (account: Address, options?: WalletLinkOptions) =>
-            run("connect", account, options),
+            run("connectAccount", account, options),
         [run],
     )
 
     const disconnect = useCallback(
         (account: Address, options?: WalletLinkOptions) =>
-            run("disconnect", account, options),
+            run("disconnectAccount", account, options),
         [run],
     )
 
     return {
+        run,
         connect,
         disconnect,
         loading,
@@ -254,8 +171,7 @@ export interface UseWalletLinkReturn {
     sdk: IdentitySDK | null
     sdkLoading: boolean
     sdkError: string | null
-    connectAccount: UseWalletLinkActionsReturn
-    disconnectAccount: UseWalletLinkActionsReturn
+    actions: UseWalletLinkActionsReturn
     connectedStatus: UseConnectedStatusReturn
 }
 
@@ -274,8 +190,7 @@ export const useWalletLink = (
         sdk,
         sdkLoading: loading,
         sdkError: error,
-        connectAccount: actions,
-        disconnectAccount: actions,
+        actions,
         connectedStatus,
     }
 }

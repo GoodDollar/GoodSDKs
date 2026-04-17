@@ -90,16 +90,25 @@ These hooks re-run whenever the connected wallet, public client, or environment 
 All wallet-link hooks live in a dedicated file (`wagmi-wallet-link-sdk.ts`) and are exported from the package root.
 They build on the identity SDK initialised via `useIdentitySDK` (see the Identity & Claim section above), so the Wagmi public and wallet clients must already be configured.
 
-#### `useConnectAccount(sdk)`
+#### `useWalletLinkActions(sdk)`
 
-Manages the connect-account flow including the security confirmation prompt.
+Manages both connect and disconnect flows, including the shared security confirmation prompt.
 
 ```tsx
-const { connect, loading, error, txHash, pendingSecurityConfirm, confirmSecurity, reset } =
-  useConnectAccount(sdk)
+const {
+  connect,
+  disconnect,
+  loading,
+  error,
+  txHash,
+  pendingSecurityConfirm,
+  confirmSecurity,
+  reset,
+} = useWalletLinkActions(sdk)
 
 // Trigger the flow - a confirmation dialog will appear via pendingSecurityConfirm
 await connect("0xSecondaryWallet")
+await disconnect("0xSecondaryWallet")
 
 // Render the security prompt
 if (pendingSecurityConfirm) {
@@ -112,10 +121,6 @@ if (pendingSecurityConfirm) {
   )
 }
 ```
-
-#### `useDisconnectAccount(sdk)`
-
-Same API as `useConnectAccount` but calls `disconnectAccount` on the SDK.
 
 #### `useConnectedStatus(sdk, account?, chainId?, publicClients?)`
 
@@ -145,7 +150,7 @@ statuses.forEach(({ chainId, chainName, isConnected, root, error }) => {
 
 #### `useWalletLink(env?, watchAccount?, chainId?, publicClients?)`
 
-Composite hook. Returns `{ sdk, sdkLoading, sdkError, connectAccount, disconnectAccount, connectedStatus }`. Reuses `useIdentitySDK` internally so there is a single SDK initialisation path.
+Composite hook. Returns `{ sdk, sdkLoading, sdkError, actions, connectedStatus }`. Reuses `useIdentitySDK` internally so there is a single SDK initialisation path.
 
 ```tsx
 import { createPublicClient, http } from "viem"
@@ -157,23 +162,23 @@ const publicClients = {
   [SupportedChains.XDC]: createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
 }
 
-const { connectAccount, disconnectAccount, connectedStatus } = useWalletLink(
+const { actions, connectedStatus } = useWalletLink(
   "production",
   "0xAccount",
   undefined,
   publicClients,
 )
 
-// connectAccount.connect(targetAddress)
-// disconnectAccount.disconnect(targetAddress)
+// actions.connect(targetAddress)
+// actions.disconnect(targetAddress)
 // connectedStatus.statuses[0].isConnected
 ```
 
-The `reset()` helper on each action hook resets `loading`, `error`, `txHash`, and `pendingSecurityConfirm` together.
+The `reset()` helper resets `loading`, `error`, `txHash`, and `pendingSecurityConfirm` together.
 
 #### Switching chains before connect/disconnect
 
-`connectAccount` and `disconnectAccount` act on the currently connected Wagmi wallet chain. If a user wants to perform a wallet-link action on another supported chain, switch first and let the hooks reinitialise with the new clients before sending the transaction.
+`actions.connect` and `actions.disconnect` act on the currently connected Wagmi wallet chain. If a user wants to perform a wallet-link action on another supported chain, switch first and let the hooks reinitialise with the new clients before sending the transaction.
 
 ```tsx
 import { useChainId, useSwitchChain } from "wagmi"
@@ -183,7 +188,7 @@ import { useWalletLink } from "@goodsdks/react-hooks"
 const WalletLinkAction = () => {
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
-  const { connectAccount, sdkLoading } = useWalletLink("production", "0xAccount")
+  const { actions, sdkLoading } = useWalletLink("production", "0xAccount")
 
   const connectOnCelo = async () => {
     if (chainId !== SupportedChains.CELO) {
@@ -192,7 +197,7 @@ const WalletLinkAction = () => {
     }
 
     if (!sdkLoading) {
-      await connectAccount.connect("0xSecondaryWallet")
+      await actions.connect("0xSecondaryWallet")
     }
   }
 

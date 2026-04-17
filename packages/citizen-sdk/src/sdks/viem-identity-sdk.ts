@@ -34,6 +34,7 @@ import type {
   IdentityExpiryData,
   IdentityExpiry,
   WalletLinkOptions,
+  WalletLinkAction,
   ChainConnectedStatus,
 } from "../types"
 
@@ -311,12 +312,51 @@ export class IdentitySDK {
   }
 
   /**
-   * Connects a new account to the identity.
-   * The whitelisted root identity must be the signer. No additional message
-   * signature is required beyond the transaction itself.
+   * Updates the wallet-link status of an account.
+   * The whitelisted root identity must be the signer for `connectAccount`,
+   * while `disconnectAccount` can be called by either the root identity or
+   * the connected account itself.
    * Custodial flows can pass `skipSecurityMessage: true` to bypass the notice;
    * the underlying transaction signing is handled by the app-provided walletClient
    * (or IdentityCustodialSDK for LocalAccount signers).
+   * @param action - The wallet-link action to submit.
+   * @param account - The account address to update.
+   * @param options - Additional options, such as security prompts.
+   * @returns The transaction receipt.
+   */
+  async updateConnectionStatus(
+    action: WalletLinkAction,
+    account: Address,
+    options?: WalletLinkOptions,
+  ): Promise<any> {
+    const securityAction =
+      action === "connectAccount" ? "connect" : "disconnect"
+    const actionLabel =
+      action === "connectAccount" ? "connect" : "disconnect"
+
+    try {
+      await this.runSecurityCheck(securityAction, options)
+
+      return this.submitAndWait(
+        {
+          address: this.contract.contractAddress,
+          abi: identityV2ABI,
+          functionName: action,
+          args: [account],
+        },
+        options?.onHash,
+      )
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("updateConnectionStatus Error:", error)
+      throw new Error(`Failed to ${actionLabel} account: ${message}`)
+    }
+  }
+
+  /**
+   * Connects a new account to the identity.
+   * The whitelisted root identity must be the signer. No additional message
+   * signature is required beyond the transaction itself.
    * @param account - The account address to connect.
    * @param options - Additional options, such as security prompts.
    * @returns The transaction receipt.
@@ -325,23 +365,7 @@ export class IdentitySDK {
     account: Address,
     options?: WalletLinkOptions,
   ): Promise<any> {
-    try {
-      await this.runSecurityCheck("connect", options)
-
-      return this.submitAndWait(
-        {
-          address: this.contract.contractAddress,
-          abi: identityV2ABI,
-          functionName: "connectAccount",
-          args: [account],
-        },
-        options?.onHash,
-      )
-    } catch (error: any) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error("connectAccount Error:", error)
-      throw new Error(`Failed to connect account: ${message}`)
-    }
+    return this.updateConnectionStatus("connectAccount", account, options)
   }
 
   /**
@@ -355,23 +379,7 @@ export class IdentitySDK {
     account: Address,
     options?: WalletLinkOptions,
   ): Promise<any> {
-    try {
-      await this.runSecurityCheck("disconnect", options)
-
-      return this.submitAndWait(
-        {
-          address: this.contract.contractAddress,
-          abi: identityV2ABI,
-          functionName: "disconnectAccount",
-          args: [account],
-        },
-        options?.onHash,
-      )
-    } catch (error: any) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error("disconnectAccount Error:", error)
-      throw new Error(`Failed to disconnect account: ${message}`)
-    }
+    return this.updateConnectionStatus("disconnectAccount", account, options)
   }
 
   /**

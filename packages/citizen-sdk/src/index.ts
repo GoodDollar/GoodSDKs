@@ -8,6 +8,7 @@ export type {
   IdentityExpiryData,
   IdentityContract,
   WalletLinkOptions,
+  WalletLinkAction,
   ConnectedAccountStatus,
   ChainConnectedStatus
 } from "./types"
