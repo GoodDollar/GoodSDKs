@@ -1,18 +1,18 @@
-import { Address, PublicClient } from "viem";
+import { Address, PublicClient } from "viem"
 
 export interface IdentityExpiry {
-  expiryTimestamp: bigint;
-  formattedExpiryTimestamp?: string;
+  expiryTimestamp: bigint
+  formattedExpiryTimestamp?: string
 }
 
 export interface IdentityExpiryData {
-  lastAuthenticated: bigint;
-  authPeriod: bigint;
+  lastAuthenticated: bigint
+  authPeriod: bigint
 }
 
 export interface IdentityContract {
-  publicClient: PublicClient;
-  contractAddress: Address;
+  publicClient: PublicClient
+  contractAddress: Address
 }
 
 export interface WalletClaimStatus {
@@ -22,3 +22,24 @@ export interface WalletClaimStatus {
 }
 
 export type SupportedChains = 42220 | 122 | 50
+
+export interface WalletLinkOptions {
+  skipSecurityMessage?: boolean
+  onSecurityMessage?: (message: string) => Promise<boolean>
+  onHash?: (hash: `0x${string}`) => void
+}
+
+export type WalletLinkAction = "connectAccount" | "disconnectAccount"
+
+export interface ConnectedAccountStatus {
+  isConnected: boolean
+  root: Address
+}
+
+export interface ChainConnectedStatus {
+  chainId: number
+  chainName: string
+  isConnected: boolean
+  root: Address
+  error?: string
+}

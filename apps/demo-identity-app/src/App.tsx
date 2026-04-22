@@ -19,6 +19,7 @@ import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
 import { SigningModal } from "./components/SigningModal"
 import { ClaimButton } from "./components/ClaimButton"
+import { WalletLinkWidget } from "./components/WalletLinkWidget" 
 
 const tamaguiConfig = createTamagui(config)
 
@@ -262,6 +263,14 @@ const App: React.FC = () => {
             </>
           )}
         </YStack>
+
+        {/* --- NEW WALLET LINK WIDGET SECTION --- */}
+        {isConnected && (
+          <YStack width="100%" maxWidth={600} marginTop={24}>
+            <WalletLinkWidget />
+          </YStack>
+        )}
+        {/* -------------------------------------- */}
 
         <SigningModal
           open={isSigningModalOpen}
