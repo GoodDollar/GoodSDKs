@@ -1,12 +1,15 @@
 {
-  "name": "@goodsdks/good-reserve",
-  "version": "0.1.0",
+  "name": "@goodsdks/streaming-sdk",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
     "dev": "tsc --watch",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "echo 'No linting configured for SDK packages'",
+    "check-types": "tsc --noEmit"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -22,24 +25,23 @@
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "@vitest/ui": "^4.0.18",
+    "@types/node": "latest",
+    "@vitest/coverage-v8": "^4.0.18",
     "typescript": "latest",
     "viem": "latest",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "tsup": "^8.3.5"
   },
   "peerDependencies": {
     "viem": "*"
   },
   "dependencies": {
-    "tsup": "^8.3.5"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "GoodDollar Reserve SDK — buy and sell G$ through the reserve using viem"
+    "@sfpro/sdk": "^0.1.0",
+    "graphql": "^16.9.0",
+    "graphql-request": "^7.1.2"
+  }
 }

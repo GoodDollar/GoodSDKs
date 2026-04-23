@@ -16,7 +16,7 @@
       "import": "./dist/index.js"
     },
     "require": {
-      "types": "./dist/index.cts",
+      "types": "./dist/index.d.cts",
       "require": "./dist/index.cjs"
     }
   },
@@ -37,6 +37,8 @@
   },
   "dependencies": {
     "@goodsdks/citizen-sdk": "*",
+    "@goodsdks/streaming-sdk": "*",
+    "@tanstack/react-query": "^4.36.1",
     "@goodsdks/good-reserve": "workspace:*",
     "lz-string": "^1.5.0",
     "react": "^19.1.1",

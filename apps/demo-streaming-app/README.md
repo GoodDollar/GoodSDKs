@@ -1,0 +1,68 @@
+# GoodDollar Streaming SDK Demo
+
+A demonstration application showcasing the GoodDollar Superfluid Streaming SDK with the simplified API that automatically resolves G$ token addresses.
+
+## What This Demo Shows
+
+This app demonstrates the key improvement in the Streaming SDK: you no longer need to manually specify G$ token addresses, and the recommended write path is a single `createOrUpdateStream()` call backed by Superfluid's `setFlowrate`. The SDK automatically resolves the correct token based on your selected environment.
+
+### Before (Old API)
+```typescript
+await sdk.createStream({
+  receiver: '<RECEIVER_ADDRESS>',
+  token: '<TOKEN_ADDRESS>', 
+  flowRate
+})
+```
+
+### After (New Simplified API)
+```typescript
+const sdk = new StreamingSDK(publicClient, walletClient, {
+  environment: 'production' // Auto-resolves G$ token
+})
+
+await sdk.createOrUpdateStream({
+  receiver: '<RECEIVER_ADDRESS>',
+  // No token parameter needed!
+  flowRate
+})
+```
+
+## Features
+
+- **Environment Selector** - Switch between production, staging, and development
+- **Wallet Connection** - Connect via WalletConnect to Celo or Base
+- **Set Streams** - Create or update streams with a single `setFlowrate`-backed form
+- **View Active Streams** - See indexed active streams for the connected wallet
+- **Token Balances** - Display the current G$ or SUP SuperToken balance
+- **Balance History** - Display recent subgraph balance snapshots for the selected token
+- **Manage Streams** - Delete streams you've created
+- **GDA Memberships** - View your pool memberships and connect/disconnect with account-scoped `isConnected` status
+- **SUP Reserves** - View Base reserve holdings when `VITE_GRAPH_API_KEY` is configured
+- **Visual API Examples** - See the actual code being used in real-time
+
+## Setup
+
+1. **Install Dependencies**
+   ```bash
+   yarn install
+   ```
+
+2. **Configure Environment**
+   Create a `.env` file with your WalletConnect Project ID.
+   
+   If you want to load **SUP reserves** on Base, also set a The Graph Gateway key (`VITE_GRAPH_API_KEY`). Without it, the reserves query is skipped and the UI will prompt you to configure it.
+
+3. **Build Dependencies**
+   ```bash
+   yarn build
+   ```
+
+## Running the Demo
+
+```bash
+cd apps/demo-streaming-app
+yarn dev
+```
+
+Open the URL shown in your terminal to view the app.
