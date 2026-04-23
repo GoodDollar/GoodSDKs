@@ -51,5 +51,8 @@
     "sass": "^1.85.1",
     "typescript": "^5.8.2",
     "vite": "6.3.5"
+  },
+  "peerDependencies": {
+    "@farcaster/miniapp-sdk": "^0.1.8"
   }
 }

@@ -27,6 +27,7 @@ export const Envs: Record<string, Record<string, string>> = {
   },
 }
 
+
 export interface ContractAddresses {
   identityContract: `0x${string}`
   ubiContract: `0x${string}`

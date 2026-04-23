@@ -72,25 +72,21 @@ export const ClaimButton: React.FC = () => {
       setError("ClaimSDK is not initialized.")
       return
     }
-    console.log("handleClaim called")
 
     setIsClaiming(true)
     setError(null)
     setTxHash(null)
 
     try {
-      const callBackExample = async () => {
-        console.log("waiting for claim for 2 seconds...")
-        await new Promise((resolve) => setTimeout(resolve, 2000)) // wait 2 seconds
-        console.log("tx start")
+      const txConfirm = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
       }
 
-      const tx = await sdk.claim(callBackExample)
+      const tx = await sdk.claim(txConfirm)
       if (!tx) return
 
       setTxHash(tx.transactionHash)
     } catch (err: any) {
-      console.error("Claim failed:", err)
       setError(err.message || "An unexpected error occurred.")
     } finally {
       setIsClaiming(false)
