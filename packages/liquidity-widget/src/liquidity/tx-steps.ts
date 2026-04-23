@@ -25,3 +25,13 @@ export function buildTxSteps(params: {
 
   return { steps, needGdApproval, needUsdgloApproval };
 }
+
+export function updateStep(
+  steps: TxStepInfo[],
+  index: number,
+  patch: Partial<TxStepInfo>,
+): TxStepInfo[] {
+  const next = steps.slice();
+  next[index] = { ...next[index], ...patch };
+  return next;
+}

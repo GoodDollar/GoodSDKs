@@ -8,6 +8,8 @@
     { "path": "./packages/engagement-sdk" },
     { "path": "./packages/savings-sdk" },
     { "path": "./packages/savings-widget" },
+    { "path": "./packages/liquidity-sdk" },
+    { "path": "./packages/liquidity-widget" },
     { "path": "./packages/good-reserve" },
     { "path": "./apps/demo-identity-app" },
     { "path": "./apps/engagement-app" },

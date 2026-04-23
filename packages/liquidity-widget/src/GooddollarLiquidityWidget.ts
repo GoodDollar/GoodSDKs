@@ -5,18 +5,17 @@ import type { PublicClient, WalletClient } from 'viem';
 import { celo } from 'viem/chains';
 
 import {
-  GD_TOKEN, USDGLO_TOKEN, IS_GD_TOKEN0,
+  GD_TOKEN, USDGLO_TOKEN,
   TICK_SPACING, DEFAULT_EXPLORER_URL, DEFAULT_APPROVAL_BUFFER,
   FULL_RANGE_TICK_LOWER, FULL_RANGE_TICK_UPPER,
-  tickToSqrtPrice,
+  calcUsdgloFromGd, calcGdFromUsdglo,
   GooddollarLiquiditySDK,
 } from '@goodsdks/liquidity-sdk';
 import type { PoolData, PositionData } from '@goodsdks/liquidity-sdk';
 
 import type { TxFlowPhase, TxStepInfo, WidgetTheme } from './liquidity/types';
-import { formatBigIntDisplay, formatAmount } from './liquidity/format';
 import { safeParseEther, validateInputs } from './liquidity/validation';
-import { buildTxSteps } from './liquidity/tx-steps';
+import { buildTxSteps, updateStep } from './liquidity/tx-steps';
 import { RANGE_PRESETS } from './liquidity/components/lw-range-presets';
 
 import './liquidity/components/lw-stepper';
@@ -28,16 +27,6 @@ import './liquidity/components/lw-position-card';
 import './liquidity/components/lw-positions-panel';
 
 type WidgetTab = 'add' | 'positions';
-
-export function updateStep(
-  steps: TxStepInfo[],
-  index: number,
-  patch: Partial<TxStepInfo>,
-): TxStepInfo[] {
-  const next = steps.slice();
-  next[index] = { ...next[index], ...patch };
-  return next;
-}
 
 @customElement('gooddollar-liquidity-widget')
 export class GooddollarLiquidityWidget extends LitElement {
@@ -248,6 +237,11 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   // ── Render ─────────────────────────────────────────────────────────
 
+  private _fmt(num: bigint): string {
+    if (num === 0n) return '0';
+    return Number(formatEther(num)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
   render() {
     const isConnected = !!(this.web3Provider && this.web3Provider.isConnected && this.userAddress);
     const gdPrice = this.poolData?.gdPriceInUsdglo ?? 0;
@@ -312,7 +306,7 @@ export class GooddollarLiquidityWidget extends LitElement {
             <lw-tooltip text="Your G$ tokens will be paired with USDGLO in the pool. The ratio is determined by the current pool price."></lw-tooltip>
           </span>
           <span class="balance-info ${!isConnected ? 'hidden' : ''}">
-            Balance: ${this.isLoading ? 'Loading...' : formatBigIntDisplay(this.gdBalance)}
+            Balance: ${this.isLoading ? 'Loading...' : this._fmt(this.gdBalance)}
           </span>
         </div>
         <div class="input-container">
@@ -332,7 +326,7 @@ export class GooddollarLiquidityWidget extends LitElement {
             <lw-tooltip text="The required counterpart token. Amount is calculated based on the pool ratio."></lw-tooltip>
           </span>
           <span class="balance-info ${!isConnected ? 'hidden' : ''}">
-            Balance: ${this.isLoading ? 'Loading...' : formatBigIntDisplay(this.usdgloBalance)}
+            Balance: ${this.isLoading ? 'Loading...' : this._fmt(this.usdgloBalance)}
           </span>
         </div>
         <div class="input-container">
@@ -476,40 +470,6 @@ export class GooddollarLiquidityWidget extends LitElement {
     this.positionsLoading = false;
   }
 
-  // ── Price & Amount Math ────────────────────────────────────────────
-
-  private _calcAmount1From0(amount0: number): number {
-    const sqC = this.poolData?.sqrtPriceFloat ?? 0;
-    const sqL = tickToSqrtPrice(this.tickLower);
-    const sqU = tickToSqrtPrice(this.tickUpper);
-    if (sqU <= sqL || sqC <= sqL || sqC >= sqU) return 0;
-    const L = amount0 * sqC * sqU / (sqU - sqC);
-    return L * (sqC - sqL);
-  }
-
-  private _calcAmount0From1(amount1: number): number {
-    const sqC = this.poolData?.sqrtPriceFloat ?? 0;
-    const sqL = tickToSqrtPrice(this.tickLower);
-    const sqU = tickToSqrtPrice(this.tickUpper);
-    if (sqU <= sqL || sqC >= sqU || sqC <= sqL) return 0;
-    const L = amount1 / (sqC - sqL);
-    return L * (sqU - sqC) / (sqC * sqU);
-  }
-
-  private _calcUsdgloFromGd() {
-    const gd = parseFloat(this.gdInput);
-    if (isNaN(gd) || gd <= 0 || !this.poolData) { this.usdgloInput = ''; return; }
-    const usdglo = IS_GD_TOKEN0 ? this._calcAmount1From0(gd) : this._calcAmount0From1(gd);
-    if (isFinite(usdglo) && usdglo >= 0) this.usdgloInput = formatAmount(usdglo);
-  }
-
-  private _calcGdFromUsdglo() {
-    const u = parseFloat(this.usdgloInput);
-    if (isNaN(u) || u <= 0 || !this.poolData) { this.gdInput = ''; return; }
-    const gd = IS_GD_TOKEN0 ? this._calcAmount0From1(u) : this._calcAmount1From0(u);
-    if (isFinite(gd) && gd >= 0) this.gdInput = formatAmount(gd);
-  }
-
   // ── Validation ─────────────────────────────────────────────────────
 
   private _validateInputs(force = false) {
@@ -537,27 +497,43 @@ export class GooddollarLiquidityWidget extends LitElement {
 
   private _handleConnect() { this.connectWallet?.(); }
 
+  private get _sqrtPriceFloat(): number {
+    return this.poolData?.sqrtPriceFloat ?? 0;
+  }
+
+  private _syncUsdgloFromGd() {
+    this.usdgloInput = calcUsdgloFromGd(
+      this.gdInput, this._sqrtPriceFloat, this.tickLower, this.tickUpper,
+    );
+  }
+
+  private _syncGdFromUsdglo() {
+    this.gdInput = calcGdFromUsdglo(
+      this.usdgloInput, this._sqrtPriceFloat, this.tickLower, this.tickUpper,
+    );
+  }
+
   private _handleGdInput(e: Event) {
     this.gdInput = (e.target as HTMLInputElement).value;
-    this._calcUsdgloFromGd();
+    this._syncUsdgloFromGd();
     this._validateInputs();
   }
 
   private _handleUsdgloInput(e: Event) {
     this.usdgloInput = (e.target as HTMLInputElement).value;
-    this._calcGdFromUsdglo();
+    this._syncGdFromUsdglo();
     this._validateInputs();
   }
 
   private _handleGdMax() {
     this.gdInput = formatEther(this.gdBalance);
-    this._calcUsdgloFromGd();
+    this._syncUsdgloFromGd();
     this.inputError = '';
   }
 
   private _handleUsdgloMax() {
     this.usdgloInput = formatEther(this.usdgloBalance);
-    this._calcGdFromUsdglo();
+    this._syncGdFromUsdglo();
     this.inputError = '';
   }
 
@@ -568,7 +544,7 @@ export class GooddollarLiquidityWidget extends LitElement {
     const { tickLower, tickUpper } = preset.getTickRange(this.currentTick, TICK_SPACING);
     this.tickLower = tickLower;
     this.tickUpper = tickUpper;
-    this._calcUsdgloFromGd();
+    this._syncUsdgloFromGd();
   }
 
   private _handleRetry() {
@@ -617,8 +593,8 @@ export class GooddollarLiquidityWidget extends LitElement {
         const hash = await sdk.approveToken(
           GD_TOKEN, gdWei, this.approvalBuffer,
           {
-            onHash: (h) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'approve-gd'); },
-            onConfirmed: (h) => this._emitTxEvent('lw-tx-confirmed', h, 'approve-gd'),
+            onHash: (h:any) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'approve-gd'); },
+            onConfirmed: (h:any) => this._emitTxEvent('lw-tx-confirmed', h, 'approve-gd'),
           },
         );
 
@@ -634,8 +610,8 @@ export class GooddollarLiquidityWidget extends LitElement {
         const hash = await sdk.approveToken(
           USDGLO_TOKEN, usdgloWei, this.approvalBuffer,
           {
-            onHash: (h) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'approve-usdglo'); },
-            onConfirmed: (h) => this._emitTxEvent('lw-tx-confirmed', h, 'approve-usdglo'),
+            onHash: (h:any) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'approve-usdglo'); },
+            onConfirmed: (h:any) => this._emitTxEvent('lw-tx-confirmed', h, 'approve-usdglo'),
           },
         );
 
@@ -650,8 +626,8 @@ export class GooddollarLiquidityWidget extends LitElement {
       const hash = await sdk.addLiquidity(
         gdWei, usdgloWei, this.tickLower, this.tickUpper,
         {
-          onHash: (h) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'mint'); },
-          onConfirmed: (h) => this._emitTxEvent('lw-tx-confirmed', h, 'mint'),
+          onHash: (h:any) => { this.txHash = h; this._emitTxEvent('lw-tx-submitted', h, 'mint'); },
+          onConfirmed: (h:any) => this._emitTxEvent('lw-tx-confirmed', h, 'mint'),
         },
       );
 
