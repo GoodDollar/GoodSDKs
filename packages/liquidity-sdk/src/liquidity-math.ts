@@ -1,5 +1,5 @@
 import { formatEther } from 'viem';
-import { IS_GD_TOKEN0 } from './constants';
+import { IS_GD_TOKEN0, tickToSqrtPrice } from './constants';
 
 const MAX_TICK = 887272n;
 const MAX_UINT256 = (1n << 256n) - 1n;
@@ -106,4 +106,77 @@ export function computeSqrtPriceFloat(sqrtPriceX96: bigint): number {
   if (sqrtPriceX96 === 0n) return 0;
   const scaled = (sqrtPriceX96 * SCALE) / Q96;
   return Number(formatEther(scaled));
+}
+
+function calcAmount1From0(
+  amount0: number,
+  sqrtPriceFloat: number,
+  tickLower: number,
+  tickUpper: number,
+): number {
+  const sqC = sqrtPriceFloat;
+  const sqL = tickToSqrtPrice(tickLower);
+  const sqU = tickToSqrtPrice(tickUpper);
+  if (sqU <= sqL || sqC <= sqL || sqC >= sqU) return 0;
+  const L = (amount0 * sqC * sqU) / (sqU - sqC);
+  return L * (sqC - sqL);
+}
+
+function calcAmount0From1(
+  amount1: number,
+  sqrtPriceFloat: number,
+  tickLower: number,
+  tickUpper: number,
+): number {
+  const sqC = sqrtPriceFloat;
+  const sqL = tickToSqrtPrice(tickLower);
+  const sqU = tickToSqrtPrice(tickUpper);
+  if (sqU <= sqL || sqC >= sqU || sqC <= sqL) return 0;
+  const L = amount1 / (sqC - sqL);
+  return (L * (sqU - sqC)) / (sqC * sqU);
+}
+
+function formatAmount(num: number): string {
+  if (num === 0) return '0';
+  return num.toFixed(6).replace(/\.?0+$/, '');
+}
+
+/**
+ * Compute the counterpart USDGLO amount for a given G$ input, using the current
+ * pool sqrtPrice and the selected tick range. Returns an empty string when the
+ * input or pool state is invalid.
+ */
+export function calcUsdgloFromGd(
+  gd: string,
+  sqrtPriceFloat: number,
+  tickLower: number,
+  tickUpper: number,
+): string {
+  const gdNum = parseFloat(gd);
+  if (isNaN(gdNum) || gdNum <= 0 || sqrtPriceFloat <= 0) return '';
+  const usdglo = IS_GD_TOKEN0
+    ? calcAmount1From0(gdNum, sqrtPriceFloat, tickLower, tickUpper)
+    : calcAmount0From1(gdNum, sqrtPriceFloat, tickLower, tickUpper);
+  if (!isFinite(usdglo) || usdglo < 0) return '';
+  return formatAmount(usdglo);
+}
+
+/**
+ * Compute the counterpart G$ amount for a given USDGLO input, using the current
+ * pool sqrtPrice and the selected tick range. Returns an empty string when the
+ * input or pool state is invalid.
+ */
+export function calcGdFromUsdglo(
+  usdglo: string,
+  sqrtPriceFloat: number,
+  tickLower: number,
+  tickUpper: number,
+): string {
+  const u = parseFloat(usdglo);
+  if (isNaN(u) || u <= 0 || sqrtPriceFloat <= 0) return '';
+  const gd = IS_GD_TOKEN0
+    ? calcAmount0From1(u, sqrtPriceFloat, tickLower, tickUpper)
+    : calcAmount1From0(u, sqrtPriceFloat, tickLower, tickUpper);
+  if (!isFinite(gd) || gd < 0) return '';
+  return formatAmount(gd);
 }

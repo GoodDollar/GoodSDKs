@@ -117,11 +117,9 @@ export class LwPositionCard extends LitElement {
 
   private _fmt(val: bigint): string {
     if (val === 0n) return '0';
-    const [whole, frac = ''] = formatEther(val).split('.');
-    if (whole === '0' && !/[1-9]/.test(frac.slice(0, 4))) return '<0.0001';
-    const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    const trimmedFrac = frac.slice(0, 4).replace(/0+$/, '');
-    return trimmedFrac ? `${grouped}.${trimmedFrac}` : grouped;
+    const num = Number(formatEther(val));
+    if (num < 0.0001) return '<0.0001';
+    return num.toLocaleString('en-US', { maximumFractionDigits: 4 });
   }
 
   render() {

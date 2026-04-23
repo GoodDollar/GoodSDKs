@@ -1,6 +1,6 @@
 import "@goodsdks/liquidity-widget"
 import React, { useEffect, useRef } from "react"
-import type { GooddollarLiquidityWidget } from "@goodsdks/liquidity-widget/src/GooddollarLiquidityWidget"
+import type { GooddollarLiquidityWidget } from "@goodsdks/liquidity-widget"
 
 type WidgetTheme = {
   primaryColor?: string

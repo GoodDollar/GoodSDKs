@@ -39,3 +39,7 @@ export function nearestUsableTick(tick: number, spacing: number): number {
   const rounded = Math.round(tick / spacing) * spacing;
   return rounded;
 }
+
+export function tickToSqrtPrice(tick: number): number {
+  return Math.sqrt(1.0001 ** tick);
+}

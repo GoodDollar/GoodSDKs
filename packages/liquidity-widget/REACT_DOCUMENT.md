@@ -4,12 +4,14 @@ The liquidity widget is a [Lit](https://lit.dev) **web component** registered as
 
 This guide covers:
 
-1. [Installation & Registration](#1-installation--registration)
-2. [A `<LiquidityWidget />` React wrapper](#2-a-liquiditywidget--react-wrapper)
-3. [Integrating with wagmi](#3-integrating-with-wagmi)
-4. [Integrating with Reown AppKit](#4-integrating-with-reown-appkit)
-5. [Listening to widget events](#5-listening-to-widget-events)
-6. [TypeScript / JSX support](#6-typescript--jsx-support)
+- [Using `@goodsdks/liquidity-widget` in React](#using-goodsdksliquidity-widget-in-react)
+  - [1. Installation \& Registration](#1-installation--registration)
+  - [2. A `<LiquidityWidget />` React wrapper](#2-a-liquiditywidget--react-wrapper)
+  - [3. Integrating with wagmi](#3-integrating-with-wagmi)
+  - [4. Integrating with Reown AppKit](#4-integrating-with-reown-appkit)
+  - [5. Listening to widget events](#5-listening-to-widget-events)
+  - [6. TypeScript / JSX support](#6-typescript--jsx-support)
+  - [Props reference](#props-reference)
 
 ---
 
@@ -45,7 +47,7 @@ Two of the widget's integrator inputs — `web3Provider` and `connectWallet` —
 
 import "@goodsdks/liquidity-widget";
 import { useEffect, useRef } from "react";
-import type { GooddollarLiquidityWidget } from "@goodsdks/liquidity-widget/src/GooddollarLiquidityWidget";
+import type { GooddollarLiquidityWidget } from "@goodsdks/liquidity-widget";
 
 type WidgetTheme = {
   primaryColor?: string;
@@ -296,7 +298,7 @@ Declare the custom element on `JSX.IntrinsicElements` so `<gooddollar-liquidity-
 
 ```ts
 // src/types/liquidity-widget.d.ts
-import type { GooddollarLiquidityWidget } from "@goodsdks/liquidity-widget/src/GooddollarLiquidityWidget";
+import type { GooddollarLiquidityWidget } from "@goodsdks/liquidity-widget";
 import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
 declare global {
