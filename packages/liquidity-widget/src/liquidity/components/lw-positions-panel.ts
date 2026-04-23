@@ -83,7 +83,8 @@ export class LwPositionsPanel extends LitElement {
   private _fmt(val: bigint): string {
     const n = Number(formatEther(val));
     if (n === 0) return '0';
-    return Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(n);
+    const frac = n < 10 ? 4 : n < 100 ? 2 : 1;
+    return Intl.NumberFormat(undefined, { maximumFractionDigits: frac }).format(n);
   }
 
   render() {
@@ -122,12 +123,8 @@ export class LwPositionsPanel extends LitElement {
             <span class="summary-value">${this._fmt(totalUsdglo)}</span>
           </div>
           <div class="summary-item">
-            <span class="summary-label">Unclaimed G$ Fees</span>
-            <span class="summary-value">${this._fmt(totalGdFees)}</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Unclaimed USDGLO Fees</span>
-            <span class="summary-value">${this._fmt(totalUsdgloFees)}</span>
+            <span class="summary-label">Unclaimed Fees</span>
+            <span class="summary-value">${this._fmt(totalGdFees)} G$ / ${this._fmt(totalUsdgloFees)} GLO</span>
           </div>
         </div>
 

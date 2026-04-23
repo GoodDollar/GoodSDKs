@@ -147,7 +147,18 @@ export class GooddollarLiquiditySDK {
       })),
     });
 
-    const positions: PositionData[] = [];
+    type ParsedPosition = {
+      tokenId: bigint;
+      token0: string;
+      token1: string;
+      fee: number;
+      tickLower: number;
+      tickUpper: number;
+      liquidity: bigint;
+      tokensOwed0: bigint;
+      tokensOwed1: bigint;
+    };
+    const parsed: ParsedPosition[] = [];
     for (let i = 0; i < tokenIds.length; i++) {
       const res = positionResults[i];
       if (res.status !== 'success') continue;
@@ -166,22 +177,59 @@ export class GooddollarLiquiditySDK {
       if (!matchesPool) continue;
       if (liquidity === 0n && tokensOwed0 === 0n && tokensOwed1 === 0n) continue;
 
-      const { amount0, amount1 } = getAmountsForPositionApprox(
-        liquidity, tickLower, tickUpper, currentTick,
-      );
-
-      positions.push({
+      parsed.push({
         tokenId: tokenIds[i],
-        token0, token1,
-        fee, tickLower, tickUpper,
-        liquidity,
-        tokensOwed0, tokensOwed1,
-        amount0, amount1,
-        inRange: currentTick >= tickLower && currentTick < tickUpper,
+        token0, token1, fee, tickLower, tickUpper,
+        liquidity, tokensOwed0, tokensOwed1,
       });
     }
 
-    return positions;
+    console.log('Parsed positions:', parsed);
+
+    if (parsed.length === 0) return [];
+
+    const feeSimResults = await Promise.all(
+      parsed.map((p) =>
+        this.publicClient.simulateContract({
+          account: userAddress,
+          address: POSITION_MANAGER,
+          abi: POSITION_MANAGER_ABI,
+          functionName: 'collect',
+          args: [{
+            tokenId: p.tokenId,
+            recipient: userAddress,
+            amount0Max: MAX_UINT128,
+            amount1Max: MAX_UINT128,
+          }],
+        }).then(
+          (r) => {
+            console.log(r.result);
+            return r.result as readonly [bigint, bigint]
+          },
+          () => [p.tokensOwed0, p.tokensOwed1] as const,
+        ),
+      ),
+    );
+
+    return parsed.map((p, i) => {
+      const [simOwed0, simOwed1] = feeSimResults[i];
+      const { amount0, amount1 } = getAmountsForPositionApprox(
+        p.liquidity, p.tickLower, p.tickUpper, currentTick,
+      );
+      return {
+        tokenId: p.tokenId,
+        token0: p.token0,
+        token1: p.token1,
+        fee: p.fee,
+        tickLower: p.tickLower,
+        tickUpper: p.tickUpper,
+        liquidity: p.liquidity,
+        tokensOwed0: simOwed0,
+        tokensOwed1: simOwed1,
+        amount0, amount1,
+        inRange: currentTick >= p.tickLower && currentTick < p.tickUpper,
+      };
+    });
   }
 
   // ── Writes ───────────────────────────────────────────────────────────
