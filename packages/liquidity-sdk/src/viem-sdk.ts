@@ -12,8 +12,7 @@ import {
   TOKEN1,
   USDGLO_TOKEN,
 } from './constants';
-import { computeGdPriceFromSqrtPrice, computeSqrtPriceFloat } from './price-math';
-import { getAmountsForPositionApprox } from './liquidity-math';
+import { computeGdPriceFromSqrtPrice, computeSqrtPriceFloat, getAmountsForPositionApprox } from './liquidity-math';
 import type {
   PoolData,
   PositionData,
@@ -108,22 +107,24 @@ export class GooddollarLiquiditySDK {
     userAddress: `0x${string}`,
     currentTick: number,
   ): Promise<PositionData[]> {
-    let positionCount: bigint;
+    let positionCount: number;
     try {
-      positionCount = (await this.publicClient.readContract({
+      const positionCountR = (await this.publicClient.readContract({
         address: POSITION_MANAGER,
         abi: POSITION_MANAGER_ABI,
         functionName: 'balanceOf',
         args: [userAddress],
       })) as bigint;
+      // it is ok to convert to number because position count is in safe range
+      positionCount = Number(positionCountR);
     } catch {
       return [];
     }
 
-    if (positionCount === 0n) return [];
+    if (positionCount === 0) return [];
 
     const tokenIdResults = await this.publicClient.multicall({
-      contracts: Array.from({ length: Number(positionCount) }, (_, i) => ({
+      contracts: Array.from({ length: positionCount }, (_, i) => ({
         address: POSITION_MANAGER,
         abi: POSITION_MANAGER_ABI,
         functionName: 'tokenOfOwnerByIndex' as const,

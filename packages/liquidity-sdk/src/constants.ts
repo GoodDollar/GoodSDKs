@@ -35,10 +35,6 @@ export const POSITION_MANAGER_ABI = parseAbi([
   'function collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max) params) payable returns (uint256 amount0, uint256 amount1)',
 ]);
 
-export function tickToSqrtPrice(tick: number): number {
-  return Math.sqrt(1.0001 ** tick);
-}
-
 export function nearestUsableTick(tick: number, spacing: number): number {
   const rounded = Math.round(tick / spacing) * spacing;
   return rounded;
