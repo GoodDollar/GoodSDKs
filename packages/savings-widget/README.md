@@ -2,6 +2,8 @@
 
 The `gooddollar-savings-widget` web component provides a simple and interactive way for users to stake their G$ tokens and earn.
 
+The widget supports the **Celo** and **XDC** networks. If the connected wallet is on any other chain, the widget shows a "Wrong network" banner and disables the action button until the user switches to one of the supported networks.
+
 ## Integratig The Component
 
 Can be used in any website, for a quick setup:
@@ -63,3 +65,6 @@ Customize the `gooddollar-savings-widget` using these properties:
 
 - **`web3Provider`**: _(Set via JavaScript property)_  
   The web3Provider object when the wallet is connected. Wallet connection logic should be handeled outside of this component.
+
+- **`default-chain-id`**: _(HTML attribute / JS property `defaultChainId`)_  
+  Numeric chain id used to display global stats when no wallet is connected. Must be one of the supported chains: `42220` (Celo, default) or `50` (XDC).
