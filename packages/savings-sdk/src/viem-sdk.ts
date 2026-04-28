@@ -6,6 +6,16 @@ import {
   type SimulateContractParameters,
 } from "viem"
 
+import {
+  DEFAULT_SAVINGS_CHAIN_CONFIG,
+  SavingsContracts,
+  SupportedChainId,
+  UnsupportedChainError,
+  formatSupportedNetworkList,
+  getSavingsChainConfig,
+  isSupportedChainId,
+} from "./constants"
+
 const STAKING_CONTRACT_ABI = parseAbi([
   "function balanceOf(address account) view returns (uint256)",
   "function earned(address account) view returns (uint256)",
@@ -24,22 +34,6 @@ const G$__ABI = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
 ])
 
-const STAKING_CONTRACT_ADDRESS =
-  "0x799a23dA264A157Db6F9c02BE62F82CE8d602A45" as const
-const GDOLLAR_CONTRACT_ADDRESS =
-  "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const
-
-
-const stakingContract = {
-  address: STAKING_CONTRACT_ADDRESS,
-  abi: STAKING_CONTRACT_ABI,
-} as const
-
-const gdollarContract = {
-  address: GDOLLAR_CONTRACT_ADDRESS,
-  abi: G$__ABI,
-} as const
-
 export interface GlobalStats {
   totalStaked: bigint // in GDollars wei
   annualAPR: number // in percentage
@@ -52,20 +46,37 @@ export interface UserStats {
   userWeeklyRewards: bigint // in GDollars wei
 }
 
+export interface GooddollarSavingsSDKOptions {
+  /**
+   * Override default contract addresses for one or more supported chains.
+   * Useful when integrating against staging deployments or before a chain's
+   * production staking contract has been registered in the defaults.
+   */
+  contracts?: Partial<Record<SupportedChainId, Partial<SavingsContracts>>>
+}
+
 export class GooddollarSavingsSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient | null = null
   private totalStaked: bigint = BigInt(0)
   private cachedRewardRate: bigint = BigInt(0)
+  private readonly chainId: SupportedChainId
+  private readonly contracts: SavingsContracts
 
   constructor(
     publicClient: PublicClient,
     walletClient?: WalletClient,
+    options: GooddollarSavingsSDKOptions = {},
   ) {
     if (!publicClient) throw new Error("Public client is required")
-    if (!(publicClient.chain?.id === 42220)) {
-      throw new Error("Public client must be connected to Celo mainnet")
+
+    const publicChainId = publicClient.chain?.id
+    if (!isSupportedChainId(publicChainId)) {
+      throw new UnsupportedChainError(publicChainId)
     }
+
+    this.chainId = publicChainId
+    this.contracts = this.resolveContracts(this.chainId, options.contracts)
     this.publicClient = publicClient
     this.walletClient = null
     if (walletClient) {
@@ -73,14 +84,31 @@ export class GooddollarSavingsSDK {
     }
   }
 
+  /** Chain id (Celo / XDC) the SDK is currently bound to. */
+  getChainId(): SupportedChainId {
+    return this.chainId
+  }
+
+  /** Resolved contract addresses for the active chain. */
+  getContracts(): SavingsContracts {
+    return this.contracts
+  }
+
   setWalletClient(walletClient: WalletClient) {
-    if (!(walletClient.chain?.id === 42220)) {
-      throw new Error("Wallet client must be connected to Celo mainnet")
+    const walletChainId = walletClient.chain?.id
+    if (!isSupportedChainId(walletChainId)) {
+      throw new UnsupportedChainError(walletChainId)
+    }
+    if (walletChainId !== this.chainId) {
+      throw new Error(
+        `Wallet client chain ${walletChainId} does not match public client chain ${this.chainId}. Connect to ${formatSupportedNetworkList()}.`,
+      )
     }
     this.walletClient = walletClient
   }
 
   async getGlobalStats(): Promise<GlobalStats> {
+    const stakingContract = this.stakingContract()
     const [totalSupply, periodFinish, effectiveRewardRate] = await Promise.all([
       this.publicClient.readContract({
         ...stakingContract,
@@ -117,6 +145,8 @@ export class GooddollarSavingsSDK {
 
   async getUserStats(): Promise<UserStats> {
     const account = await this.getAccount()
+    const stakingContract = this.stakingContract()
+    const gdollarContract = this.gdollarContract()
 
     const [balance, staked, earned] = await Promise.all([
       this.publicClient.readContract({
@@ -156,6 +186,7 @@ export class GooddollarSavingsSDK {
     if (amount <= BigInt(0)) throw new Error("Amount must be greater than zero")
 
     const account = await this.getAccount()
+    const gdollarContract = this.gdollarContract()
 
     const balance = await this.publicClient.readContract({
       ...gdollarContract,
@@ -171,7 +202,7 @@ export class GooddollarSavingsSDK {
 
     return this.submitAndWait(
       {
-        ...stakingContract,
+        ...this.stakingContract(),
         functionName: "stake",
         args: [amount],
       },
@@ -184,7 +215,7 @@ export class GooddollarSavingsSDK {
 
     return this.submitAndWait(
       {
-        ...stakingContract,
+        ...this.stakingContract(),
         functionName: "withdraw",
         args: [amount],
       },
@@ -195,7 +226,7 @@ export class GooddollarSavingsSDK {
   async claimReward(onHash?: (hash: `0x${string}`) => void) {
     return this.submitAndWait(
       {
-        ...stakingContract,
+        ...this.stakingContract(),
         functionName: "getReward",
         args: [],
       },
@@ -243,10 +274,11 @@ export class GooddollarSavingsSDK {
     onHash?: (hash: `0x${string}`) => void,
   ) {
     const account = await this.getAccount()
+    const gdollarContract = this.gdollarContract()
     const allowance = await this.publicClient.readContract({
       ...gdollarContract,
       functionName: "allowance",
-      args: [account, STAKING_CONTRACT_ADDRESS],
+      args: [account, this.contracts.staking],
     })
 
     if (allowance < amount) {
@@ -254,10 +286,38 @@ export class GooddollarSavingsSDK {
         {
           ...gdollarContract,
           functionName: "approve",
-          args: [STAKING_CONTRACT_ADDRESS, amount],
+          args: [this.contracts.staking, amount],
         },
         onHash,
       )
+    }
+  }
+
+  private stakingContract() {
+    return {
+      address: this.contracts.staking,
+      abi: STAKING_CONTRACT_ABI,
+    } as const
+  }
+
+  private gdollarContract() {
+    return {
+      address: this.contracts.gdollar,
+      abi: G$__ABI,
+    } as const
+  }
+
+  private resolveContracts(
+    chainId: SupportedChainId,
+    overrides: GooddollarSavingsSDKOptions["contracts"],
+  ): SavingsContracts {
+    const defaults =
+      getSavingsChainConfig(chainId)?.contracts ??
+      DEFAULT_SAVINGS_CHAIN_CONFIG[chainId].contracts
+    const override = overrides?.[chainId]
+    return {
+      staking: override?.staking ?? defaults.staking,
+      gdollar: override?.gdollar ?? defaults.gdollar,
     }
   }
 
