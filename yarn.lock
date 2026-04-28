@@ -2057,7 +2057,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
+"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/citizen-sdk@workspace:packages/citizen-sdk"
   dependencies:
@@ -2193,12 +2193,27 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@goodsdks/invite-sdk@workspace:*, @goodsdks/invite-sdk@workspace:packages/invite-sdk":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/invite-sdk@workspace:packages/invite-sdk"
+  dependencies:
+    "@goodsdks/citizen-sdk": "workspace:*"
+    "@repo/typescript-config": "workspace:*"
+    tsup: "npm:^8.4.0"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+  peerDependencies:
+    viem: "*"
+  languageName: unknown
+  linkType: soft
+
 "@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
   dependencies:
     "@goodsdks/citizen-sdk": "npm:*"
     "@goodsdks/good-reserve": "workspace:*"
+    "@goodsdks/invite-sdk": "workspace:*"
     "@repo/typescript-config": "workspace:*"
     "@types/react": "npm:^19"
     lz-string: "npm:^1.5.0"
