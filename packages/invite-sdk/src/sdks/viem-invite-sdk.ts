@@ -60,7 +60,7 @@ function mapContractError(error: unknown): InviteSDKError {
     return new InviteSDKError("cannot invite yourself", "SELF_INVITE")
   if (combined.includes("user_already_joined") || combined.includes("already joined"))
     return new InviteSDKError("user has already joined", "USER_ALREADY_JOINED")
-  if (combined.includes("not_eligible_bounty") || combined.includes("not elligble"))
+  if (combined.includes("not_eligible_bounty") || combined.includes("not eligible"))
     return new InviteSDKError(
       "invitee not yet eligible for bounty",
       "NOT_ELIGIBLE_BOUNTY",
@@ -104,7 +104,8 @@ function parseBountyLogs(
   return results
 }
 
-// ─── SDK Options ──────────────────────────────────────────────────────────────
+/** Milliseconds to wait after tx submission before polling for the receipt. */
+const TX_SUBMISSION_DELAY_MS = 2000
 
 export interface InviteSDKOptions {
   publicClient: PublicClient
@@ -213,7 +214,7 @@ export class InviteSDK {
     const hash = await this.walletClient.writeContract(request)
 
     // Give the node a moment before polling
-    await new Promise((res) => setTimeout(res, 2000))
+    await new Promise((res) => setTimeout(res, TX_SUBMISSION_DELAY_MS))
 
     return waitForTransactionReceipt(this.publicClient, {
       hash,
