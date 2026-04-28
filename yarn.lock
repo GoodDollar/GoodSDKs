@@ -2193,6 +2193,34 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@goodsdks/liquidity-sdk@npm:*, @goodsdks/liquidity-sdk@workspace:packages/liquidity-sdk":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/liquidity-sdk@workspace:packages/liquidity-sdk"
+  dependencies:
+    "@repo/typescript-config": "workspace:*"
+    tsup: "npm:^8.3.5"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+    wagmi: "npm:latest"
+  peerDependencies:
+    viem: "*"
+    wagmi: "*"
+  languageName: unknown
+  linkType: soft
+
+"@goodsdks/liquidity-widget@npm:*, @goodsdks/liquidity-widget@workspace:packages/liquidity-widget":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/liquidity-widget@workspace:packages/liquidity-widget"
+  dependencies:
+    "@goodsdks/liquidity-sdk": "npm:*"
+    "@repo/typescript-config": "workspace:*"
+    lit: "npm:^3.1.0"
+    tsup: "npm:^8.3.5"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+  languageName: unknown
+  linkType: soft
+
 "@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
@@ -10581,6 +10609,41 @@ __metadata:
     vite: "npm:6.3.5"
     wagmi: "npm:^1.4.13"
     zod: "npm:^3.24.2"
+  languageName: unknown
+  linkType: soft
+
+"demo-liquidity-widget@workspace:apps/demo-liquidity-widget":
+  version: 0.0.0-use.local
+  resolution: "demo-liquidity-widget@workspace:apps/demo-liquidity-widget"
+  dependencies:
+    "@goodsdks/liquidity-widget": "npm:*"
+    "@reown/appkit": "npm:^1.7.2"
+    "@reown/appkit-adapter-wagmi": "npm:^1.7.2"
+    "@reown/appkit-wallet": "npm:^1.7.2"
+    "@tamagui/config": "npm:^1.125.22"
+    "@tamagui/core": "npm:^1.125.22"
+    "@tamagui/font-inter": "npm:^1.125.22"
+    "@tamagui/vite-plugin": "npm:^1.125.22"
+    "@tamagui/web": "npm:^1.125.22"
+    "@tanstack/react-query": "npm:^4.36.1"
+    "@types/react": "npm:^18.3.18"
+    "@types/react-dom": "npm:^18.3.5"
+    "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
+    "@typescript-eslint/parser": "npm:^5.62.0"
+    "@vitejs/plugin-react": "npm:^4.3.4"
+    cross-env: "npm:^7.0.3"
+    eslint: "npm:^8.57.1"
+    eslint-config-prettier: "npm:^8.10.0"
+    eslint-plugin-react: "npm:^7.37.4"
+    eslint-plugin-react-hooks: "npm:^5.2.0"
+    prettier: "npm:^3.5.3"
+    react: "npm:^18.3.1"
+    react-dom: "npm:^18.3.1"
+    tamagui: "npm:^1.125.22"
+    typescript: "npm:^5.8.2"
+    viem: "npm:^1.21.4"
+    vite: "npm:6.3.5"
+    wagmi: "npm:^1.4.13"
   languageName: unknown
   linkType: soft
 
