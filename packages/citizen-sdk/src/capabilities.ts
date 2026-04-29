@@ -27,13 +27,35 @@ export interface SdkCapabilitySummary {
   writes: readonly SdkCapabilityOperation[]
 }
 
+/**
+ * Canonical citizen-sdk runtime environments for capability consumers.
+ * Adapters/widgets should consume this via citizenSdkCapabilities to avoid
+ * duplicating environment lists.
+ */
+export const CITIZEN_SDK_ENVIRONMENTS = [
+  "production",
+  "staging",
+  "development",
+] as const
+
+/**
+ * Canonical citizen-sdk supported chains for capability consumers.
+ * Adapters/widgets should consume this via citizenSdkCapabilities to avoid
+ * duplicating supported-chain lists.
+ */
+export const CITIZEN_SDK_SUPPORTED_CHAINS = [
+  SupportedChains.FUSE,
+  SupportedChains.CELO,
+  SupportedChains.XDC,
+] as const
+
 // UI-agnostic summary for integrators building widgets or other frontends on
 // top of citizen-sdk. It documents runtime requirements without prescribing a
 // GoodWidget UI structure.
 export const citizenSdkCapabilities = {
   sdk: "@goodsdks/citizen-sdk",
-  environments: ["production", "staging", "development"],
-  chains: [SupportedChains.FUSE, SupportedChains.CELO, SupportedChains.XDC],
+  environments: CITIZEN_SDK_ENVIRONMENTS,
+  chains: CITIZEN_SDK_SUPPORTED_CHAINS,
   needs: [
     "connectedWallet",
     "readClient",
@@ -60,6 +82,16 @@ export const citizenSdkCapabilities = {
       id: "claimEntitlement",
       method: "ClaimSDK.checkEntitlement",
       needs: ["readClient", "walletClient", "connectedWallet"],
+    },
+    {
+      id: "genericClaimEntitlement",
+      method: "checkGenericEntitlement",
+      needs: ["readClient"],
+    },
+    {
+      id: "dailyStats",
+      method: "checkGenericDailyStats",
+      needs: ["readClient"],
     },
   ],
   writes: [
