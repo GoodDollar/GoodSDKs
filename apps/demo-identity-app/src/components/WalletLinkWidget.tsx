@@ -7,6 +7,9 @@ import { SDK_ENV } from "../config"
 export const WalletLinkWidget = () => {
   const [targetAddress, setTargetAddress] = useState("")
   const [addressError, setAddressError] = useState<string | null>(null)
+  const [activeAction, setActiveAction] = useState<
+    "connect" | "disconnect" | null
+  >(null)
   const currentChainId = useChainId()
   const parsedAddress = isAddress(targetAddress)
     ? (targetAddress as Address)
@@ -35,12 +38,12 @@ export const WalletLinkWidget = () => {
     const address = getValidatedAddress()
     if (!address) return
 
+    setActiveAction("connect")
     try {
       await actions.connect(address)
-    } catch (err) {
-      console.error("Connect failed", err)
     } finally {
       connectedStatus.refetch()
+      setActiveAction(null)
     }
   }
 
@@ -48,12 +51,12 @@ export const WalletLinkWidget = () => {
     const address = getValidatedAddress()
     if (!address) return
 
+    setActiveAction("disconnect")
     try {
       await actions.disconnect(address)
-    } catch (err) {
-      console.error("Disconnect failed", err)
     } finally {
       connectedStatus.refetch()
+      setActiveAction(null)
     }
   }
 
@@ -123,13 +126,15 @@ export const WalletLinkWidget = () => {
             onClick={handleConnect}
             disabled={actions.loading || !parsedAddress}
           >
-            {actions.loading ? "Connecting..." : "Connect Wallet"}
+            {activeAction === "connect" && actions.loading
+              ? "Connecting..."
+              : "Connect Wallet"}
           </button>
           <button
             onClick={handleDisconnect}
             disabled={actions.loading || !parsedAddress}
           >
-            {actions.loading
+            {activeAction === "disconnect" && actions.loading
               ? "Disconnecting..."
               : "Disconnect Wallet"}
           </button>
