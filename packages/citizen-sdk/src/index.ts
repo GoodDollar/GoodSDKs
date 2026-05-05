@@ -9,6 +9,5 @@ export type {
   IdentityContract,
   WalletLinkOptions,
   WalletLinkAction,
-  ConnectedAccountStatus,
   ChainConnectedStatus
 } from "./types"

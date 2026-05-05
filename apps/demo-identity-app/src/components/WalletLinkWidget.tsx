@@ -2,16 +2,18 @@ import { useState } from "react"
 import { useChainId } from "wagmi"
 import { useWalletLink } from "@goodsdks/react-hooks"
 import { Address, isAddress } from "viem"
+import { SDK_ENV } from "../config"
 
 export const WalletLinkWidget = () => {
   const [targetAddress, setTargetAddress] = useState("")
+  const [addressError, setAddressError] = useState<string | null>(null)
   const currentChainId = useChainId()
   const parsedAddress = isAddress(targetAddress)
     ? (targetAddress as Address)
     : undefined
 
   const { actions, connectedStatus } = useWalletLink(
-    "development",
+    SDK_ENV,
     parsedAddress,
   )
 
@@ -19,39 +21,44 @@ export const WalletLinkWidget = () => {
     (status) => status.chainId === currentChainId,
   )
 
-  const handleConnect = async () => {
+  const getValidatedAddress = (): Address | null => {
     if (!parsedAddress) {
-      alert("Invalid Ethereum address format.")
-      return
+      setAddressError("Invalid Ethereum address format.")
+      return null
     }
 
+    setAddressError(null)
+    return parsedAddress
+  }
+
+  const handleConnect = async () => {
+    const address = getValidatedAddress()
+    if (!address) return
+
     try {
-      await actions.connect(parsedAddress)
-      connectedStatus.refetch()
+      await actions.connect(address)
     } catch (err) {
       console.error("Connect failed", err)
+    } finally {
+      connectedStatus.refetch()
     }
   }
 
   const handleDisconnect = async () => {
-    if (!parsedAddress) {
-      alert("Invalid Ethereum address format.")
-      return
-    }
+    const address = getValidatedAddress()
+    if (!address) return
 
     try {
-      await actions.disconnect(parsedAddress)
-      connectedStatus.refetch()
+      await actions.disconnect(address)
     } catch (err) {
       console.error("Disconnect failed", err)
+    } finally {
+      connectedStatus.refetch()
     }
   }
 
   const handleCheckStatus = () => {
-    if (!parsedAddress) {
-      alert("Invalid Ethereum address format.")
-      return
-    }
+    if (!getValidatedAddress()) return
 
     connectedStatus.refetch()
   }
@@ -72,7 +79,7 @@ export const WalletLinkWidget = () => {
       >
         <h3>Security Notice</h3>
         <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px" }}>
-          {pending?.message}
+          {pending.message}
         </pre>
         <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
           <button
@@ -108,6 +115,9 @@ export const WalletLinkWidget = () => {
           onChange={(e) => setTargetAddress(e.target.value)}
           style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
         />
+        {addressError && (
+          <p style={{ color: "red", marginTop: 0 }}>{addressError}</p>
+        )}
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             onClick={handleConnect}

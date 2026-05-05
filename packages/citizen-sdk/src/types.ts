@@ -31,11 +31,6 @@ export interface WalletLinkOptions {
 
 export type WalletLinkAction = "connectAccount" | "disconnectAccount"
 
-export interface ConnectedAccountStatus {
-  isConnected: boolean
-  root: Address
-}
-
 export interface ChainConnectedStatus {
   chainId: number
   chainName: string

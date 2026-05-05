@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react"
 import { View, Text, Spinner } from "tamagui"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
+import { SDK_ENV } from "../config"
 
 export const IdentityCard: React.FC = () => {
   const { address } = useAccount()
-  const { sdk: identitySDK, loading, error } = useIdentitySDK("development")
+  const { sdk: identitySDK, loading, error } = useIdentitySDK(SDK_ENV)
   const [expiry, setExpiry] = useState<string | undefined>(undefined)
   const [isWhitelisted, setIsWhitelisted] = useState<boolean | undefined>(undefined)
   const [rootAddress, setRootAddress] = useState<string | undefined>(undefined)

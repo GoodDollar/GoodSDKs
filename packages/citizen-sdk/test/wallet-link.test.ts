@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { zeroAddress } from "viem"
+import type { PublicClient, WalletClient } from "viem"
 import { IdentitySDK } from "../src/sdks/viem-identity-sdk"
 import * as rpcFallback from "../src/utils/rpcFallback"
 import { SupportedChains, WALLET_LINK_SECURITY_MESSAGES } from "../src/constants"
@@ -7,9 +8,15 @@ import { SupportedChains, WALLET_LINK_SECURITY_MESSAGES } from "../src/constants
 const MOCK_ROOT_ACCOUNT = "0x1111111111111111111111111111111111111111"
 const MOCK_CHILD_ACCOUNT = "0x2222222222222222222222222222222222222222"
 
+type MockPublicClient = Pick<PublicClient, "readContract" | "simulateContract">
+type MockWalletClient = Pick<
+  WalletClient,
+  "account" | "chain" | "getAddresses" | "writeContract"
+>
+
 describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
-  let publicClient: any
-  let walletClient: any
+  let publicClient: MockPublicClient
+  let walletClient: MockWalletClient
   let sdk: IdentitySDK
 
   beforeEach(() => {
@@ -29,8 +36,8 @@ describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
     }
 
     sdk = new IdentitySDK({
-      publicClient,
-      walletClient,
+      publicClient: publicClient as PublicClient,
+      walletClient: walletClient as WalletClient,
       env: "development",
     })
 
@@ -138,14 +145,15 @@ describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
     })
 
     it("uses fallback clients when publicClients are omitted", async () => {
+      const fallbackPublicClient: MockPublicClient = {
+        readContract: vi.fn().mockResolvedValue(zeroAddress),
+        simulateContract: vi.fn(),
+      }
       const fallbackClientSpy = vi
         .spyOn(rpcFallback, "getRpcFallbackClient")
-        .mockReturnValue(publicClient)
+        .mockReturnValue(fallbackPublicClient as PublicClient)
 
-      publicClient.readContract
-        .mockResolvedValueOnce(MOCK_ROOT_ACCOUNT) // CELO
-        .mockResolvedValueOnce(zeroAddress)       // FUSE
-        .mockResolvedValueOnce(zeroAddress)       // XDC
+      publicClient.readContract.mockResolvedValueOnce(MOCK_ROOT_ACCOUNT)
 
       const result = await sdk.checkConnectedStatus(MOCK_CHILD_ACCOUNT)
 

@@ -211,14 +211,6 @@ export const identityV2ABI = parseAbi([
   "function connectedAccounts(address account) view returns (address)",
 ])
 
-/** Alias exported for clarity when consumers only need wallet-link methods. */
-export const walletLinkABI = parseAbi([
-  "function connectAccount(address account) external",
-  "function disconnectAccount(address account) external",
-  "function connectedAccounts(address account) view returns (address)",
-  "function getWhitelistedRoot(address account) view returns (address)",
-])
-
 // ABI for the UBISchemeV2 contract for essential functions and events
 export const ubiSchemeV2ABI = parseAbi([
   "function claim() returns (bool)",
