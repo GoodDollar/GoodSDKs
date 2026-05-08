@@ -148,6 +148,12 @@ export interface SUPReserveLocker {
   lockerOwner: Address
   blockNumber: bigint
   blockTimestamp: bigint
+  /**
+   * Current staked SUP balance held by this reserve locker.
+   * Sourced from `stakingData.currentStakedBalance` on the SUP subgraph.
+   * `0n` when the locker has never staked.
+   */
+  stakedBalance: bigint
 }
 
 // Query Options

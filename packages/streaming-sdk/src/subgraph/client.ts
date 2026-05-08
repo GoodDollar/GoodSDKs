@@ -156,9 +156,12 @@ const GET_SUP_RESERVES = gql`
       orderDirection: desc
     ) {
       id
-      lockerOwner { id }
+      lockerOwner
       blockNumber
       blockTimestamp
+      stakingData {
+        currentStakedBalance
+      }
     }
   }
 `
@@ -190,7 +193,13 @@ interface SubgraphPool {
   poolMembers?: { isConnected: boolean; units: string; totalAmountClaimed: string }[]
 }
 interface SubgraphPoolMembership { pool: SubgraphPool; units: string; isConnected: boolean; totalAmountClaimed: string }
-interface SubgraphLocker { id: string; lockerOwner: SubgraphAccount; blockNumber: string; blockTimestamp: string }
+interface SubgraphLocker {
+  id: string
+  lockerOwner: string
+  blockNumber: string
+  blockTimestamp: string
+  stakingData?: { currentStakedBalance: string } | null
+}
 type StreamDirection = Exclude<GetStreamsOptions["direction"], "all">
 
 function normalizeTimestampToSubgraphSeconds(timestamp?: number): number | undefined {
@@ -371,9 +380,10 @@ export class SubgraphClient {
 
     return data.lockers.map((l) => ({
       id: l.id,
-      lockerOwner: l.lockerOwner.id as Address,
+      lockerOwner: l.lockerOwner as Address,
       blockNumber: BigInt(l.blockNumber),
       blockTimestamp: BigInt(l.blockTimestamp),
+      stakedBalance: BigInt(l.stakingData?.currentStakedBalance ?? "0"),
     }))
   }
 

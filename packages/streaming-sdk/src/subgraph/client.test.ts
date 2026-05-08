@@ -265,11 +265,12 @@ describe("SubgraphClient", () => {
         lockers: [
           {
             id: "0xLocker",
-            lockerOwner: { id: mockAccount },
+            lockerOwner: mockAccount,
             blockNumber: "12345",
-            blockTimestamp: "67890"
-          }
-        ]
+            blockTimestamp: "67890",
+            stakingData: { currentStakedBalance: "470101003130757339285" },
+          },
+        ],
       })
 
       const lockers = await client.querySUPReserves(mockAccount)
@@ -295,6 +296,26 @@ describe("SubgraphClient", () => {
       expect(locker.lockerOwner).toBe(mockAccount)
       expect(locker.blockNumber).toBe(BigInt(12345))
       expect(locker.blockTimestamp).toBe(BigInt(67890))
+      expect(locker.stakedBalance).toBe(BigInt("470101003130757339285"))
+    })
+
+    it("should default stakedBalance to 0n when stakingData is absent", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000002" as Address
+
+      requestMock.mockResolvedValue({
+        lockers: [
+          {
+            id: "0xLockerNoStake",
+            lockerOwner: mockAccount,
+            blockNumber: "1",
+            blockTimestamp: "2",
+            stakingData: null,
+          },
+        ],
+      })
+
+      const [locker] = await client.querySUPReserves(mockAccount)
+      expect(locker.stakedBalance).toBe(BigInt(0))
     })
 
     it("should throw if account is missing", async () => {

@@ -205,7 +205,13 @@ const client = new SubgraphClient(SupportedChains.BASE, {
 })
 
 const reserves = await client.querySUPReserves("0x...")
+
+for (const locker of reserves) {
+  console.log(locker.id, locker.stakedBalance) // bigint, 18-decimal SUP
+}
 ```
+
+Each `SUPReserveLocker` includes the locker's `id`, `lockerOwner`, `blockNumber`, `blockTimestamp`, and a `stakedBalance` (bigint, sourced from `stakingData.currentStakedBalance`). `stakedBalance` is `0n` when the locker has never staked.
 
 The reserve query is intentionally account-scoped. You must pass the wallet or account whose reserves you want to inspect.
 

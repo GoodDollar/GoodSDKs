@@ -31,10 +31,10 @@
     "@repo/typescript-config": "workspace:*",
     "@types/node": "latest",
     "@vitest/coverage-v8": "^4.0.18",
+    "tsup": "^8.3.5",
     "typescript": "latest",
     "viem": "latest",
-    "vitest": "^4.0.18",
-    "tsup": "^8.3.5"
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "viem": "*"
