@@ -672,7 +672,7 @@ export class GooddollarSavingsWidget extends LitElement {
       return true;
     } catch (error: any) {
       this.transactionError =
-        this.toUserErrorMessage(error) || 'Please switch to Celo mainnet to continue.';
+        this.toUserErrorMessage(error, 'Failed to switch wallet network.');
       return false;
     }
   }

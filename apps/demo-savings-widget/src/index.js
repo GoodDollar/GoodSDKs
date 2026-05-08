@@ -9,7 +9,7 @@ const getProvider = () => window.ethereum ?? null
 const updateWalletStatus = async () => {
   const provider = getProvider()
   if (!provider?.request) {
-    walletStatus.textContent = "No injected wallet found (install MetaMask or Valora extension)"
+    walletStatus.textContent = "No injected wallet found (install a browser wallet like MetaMask)"
     connectWalletButton.disabled = true
     connectWalletButton.style.opacity = "0.6"
     return
@@ -29,7 +29,7 @@ const updateWalletStatus = async () => {
 const connectWallet = async () => {
   const provider = getProvider()
   if (!provider?.request) {
-    walletStatus.textContent = "No injected wallet found (install MetaMask or Valora extension)"
+    walletStatus.textContent = "No injected wallet found (install a browser wallet like MetaMask)"
     return
   }
 
