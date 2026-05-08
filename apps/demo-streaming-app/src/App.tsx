@@ -858,20 +858,6 @@ export default function App() {
                                 </View>
                             ) : supLoading ? <Spinner /> : (supReserves && supReserves.length > 0) ? (
                                 <YStack gap="$2">
-                                    <XStack padding="$3" backgroundColor="#EFF6FF" borderRadius="$3" justifyContent="space-between" ai="center" borderWidth={1} borderColor="#BFDBFE">
-                                        <YStack>
-                                            <Text fontSize={11} color="$blue10" fontWeight="600">Total staked across reserves</Text>
-                                            <Text fontSize={10} color="$gray10">{supReserves.length} locker(s)</Text>
-                                        </YStack>
-                                        <Text fontSize={14} fontWeight="700" color="$blue11">
-                                            {formatTokenAmount(
-                                                supReserves.reduce(
-                                                    (sum: bigint, l: SUPReserveLocker) => sum + (l.stakedBalance ?? BigInt(0)),
-                                                    BigInt(0),
-                                                ),
-                                            )} SUP
-                                        </Text>
-                                    </XStack>
                                     {supReserves.slice(0, 5).map((l: SUPReserveLocker, i: number) => (
                                         <XStack key={l.id ?? i} padding="$3" backgroundColor="#F7FAFC" borderRadius="$3" justifyContent="space-between" ai="center" borderWidth={1} borderColor="#E2E8F0">
                                             <YStack>

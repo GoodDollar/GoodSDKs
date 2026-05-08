@@ -266,6 +266,10 @@ const pool = await gda.getPoolDetails("0xPool..." as Address, "0xAccount..." as 
 | G$ | Celo | 42220 | production, staging, development |
 | SUP | Base | 8453 | production |
 
+SUP is a production-only token on Base. Resolving SUP for `staging` or
+`development` returns `undefined` by design, and any SDK call that would
+require such an address throws a clear "Token address not available" error.
+
 ## License
 
 MIT
