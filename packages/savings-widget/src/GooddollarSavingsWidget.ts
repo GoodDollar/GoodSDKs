@@ -671,17 +671,21 @@ export class GooddollarSavingsWidget extends LitElement {
       this.transactionError = '';
       return true;
     } catch (error: any) {
-      this.transactionError =
-        this.toUserErrorMessage(error, 'Failed to switch wallet network.');
+      this.transactionError = this.toUserErrorMessage(error, 'Failed to switch wallet network.');
       return false;
     }
   }
 
-  private toUserErrorMessage(error: any, fallback: string = 'Transaction failed') {
+  private toUserErrorMessage(error: unknown, fallback: string = 'Transaction failed') {
     if (!error) return fallback;
 
-    const shortMessage = error?.shortMessage || error?.cause?.shortMessage;
-    const message = shortMessage || error?.message || String(error);
+    const maybeError = error as {
+      shortMessage?: string;
+      message?: string;
+      cause?: { shortMessage?: string };
+    };
+    const shortMessage = maybeError.shortMessage || maybeError.cause?.shortMessage;
+    const message = shortMessage || maybeError.message || String(error);
     const lines = message
       .split('\n')
       .map((line: string) => line.trim())
