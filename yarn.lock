@@ -2228,7 +2228,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/savings-widget@workspace:packages/savings-widget":
+"@goodsdks/savings-widget@workspace:*, @goodsdks/savings-widget@workspace:packages/savings-widget":
   version: 0.0.0-use.local
   resolution: "@goodsdks/savings-widget@workspace:packages/savings-widget"
   dependencies:
@@ -10608,6 +10608,15 @@ __metadata:
     viem: "npm:^2.22.10"
     vite: "npm:6.3.5"
     wagmi: "npm:^2.14.8"
+  languageName: unknown
+  linkType: soft
+
+"demo-savings-widget@workspace:apps/demo-savings-widget":
+  version: 0.0.0-use.local
+  resolution: "demo-savings-widget@workspace:apps/demo-savings-widget"
+  dependencies:
+    "@goodsdks/savings-widget": "workspace:*"
+    vite: "npm:6.3.5"
   languageName: unknown
   linkType: soft
 

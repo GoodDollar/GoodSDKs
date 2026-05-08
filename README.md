@@ -49,6 +49,7 @@ Common tasks:
 - `apps/demo-identity-app` – React demo covering identity + claim flows
 - `apps/engagement-app` – engagement rewards showcase
 - `apps/demo-webcomponents` – Vite playground for Lit components
+- `apps/demo-savings-widget` – Vite demo to test the savings widget with an injected wallet
 
 Each app documents its development server and environment requirements inside its own README.
 

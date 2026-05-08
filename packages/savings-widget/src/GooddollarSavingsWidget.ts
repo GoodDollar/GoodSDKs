@@ -4,6 +4,9 @@ import { createWalletClient, createPublicClient, custom, PublicClient, WalletCli
 import { celo } from 'viem/chains';
 import { GooddollarSavingsSDK } from '@goodsdks/savings-sdk';
 
+const CELO_CHAIN_ID = 42220;
+const CELO_CHAIN_ID_HEX = '0xa4ec';
+
 @customElement('gooddollar-savings-widget')
 export class GooddollarSavingsWidget extends LitElement {
   static styles = css`
@@ -581,6 +584,9 @@ export class GooddollarSavingsWidget extends LitElement {
     }
 
     try {
+      const isCeloNetwork = await this.ensureCeloNetwork();
+      if (!isCeloNetwork) return;
+
       this.txLoading = true;
       this.transactionError = '';
       const amount = parseEther(this.inputAmount);
@@ -593,7 +599,7 @@ export class GooddollarSavingsWidget extends LitElement {
       }
     } catch (error: any) {
       console.error('Staking error:', error);
-      this.transactionError = error.message || 'Staking failed';
+      this.transactionError = this.toUserErrorMessage(error, 'Staking failed');
     } finally {
       this.txLoading = false;
     }
@@ -607,6 +613,9 @@ export class GooddollarSavingsWidget extends LitElement {
     }
 
     try {
+      const isCeloNetwork = await this.ensureCeloNetwork();
+      if (!isCeloNetwork) return;
+
       this.txLoading = true;
       this.transactionError = '';
       const amount = parseEther(this.inputAmount);
@@ -619,7 +628,7 @@ export class GooddollarSavingsWidget extends LitElement {
       }
     } catch (error: any) {
       console.error('Unstaking error:', error);
-      this.transactionError = error.message || 'Unstaking failed';
+      this.transactionError = this.toUserErrorMessage(error, 'Unstaking failed');
     } finally {
       this.txLoading = false;
     }
@@ -629,6 +638,9 @@ export class GooddollarSavingsWidget extends LitElement {
     if (!this.sdk || !this.userAddress) return;
 
     try {
+      const isCeloNetwork = await this.ensureCeloNetwork();
+      if (!isCeloNetwork) return;
+
       this.isClaiming = true;
       this.transactionError = '';
       const receipt = await this.sdk.claimReward();
@@ -638,9 +650,65 @@ export class GooddollarSavingsWidget extends LitElement {
       }
     } catch (error: any) {
       console.error('Claim error:', error);
-      this.transactionError = error.message || 'Claim failed';
+      this.transactionError = this.toUserErrorMessage(error, 'Claim failed');
     } finally {
       this.isClaiming = false;
     }
+  }
+
+  private async ensureCeloNetwork(): Promise<boolean> {
+    if (!this.web3Provider?.request) return true;
+
+    const chainIdHex = await this.web3Provider.request({ method: 'eth_chainId' });
+    const currentChainId = parseInt(chainIdHex, 16);
+    if (currentChainId === CELO_CHAIN_ID) return true;
+
+    try {
+      await this.web3Provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: CELO_CHAIN_ID_HEX }],
+      });
+      this.transactionError = '';
+      return true;
+    } catch (error: any) {
+      this.transactionError =
+        this.toUserErrorMessage(error) || 'Please switch to Celo mainnet to continue.';
+      return false;
+    }
+  }
+
+  private toUserErrorMessage(error: any, fallback: string = 'Transaction failed') {
+    if (!error) return fallback;
+
+    const shortMessage = error?.shortMessage || error?.cause?.shortMessage;
+    const message = shortMessage || error?.message || String(error);
+    const lines = message
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter(Boolean);
+    const firstLine = lines[0] || fallback;
+    const cleaned = firstLine
+      .split('Contract Call:')[0]
+      .split('Docs:')[0]
+      .split('Details:')[0]
+      .trim();
+
+    const lower = cleaned.toLowerCase();
+    if (lower.includes('user rejected') || lower.includes('rejected the request')) {
+      return 'Transaction rejected in wallet.';
+    }
+    if (lower.includes('insufficient funds')) {
+      return 'Insufficient funds to pay for gas.';
+    }
+    if (
+      lower.includes('wrong network') ||
+      lower.includes('chain mismatch') ||
+      lower.includes('switch your wallet to celo') ||
+      lower.includes('unsupported chain')
+    ) {
+      return 'Please switch to Celo mainnet to continue.';
+    }
+
+    return cleaned || fallback;
   }
 }

@@ -28,6 +28,7 @@ const STAKING_CONTRACT_ADDRESS =
   "0x799a23dA264A157Db6F9c02BE62F82CE8d602A45" as const
 const GDOLLAR_CONTRACT_ADDRESS =
   "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const
+const CELO_MAINNET_CHAIN_ID = 42220
 
 
 const stakingContract = {
@@ -63,7 +64,7 @@ export class GooddollarSavingsSDK {
     walletClient?: WalletClient,
   ) {
     if (!publicClient) throw new Error("Public client is required")
-    if (!(publicClient.chain?.id === 42220)) {
+    if (!(publicClient.chain?.id === CELO_MAINNET_CHAIN_ID)) {
       throw new Error("Public client must be connected to Celo mainnet")
     }
     this.publicClient = publicClient
@@ -74,7 +75,7 @@ export class GooddollarSavingsSDK {
   }
 
   setWalletClient(walletClient: WalletClient) {
-    if (!(walletClient.chain?.id === 42220)) {
+    if (!(walletClient.chain?.id === CELO_MAINNET_CHAIN_ID)) {
       throw new Error("Wallet client must be connected to Celo mainnet")
     }
     this.walletClient = walletClient
@@ -137,8 +138,15 @@ export class GooddollarSavingsSDK {
     ])
 
     let userWeeklyRewards = BigInt(0)
-    if (staked > BigInt(0) && this.totalStaked == BigInt(0)) {
+    if (this.totalStaked === BigInt(0)) {
       await this.getGlobalStats()
+    }
+
+    if (
+      staked > BigInt(0) &&
+      this.totalStaked > BigInt(0) &&
+      this.cachedRewardRate > BigInt(0)
+    ) {
       const oneWeekSeconds = BigInt(7 * 24 * 60 * 60)
       userWeeklyRewards =
         (this.cachedRewardRate * oneWeekSeconds * staked) / this.totalStaked
@@ -208,6 +216,7 @@ export class GooddollarSavingsSDK {
     onHash?: (hash: `0x${string}`) => void,
   ) {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
+    await this.assertWalletOnCeloMainnet()
 
     const account = await this.getAccount()
 
@@ -250,7 +259,7 @@ export class GooddollarSavingsSDK {
     })
 
     if (allowance < amount) {
-      await this.submitAndWait(
+      const approvalReceipt = await this.submitAndWait(
         {
           ...gdollarContract,
           functionName: "approve",
@@ -258,6 +267,30 @@ export class GooddollarSavingsSDK {
         },
         onHash,
       )
+
+      if (approvalReceipt.status !== "success") {
+        throw new Error("Approval transaction failed")
+      }
+
+      const updatedAllowance = await this.publicClient.readContract({
+        ...gdollarContract,
+        functionName: "allowance",
+        args: [account, STAKING_CONTRACT_ADDRESS],
+      })
+
+      if (updatedAllowance < amount) {
+        throw new Error(
+          "Approval is still insufficient. Please wait for confirmation and try staking again.",
+        )
+      }
+    }
+  }
+
+  private async assertWalletOnCeloMainnet() {
+    if (!this.walletClient) return
+    const walletChainId = await this.walletClient.getChainId()
+    if (walletChainId !== CELO_MAINNET_CHAIN_ID) {
+      throw new Error("Wrong network. Please switch your wallet to Celo mainnet.")
     }
   }
 
