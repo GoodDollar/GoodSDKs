@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Button, Input, Text, XStack, YStack } from "tamagui"
 import { useChainId } from "wagmi"
 import { useWalletLink } from "@goodsdks/react-hooks"
 import { Address, isAddress } from "viem"
@@ -23,6 +24,13 @@ export const WalletLinkWidget = () => {
   const currentChainStatus = connectedStatus.statuses.find(
     (status) => status.chainId === currentChainId,
   )
+  const isConnecting = activeAction === "connect" && actions.loading
+  const isDisconnecting = activeAction === "disconnect" && actions.loading
+
+  const handleAddressChange = (value: string) => {
+    setTargetAddress(value)
+    if (addressError) setAddressError(null)
+  }
 
   const getValidatedAddress = (): Address | null => {
     if (!parsedAddress) {
@@ -72,128 +80,188 @@ export const WalletLinkWidget = () => {
     const pending = actions.pendingSecurityConfirm
 
     return (
-      <div
-        style={{
-          border: "2px solid red",
-          padding: "1rem",
-          margin: "1rem 0",
-          borderRadius: "8px",
-        }}
+      <YStack
+        padding="$4"
+        backgroundColor="#FFF8E1"
+        borderRadius="$4"
+        borderWidth={1}
+        borderColor="#FFD700"
+        gap="$3"
       >
-        <h3>Security Notice</h3>
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px" }}>
+        <Text fontSize={18} fontWeight="bold" color="#664D03">
+          Security Notice
+        </Text>
+        <Text fontSize={12} color="#664D03" whiteSpace="pre-wrap">
           {pending.message}
-        </pre>
-        <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-          <button
-            onClick={() => actions.confirmSecurity(true)}
-            style={{ background: "red", color: "white", padding: "8px" }}
+        </Text>
+        <XStack gap="$3" flexWrap="wrap">
+          <Button
+            onPress={() => actions.confirmSecurity(true)}
+            color="$colorWhite"
+            backgroundColor="$red10"
+            hoverStyle={{ backgroundColor: "$red11" }}
+            pressedStyle={{ backgroundColor: "$red12" }}
           >
             I Understand, Proceed
-          </button>
-          <button onClick={() => actions.confirmSecurity(false)} style={{ padding: "8px" }}>
+          </Button>
+          <Button onPress={() => actions.confirmSecurity(false)}>
             Cancel
-          </button>
-        </div>
-      </div>
+          </Button>
+        </XStack>
+      </YStack>
     )
   }
 
   return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        padding: "1rem",
-        borderRadius: "8px",
-        marginTop: "2rem",
-      }}
+    <YStack
+      padding="$4"
+      backgroundColor="white"
+      borderRadius="$4"
+      borderWidth={1}
+      borderColor="#E2E8F0"
+      width="100%"
+      gap="$4"
+      shadow="$1"
     >
-      <h2>Wallet Link (Citizen SDK)</h2>
+      <Text
+        fontSize={18}
+        fontWeight="bold"
+        color="$text"
+        textAlign="center"
+      >
+        Wallet Link (Citizen SDK)
+      </Text>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <input
-          type="text"
+      <YStack gap="$3">
+        <Input
           placeholder="0xSecondaryWalletAddress..."
           value={targetAddress}
-          onChange={(e) => setTargetAddress(e.target.value)}
-          style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
+          onChangeText={handleAddressChange}
+          autoCapitalize="none"
+          autoCorrect={false}
+          borderColor={addressError ? "$red10" : "#E2E8F0"}
         />
         {addressError && (
-          <p style={{ color: "red", marginTop: 0 }}>{addressError}</p>
+          <Text color="$red10" fontSize={14}>
+            {addressError}
+          </Text>
         )}
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={handleConnect}
+        <XStack gap="$3" flexWrap="wrap" justifyContent="center">
+          <Button
+            onPress={handleConnect}
             disabled={actions.loading || !parsedAddress}
+            color="$colorWhite"
+            backgroundColor={isConnecting ? "$colorGray500" : "$colorGreen500"}
+            hoverStyle={{
+              backgroundColor: isConnecting ? "$colorGray600" : "$colorGreen600",
+            }}
+            pressedStyle={{
+              backgroundColor: isConnecting ? "$colorGray700" : "$colorGreen700",
+            }}
+            opacity={actions.loading || !parsedAddress ? 0.7 : 1}
           >
-            {activeAction === "connect" && actions.loading
-              ? "Connecting..."
-              : "Connect Wallet"}
-          </button>
-          <button
-            onClick={handleDisconnect}
+            {isConnecting ? "Connecting..." : "Connect Wallet"}
+          </Button>
+          <Button
+            onPress={handleDisconnect}
             disabled={actions.loading || !parsedAddress}
+            color="$colorWhite"
+            backgroundColor={isDisconnecting ? "$colorGray500" : "$colorBlue500"}
+            hoverStyle={{
+              backgroundColor: isDisconnecting ? "$colorGray600" : "$colorBlue600",
+            }}
+            pressedStyle={{
+              backgroundColor: isDisconnecting ? "$colorGray700" : "$colorBlue700",
+            }}
+            opacity={actions.loading || !parsedAddress ? 0.7 : 1}
           >
-            {activeAction === "disconnect" && actions.loading
-              ? "Disconnecting..."
-              : "Disconnect Wallet"}
-          </button>
-          <button onClick={handleCheckStatus} disabled={!parsedAddress}>
+            {isDisconnecting ? "Disconnecting..." : "Disconnect Wallet"}
+          </Button>
+          <Button
+            onPress={handleCheckStatus}
+            disabled={!parsedAddress}
+            opacity={!parsedAddress ? 0.7 : 1}
+          >
             Check Status
-          </button>
-        </div>
-      </div>
+          </Button>
+        </XStack>
+      </YStack>
 
       {(actions.error || connectedStatus.error) && (
-        <p style={{ color: "red" }}>
+        <Text color="$red10" fontSize={14} textAlign="center">
           Error:{" "}
           {actions.error || connectedStatus.error}
-        </p>
+        </Text>
       )}
 
       {actions.txHash && (
-        <p style={{ color: "green" }}>
+        <Text color="$green10" fontSize={14} textAlign="center">
           Tx Hash: {actions.txHash}
-        </p>
+        </Text>
       )}
 
-      <div
-        style={{
-          background: "#f5f5f5",
-          padding: "10px",
-          marginTop: "1rem",
-          fontSize: "14px",
-        }}
+      <YStack
+        backgroundColor="#F7FAFC"
+        borderRadius="$4"
+        borderWidth={1}
+        borderColor="#E2E8F0"
+        padding="$3"
+        gap="$2"
       >
-        <h4>Status for {targetAddress || "..."}</h4>
+        <Text fontSize={14} fontWeight="bold" color="$text">
+          Status for {targetAddress || "..."}
+        </Text>
         {connectedStatus.loading ? (
-          <p>Loading status...</p>
+          <Text fontSize={14} color="$gray10">
+            Loading status...
+          </Text>
         ) : (
           <>
-            <p>
-              <strong>Connected (Current Chain):</strong>{" "}
+            <Text fontSize={14} color="$gray10">
+              <Text fontWeight="bold">Connected (Current Chain):</Text>{" "}
               {currentChainStatus?.isConnected ? "Yes" : "No"}
-            </p>
-            <p>
-              <strong>Root Identity:</strong>{" "}
+            </Text>
+            <Text fontSize={14} color="$gray10">
+              <Text fontWeight="bold">Root Identity:</Text>{" "}
               {currentChainStatus?.root || "None"}
-            </p>
+            </Text>
 
-            <details style={{ marginTop: "10px" }}>
-              <summary>Multi-Chain Statuses</summary>
-              <ul>
-                {connectedStatus.statuses.map((chain) => (
-                  <li key={chain.chainId}>
-                    {chain.chainName}:{" "}
-                    {chain.isConnected ? `Connected (Root: ${chain.root})` : "Not connected"}
-                    {chain.error ? ` - ${chain.error}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </details>
+            <YStack marginTop="$2" gap="$2">
+              <Text fontSize={14} fontWeight="bold" color="$text">
+                Multi-Chain Statuses
+              </Text>
+              {connectedStatus.statuses.map((chain) => (
+                <YStack
+                  key={chain.chainId}
+                  padding="$2"
+                  borderRadius="$3"
+                  backgroundColor="white"
+                  borderWidth={1}
+                  borderColor="#E2E8F0"
+                  gap="$1"
+                >
+                  <Text fontSize={14} color="$text" fontWeight="bold">
+                    {chain.chainName}
+                  </Text>
+                  <Text
+                    fontSize={13}
+                    color={chain.isConnected ? "$green10" : "$gray10"}
+                  >
+                    {chain.isConnected
+                      ? `Connected (Root: ${chain.root})`
+                      : "Not connected"}
+                  </Text>
+                  {chain.error ? (
+                    <Text fontSize={13} color="$red10">
+                      {chain.error}
+                    </Text>
+                  ) : null}
+                </YStack>
+              ))}
+            </YStack>
           </>
         )}
-      </div>
-    </div>
+      </YStack>
+    </YStack>
   )
 }
