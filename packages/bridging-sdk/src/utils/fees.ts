@@ -35,7 +35,7 @@ export function parseNativeFee(feeString: string, chainId: ChainId): bigint {
     throw new Error("Invalid fee format")
   }
 
-  const decimals = SUPPORTED_CHAINS[chainId]?.decimals || 18
+  const decimals = SUPPORTED_CHAINS[chainId]?.nativeCurrency.decimals || 18
   return parseUnits(amountStr, decimals)
 }
 
@@ -133,7 +133,7 @@ export function validateFeeCoverage(
  * Formats a fee amount for display
  */
 export function formatFee(fee: bigint, chainId: ChainId): string {
-  const decimals = SUPPORTED_CHAINS[chainId]?.decimals || 18
+  const decimals = SUPPORTED_CHAINS[chainId]?.nativeCurrency.decimals || 18
   return formatUnits(fee, decimals)
 }
 

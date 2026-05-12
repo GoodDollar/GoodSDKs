@@ -7,7 +7,8 @@ import { publicClients } from "../config"
 
 export function TransactionHistory() {
   const { address, isConnected } = useAccount()
-  const { history, loading, error } = useBridgeHistory(address, publicClients)
+  const { sdk } = useBridgingSDK()
+  const { history, loading, error } = useBridgeHistory(sdk, address, publicClients)
 
   if (!isConnected) return null
 

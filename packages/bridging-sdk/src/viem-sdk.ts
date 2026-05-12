@@ -468,7 +468,7 @@ export class BridgingSDK {
       amount,
     }
 
-    return { quote, needsApproval, canBridge: !needsApproval, requirements }
+    return { quote, needsApproval, canBridge: true, requirements }
   }
 
   /**

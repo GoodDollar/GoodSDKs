@@ -72,11 +72,11 @@ export function useBridgingSDK(): UseBridgingSDKResult {
  * Hook for getting fee estimates for bridging
  */
 export function useBridgeFee(
+  sdk: BridgingSDK | null,
   fromChainId: ChainId,
   toChainId: ChainId,
   protocol: BridgeProtocol,
 ) {
-  const { sdk } = useBridgingSDK()
   const [fee, setFee] = useState<{ amount: bigint; formatted: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -112,10 +112,10 @@ export function useBridgeFee(
  * Hook for fetching and tracking bridge history
  */
 export function useBridgeHistory(
+  sdk: BridgingSDK | null,
   address: `0x${string}` | undefined,
   clients?: Record<number, PublicClient>
 ) {
-  const { sdk } = useBridgingSDK()
   const [history, setHistory] = useState<(BridgeRequestEvent | ExecutedTransferEvent)[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

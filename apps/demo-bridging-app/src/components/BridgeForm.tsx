@@ -27,8 +27,17 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
   })
 
   const [amount, setAmount] = useState("")
+  const [debouncedAmount, setDebouncedAmount] = useState(amount)
   const [recipient, setRecipient] = useState("")
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null)
+
+  // Debounce amount input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedAmount(amount)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [amount])
 
   // Base config: balances, allowance, fees, limits
   const [config, setConfig] = useState<BridgeConfig | null>(null)
@@ -75,7 +84,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
 
   // Re-evaluate quote whenever amount, route, or config changes
   useEffect(() => {
-    if (!sdk || !address || !config || !amount) {
+    if (!sdk || !address || !config || !debouncedAmount) {
       setQuoteResult(null)
       return
     }
@@ -83,7 +92,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
     const decimals = SUPPORTED_CHAINS[fromChain]?.decimals ?? 18
     let amountInWei: bigint
     try {
-      amountInWei = parseUnits(amount, decimals)
+      amountInWei = parseUnits(debouncedAmount, decimals)
       if (amountInWei <= 0n) {
         setQuoteResult(null)
         return
@@ -115,7 +124,7 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
 
     run()
     return () => { cancelled = true }
-  }, [sdk, address, config, amount, fromChain, toChain, recipient, defaultProtocol])
+  }, [sdk, address, config, debouncedAmount, fromChain, toChain, recipient, defaultProtocol])
 
   const handleBridge = async () => {
     if (!sdk || !quoteResult?.quote) return

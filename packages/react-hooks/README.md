@@ -107,6 +107,15 @@ export const App = () => (
 - `useConnectToPool()`, `useDisconnectFromPool()`
   - Mutators for GDA pool memberships.
 
+### Bridging Hooks
+
+- `useBridgingSDK()`
+  - Initialises the `BridgingSDK` instance for the current chain.
+- `useBridgeFee(sdk, fromChain, toChain, protocol)`
+  - Estimates bridging fees for a specific route. Requires the `sdk` instance from `useBridgingSDK`.
+- `useBridgeHistory(sdk, account, clients?)`
+  - Fetches and polls the combined bridge history for an account. Pass `clients` (record of public clients) for cross-chain history.
+
 Both hooks re-run whenever the connected wallet, public client, or environment changes.
 These hooks re-run whenever the connected wallet, public client, or environment changes.
 

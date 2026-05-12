@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useBridgeFee } from "@goodsdks/react-hooks"
+import { useBridgingSDK, useBridgeFee } from "@goodsdks/react-hooks"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
 import type { BridgeProtocol, ChainId } from "@goodsdks/bridging-sdk"
 
@@ -10,16 +10,19 @@ interface FeeEstimatorProps {
 }
 
 export function FeeEstimator({ fromChain, toChain, amount }: FeeEstimatorProps) {
+  const { sdk } = useBridgingSDK()
   const [selectedProtocol, setSelectedProtocol] = useState<BridgeProtocol>("AXELAR")
   
   // Get fees for both protocols
   const { fee: axelarFee, loading: axelarLoading, error: axelarError } = useBridgeFee(
+    sdk,
     fromChain,
     toChain,
     "AXELAR"
   )
   
   const { fee: lzFee, loading: lzLoading, error: lzError } = useBridgeFee(
+    sdk,
     fromChain,
     toChain,
     "LAYERZERO"

@@ -39,247 +39,90 @@ const walletClient = createWalletClient({
 
 const bridgingSDK = new BridgingSDK(publicClient, walletClient)
 
-// Check if user can bridge
-const canBridge = await bridgingSDK.canBridge(
-  "0xUserAddress",
-  1000000000000000000n, // 1 G$ (18 decimals for Celo)
-  1 // Ethereum mainnet
+### Bridging Flow (Recommended)
+
+The SDK provides a high-level 3-method flow that abstracts away the complexity of balance checks, fee estimation, and token approvals.
+
+```typescript
+// 1. Get base config (balances, fees, limits, allowance)
+const config = await sdk.getBridgeConfig(userAddress)
+
+// 2. Get a validated quote for a specific route
+const { quote, needsApproval, canBridge, requirements } = await sdk.getQuote(
+  amount,
+  fromChainId,
+  toChainId,
+  recipient,
+  "AXELAR",
+  config.allowance
 )
 
-if (canBridge.isWithinLimit) {
-  // Bridge tokens (fee is estimated internally)
-  const receipt = await bridgingSDK.bridgeTo(
-    "0xRecipientAddress",
-    1, // Ethereum mainnet
-    1000000000000000000n, // 1 G$
-    "AXELAR",
-  )
-
-  console.log("Bridge transaction:", receipt.transactionHash)
+if (canBridge && quote) {
+  // 3. Execute bridge (handles approval + bridge internally)
+  await sdk.doBridge(quote, (status) => {
+    console.log("Current step:", status.step) // 'approving' | 'bridging' | 'completed' | 'failed'
+  })
+} else {
+  console.log("Cannot bridge:", requirements[0].message)
 }
 ```
 
-### React Integration
+### Manual Methods
 
-`useBridgingSDK` is part of the `@goodsdks/react-hooks` package.
+#### `canBridge(from, amount, targetChainId)`
 
-```tsx
-import { useBridgingSDK } from "@goodsdks/react-hooks"
-
-const BridgeComponent = () => {
-  const { sdk, loading, error } = useBridgingSDK()
-
-  if (loading) return <p>Loading SDK...</p>
-  if (error) return <p>Error: {error}</p>
-  if (!sdk) return <p>SDK not initialized</p>
-
-  const handleBridge = async () => {
-    try {
-      const receipt = await sdk.bridgeTo(
-        "0xRecipientAddress",
-        1, // Ethereum mainnet
-        1000000000000000000n, // 1 G$
-        "LAYERZERO",
-      )
-
-      console.log("Bridge successful:", receipt.transactionHash)
-    } catch (error) {
-      console.error("Bridge failed:", error)
-    }
-  }
-
-  return <button onClick={handleBridge}>Bridge 1 G$ to Ethereum</button>
-}
-```
-
-## Core Concepts
-
-### Decimal Handling
-
-The SDK handles different decimal precision across chains:
-
-- **Celo/XDC**: 18 decimals
-- **Ethereum/Fuse**: 2 decimals
-
-**Important**: Bridge operations use native token decimals, while limit checks use 18-decimal normalized amounts.
+Checks if an address can bridge a specified amount to a target chain based on on-chain limits.
 
 ```typescript
-import { normalizeAmount } from "@goodsdks/bridging-sdk"
-
-// For bridging from Celo (18 decimals) — normalize to 18 decimals for limit checks
-const bridgeAmount = 1000000000000000000n // 1 G$ in Celo decimals
-const normalizedAmount = normalizeAmount(bridgeAmount, 42220) // Convert to 18 decimals
-```
-
-### Fee Estimation
-
-Fees are estimated using the GoodServer API. The SDK handles `msg.value` internally:
-
-```typescript
-const feeEstimate = await sdk.estimateFee(targetChainId, "AXELAR")
-console.log(`Fee: ${feeEstimate.feeInNative}`) // e.g., "4.8367843657257685 Celo"
-
-// The SDK automatically includes the fee as msg.value
-await sdk.bridgeTo(recipient, targetChainId, amount, "AXELAR")
-```
-
-### Transaction Tracking
-
-Track bridge transactions across chains:
-
-```typescript
-// Get transaction status
-const status = await sdk.getTransactionStatus(txHash, "AXELAR")
-console.log("Status:", status.status) // "pending" | "completed" | "failed"
-
-// Get explorer link
-const explorerLink = sdk.explorerLink(txHash, "AXELAR")
-console.log("Explorer:", explorerLink) // https://axelarscan.io/gmp/0x...
-
-// Get bridge history
-const requests = await sdk.getBridgeRequests(userAddress)
-const executed = await sdk.getExecutedTransfers(userAddress)
-```
-
-## API Reference
-
-### BridgingSDK Class
-
-#### Constructor
-
-```typescript
-new BridgingSDK(publicClient, walletClient?, chainId?)
-```
-
-#### Methods
-
-##### `canBridge(from, amount, targetChainId)`
-
-Checks if an address can bridge a specified amount to a target chain.
-
-```typescript
-const result = await sdk.canBridge(
-  "0xUserAddress",
-  1000000000000000000n,
-  1 // Ethereum mainnet
-)
+const result = await sdk.canBridge("0xUser", 1000n, 1)
 // Returns: { isWithinLimit: boolean, error?: string }
 ```
 
-##### `estimateFee(targetChainId, protocol)`
+#### `estimateFee(targetChainId, protocol, fromChainId?)`
 
-Estimates the fee for bridging to a target chain using a specific protocol.
+Estimates the fee for bridging. Fees are paid in the source chain's native currency.
 
 ```typescript
 const estimate = await sdk.estimateFee(1, "AXELAR")
 // Returns: { fee: bigint, feeInNative: string, protocol: "AXELAR" }
 ```
 
-##### `bridgeTo(target, targetChainId, amount, protocol)`
+#### `bridgeTo(target, targetChainId, amount, protocol)`
 
-Generic bridge method that automatically handles fee estimation and validation.
-
-```typescript
-const receipt = await sdk.bridgeTo(
-  "0xRecipientAddress",
-  1, // Ethereum mainnet
-  1000000000000000000n, // 1 G$
-  "AXELAR",
-)
-```
-
-##### `bridgeToWithLz(target, targetChainId, amount, adapterParams?)`
-
-Bridge using LayerZero with custom adapter parameters.
+Generic bridge method. Note: Requires prior approval if allowance is insufficient.
 
 ```typescript
-const receipt = await sdk.bridgeToWithLz(
-  "0xRecipientAddress",
-  1, // Ethereum mainnet
-  1000000000000000000n, // 1 G$
-  "0x000100000000000000000000000000000000000000000000000000000000000000060000", // Custom adapter params
-)
+const receipt = await sdk.bridgeTo(recipient, 1, amount, "AXELAR")
 ```
 
-##### `bridgeToWithAxelar(target, targetChainId, amount)`
+### Transaction Tracking
 
-Bridge using Axelar.
+#### `getTransactionStatus(txHash, protocol)`
+
+Gets the status of a bridge transaction from external explorers.
 
 ```typescript
-const receipt = await sdk.bridgeToWithAxelar(
-  "0xRecipientAddress",
-  1, // Ethereum mainnet
-  1000000000000000000n, // 1 G$
-)
+const status = await sdk.getTransactionStatus(txHash, "AXELAR")
+// Returns: { status: "pending" | "completed" | "failed", ... }
 ```
 
-##### `getBridgeRequests(address, options?)`
-
-Fetches BridgeRequest events for an address.
-
-```typescript
-const requests = await sdk.getBridgeRequests("0xUserAddress", {
-  fromBlock: 5000000n,
-  limit: 100
-})
-```
-
-##### `getExecutedTransfers(address, options?)`
-
-Fetches ExecutedTransfer events for an address.
-
-```typescript
-const executed = await sdk.getExecutedTransfers("0xUserAddress", {
-  fromBlock: 5000000n,
-  limit: 100
-})
-```
-
-##### `getTransactionStatus(txHash, protocol)`
-
-Gets the status of a bridge transaction.
-
-```typescript
-const status = await sdk.getTransactionStatus(
-  "0xTransactionHash",
-  "AXELAR"
-)
-// Returns: { status: "pending" | "completed" | "failed", srcTxHash?, dstTxHash?, timestamp?, error? }
-```
-
-##### `explorerLink(txHash, protocol)`
+#### `explorerLink(txHash, protocol)`
 
 Generates an explorer link for a bridge transaction.
 
 ```typescript
-const link = sdk.explorerLink("0xTransactionHash", "LAYERZERO")
-// Returns: "https://layerzeroscan.com/tx/0xTransactionHash"
+const link = sdk.explorerLink(txHash, "LAYERZERO")
+// "https://layerzeroscan.com/tx/0x..."
 ```
 
 ### React Hooks
 
-#### `useBridgingSDK()`
-
-Hook for accessing the BridgingSDK instance.
+Bridging hooks are provided via `@goodsdks/react-hooks`.
 
 ```tsx
-const { sdk, loading, error } = useBridgingSDK()
-```
-
-#### `useBridgeFee(fromChainId, toChainId, protocol)`
-
-Hook for getting fee estimates.
-
-```tsx
-const { fee, loading, error } = useBridgeFee(42220, 1, "AXELAR")
-```
-
-#### `useBridgeTransactionStatus(txHash, protocol)`
-
-Hook for tracking transaction status.
-
-```tsx
-const { status, loading, error } = useBridgeTransactionStatus("0xHash", "AXELAR")
+const { sdk } = useBridgingSDK()
+const { fee } = useBridgeFee(sdk, fromChain, toChain, protocol)
+const { history } = useBridgeHistory(sdk, address)
 ```
 
 ### Utility Functions
