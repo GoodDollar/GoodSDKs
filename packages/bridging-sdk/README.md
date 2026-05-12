@@ -13,18 +13,18 @@ npm install @goodsdks/bridging-sdk viem
 For React applications, also install the peer dependencies:
 
 ```bash
-yarn add @goodsdks/bridging-sdk wagmi viem
+yarn add @goodsdks/bridging-sdk @goodsdks/react-hooks wagmi viem
 # or
-npm install @goodsdks/bridging-sdk wagmi viem
+npm install @goodsdks/bridging-sdk @goodsdks/react-hooks wagmi viem
 ```
 
 ## Quick Start
 
-### Viem Integration
+### Setup
 
 ```typescript
-import { createPublicClient, createWalletClient, http } from "viem"
-import { celo, mainnet, fuse } from "viem/chains"
+import { createPublicClient, createWalletClient, http, custom } from "viem"
+import { celo } from "viem/chains"
 import { BridgingSDK } from "@goodsdks/bridging-sdk"
 
 const publicClient = createPublicClient({
@@ -37,131 +37,206 @@ const walletClient = createWalletClient({
   transport: custom(window.ethereum),
 })
 
-const bridgingSDK = new BridgingSDK(publicClient, walletClient)
+const sdk = new BridgingSDK(publicClient, walletClient)
+```
 
-### Bridging Flow (Recommended)
+### Recommended Bridging Flow
 
-The SDK provides a high-level 3-method flow that abstracts away the complexity of balance checks, fee estimation, and token approvals.
+The SDK exposes a 3-step flow that handles balance checks, fee estimation, approvals, and the bridge transaction.
 
 ```typescript
-// 1. Get base config (balances, fees, limits, allowance)
-const config = await sdk.getBridgeConfig(userAddress)
+import { parseUnits } from "viem"
 
-// 2. Get a validated quote for a specific route
+// 1. Fetch the user's balances, allowance, and bridge fee in one call
+const config = await sdk.getBridgeConfig("0xUserAddress")
+// config: { g$Balance, nativeBalance, allowance, fee, bridgeLimits }
+
+// 2. Get a validated quote — checks all requirements before submitting anything
+const amount = parseUnits("10", 18) // 10 G$ from Celo (18 decimals)
 const { quote, needsApproval, canBridge, requirements } = await sdk.getQuote(
   amount,
-  fromChainId,
-  toChainId,
-  recipient,
+  42220,        // fromChain: Celo
+  1,            // toChain:   Ethereum
+  "0xRecipientAddress",
   "AXELAR",
   config.allowance
 )
 
-if (canBridge && quote) {
-  // 3. Execute bridge (handles approval + bridge internally)
-  await sdk.doBridge(quote, (status) => {
-    console.log("Current step:", status.step) // 'approving' | 'bridging' | 'completed' | 'failed'
-  })
-} else {
-  console.log("Cannot bridge:", requirements[0].message)
+if (!canBridge) {
+  // At least one blocking requirement failed (wrong chain, insufficient balance, etc.)
+  console.error("Cannot bridge:", requirements.map(r => r.message))
+  return
+}
+
+// needsApproval will be true if allowance < amount — doBridge handles this automatically
+console.log("Needs approval first:", needsApproval)
+
+// 3. Execute — handles ERC-20 approval (if needed) then submits the bridge transaction
+const receipt = await sdk.doBridge(quote!, (status) => {
+  switch (status.step) {
+    case "approving":  console.log("Approving token spend..."); break
+    case "bridging":   console.log("Submitting bridge transaction..."); break
+    case "completed":  console.log("Done!", status.bridgeTxHash); break
+    case "failed":     console.error("Failed:", status.error); break
+  }
+})
+
+console.log("Bridge tx:", receipt.transactionHash)
+```
+
+### React Integration
+
+Use `@goodsdks/react-hooks` for a Wagmi-integrated experience:
+
+```tsx
+import { useBridgingSDK, useBridgeFee, useBridgeHistory } from "@goodsdks/react-hooks"
+
+const BridgeComponent = () => {
+  const { sdk, loading, error } = useBridgingSDK()
+
+  // Fee estimate for a specific route
+  const { fee } = useBridgeFee(sdk, 42220, 1, "AXELAR")
+  // fee.formatted → e.g. "0.0012 CELO"
+
+  // Transaction history for the connected wallet
+  const { history } = useBridgeHistory(sdk, "0xUserAddress")
+
+  if (loading) return <p>Initializing SDK...</p>
+  if (error || !sdk) return <p>Error: {error}</p>
+
+  const handleBridge = async () => {
+    const config = await sdk.getBridgeConfig("0xUserAddress")
+    const { quote, canBridge } = await sdk.getQuote(
+      10000000000000000000n, // 10 G$
+      42220, 1, "0xRecipientAddress", "AXELAR",
+      config.allowance
+    )
+    if (canBridge && quote) {
+      await sdk.doBridge(quote)
+    }
+  }
+
+  return <button onClick={handleBridge}>Bridge 10 G$ to Ethereum</button>
 }
 ```
 
-### Manual Methods
+## API Reference
 
-#### `canBridge(from, amount, targetChainId)`
-
-Checks if an address can bridge a specified amount to a target chain based on on-chain limits.
+### Constructor
 
 ```typescript
-const result = await sdk.canBridge("0xUser", 1000n, 1)
-// Returns: { isWithinLimit: boolean, error?: string }
+new BridgingSDK(publicClient, walletClient?, chainId?)
 ```
+
+Call `await sdk.initialize()` if you want to pre-warm the fee cache. `getBridgeConfig` does this automatically.
+
+### Core Methods
+
+#### `getBridgeConfig(address)`
+
+Fetches balances, allowance, and fee data in one call.
+
+```typescript
+const config = await sdk.getBridgeConfig("0xUserAddress")
+// Returns: { g$Balance, nativeBalance, allowance, fee, bridgeLimits }
+```
+
+#### `getQuote(amount, fromChain, toChain, recipient, protocol, currentAllowance)`
+
+Validates a bridge request and returns a quote or a list of blocking requirements.
+
+```typescript
+const { quote, needsApproval, canBridge, requirements } = await sdk.getQuote(
+  amount, 42220, 1, "0xRecipient", "AXELAR", config.allowance
+)
+// Returns: { quote: BridgeQuote | null, needsApproval: boolean, canBridge: boolean, requirements: BridgeRequirement[] }
+```
+
+#### `doBridge(quote, onStatus?)`
+
+Executes a bridge. Automatically approves the token if needed before bridging.
+
+```typescript
+const receipt = await sdk.doBridge(quote, (status) => {
+  // status.step: "approving" | "bridging" | "completed" | "failed"
+})
+```
+
+### Supporting Methods
 
 #### `estimateFee(targetChainId, protocol, fromChainId?)`
 
-Estimates the fee for bridging. Fees are paid in the source chain's native currency.
+Returns the estimated native fee for a route.
 
 ```typescript
-const estimate = await sdk.estimateFee(1, "AXELAR")
+const estimate = await sdk.estimateFee(1, "AXELAR", 42220)
 // Returns: { fee: bigint, feeInNative: string, protocol: "AXELAR" }
 ```
 
-#### `bridgeTo(target, targetChainId, amount, protocol)`
-
-Generic bridge method. Note: Requires prior approval if allowance is insufficient.
-
-```typescript
-const receipt = await sdk.bridgeTo(recipient, 1, amount, "AXELAR")
-```
-
-### Transaction Tracking
-
 #### `getTransactionStatus(txHash, protocol)`
 
-Gets the status of a bridge transaction from external explorers.
+Polls the bridge explorer for transaction status.
 
 ```typescript
-const status = await sdk.getTransactionStatus(txHash, "AXELAR")
-// Returns: { status: "pending" | "completed" | "failed", ... }
+const status = await sdk.getTransactionStatus("0xTxHash", "AXELAR")
+// Returns: { status: "pending" | "completed" | "failed", srcTxHash?, dstTxHash?, timestamp? }
 ```
 
 #### `explorerLink(txHash, protocol)`
 
-Generates an explorer link for a bridge transaction.
+Returns a link to the bridge explorer.
 
 ```typescript
-const link = sdk.explorerLink(txHash, "LAYERZERO")
-// "https://layerzeroscan.com/tx/0x..."
+const link = sdk.explorerLink("0xTxHash", "LAYERZERO")
+// "https://layerzeroscan.com/tx/0xTxHash"
 ```
 
-### React Hooks
+#### `getHistory(address, options?)`
 
-Bridging hooks are provided via `@goodsdks/react-hooks`.
-
-```tsx
-const { sdk } = useBridgingSDK()
-const { fee } = useBridgeFee(sdk, fromChain, toChain, protocol)
-const { history } = useBridgeHistory(sdk, address)
-```
-
-### Utility Functions
-
-#### Decimal Conversion
+Fetches the combined BridgeRequest + ExecutedTransfer event history for an address on the current chain.
 
 ```typescript
-import { normalizeAmount } from "@goodsdks/bridging-sdk"
-import { formatUnits, parseUnits } from "viem"
-
-// Normalize to 18-decimal format for limit checks
-const normalized = normalizeAmount(amount, fromChainId)
-
-// Format for display using viem
-const formatted = formatUnits(1000000000000000000n, 18) // "1.0"
-
-// Parse user input using viem
-const parsed = parseUnits("1.5", 18) // 1500000000000000000n
+const history = await sdk.getHistory("0xUserAddress")
 ```
 
-#### Transaction Tracking
+#### Static Helpers
 
 ```typescript
-// Get status via SDK method
-const status = await sdk.getTransactionStatus(txHash, "AXELAR")
-// Returns: { status: "pending" | "completed" | "failed", srcTxHash?, dstTxHash?, timestamp? }
+BridgingSDK.formatChainName(42220)         // "Celo"
+BridgingSDK.formatProtocolName("AXELAR")  // "Axelar"
+BridgingSDK.getStatusLabel(status)         // "Pending" | "Completed" | "Failed"
+BridgingSDK.getAllHistory(address, clients) // Cross-chain history using multiple public clients
+```
 
-// Get human-readable label
-const label = BridgingSDK.getStatusLabel(status) // "Pending" | "Completed" | "Failed"
+## Error Handling
+
+With the recommended flow, errors surface through `requirements` (pre-flight) or the `onStatus` callback (execution):
+
+```typescript
+// Pre-flight validation errors
+const { canBridge, requirements } = await sdk.getQuote(...)
+if (!canBridge) {
+  requirements.forEach(r => console.error(r.type, r.message))
+  // Types: "wrong_chain" | "insufficient_token_balance" | "insufficient_native_balance"
+  //        | "insufficient_allowance" | "exceeds_limit" | "route_unavailable"
+}
+
+// Execution errors
+await sdk.doBridge(quote, (status) => {
+  if (status.step === "failed") console.error(status.error)
+})
 ```
 
 ## Supported Chains
 
-| Chain | Chain ID | Decimals | Native Currency |
-|-------|-----------|----------|-----------------|
-| Celo | 42220 | 18 | CELO |
-| Ethereum | 1 | 2 | ETH |
-| Fuse | 122 | 2 | FUSE |
-| XDC | 50 | 18 | XDC |
+| Chain    | Chain ID | G$ Decimals | Native Currency |
+|----------|----------|-------------|-----------------|
+| Celo     | 42220    | 18          | CELO (18 dec)   |
+| Ethereum | 1        | 2           | ETH (18 dec)    |
+| Fuse     | 122      | 2           | FUSE (18 dec)   |
+| XDC      | 50       | 18          | XDC (18 dec)    |
+
+> **Note**: G$ decimals differ per chain. Bridge fees are always denominated in the source chain's **native currency** (18 decimals on all chains).
 
 ## Bridge Protocols
 
@@ -175,35 +250,17 @@ const label = BridgingSDK.getStatusLabel(status) // "Pending" | "Completed" | "F
 - Custom adapter parameters
 - Explorer: https://layerzeroscan.com
 
-## Error Handling
-
-The SDK provides detailed error messages for common issues:
-
-```typescript
-try {
-  await sdk.bridgeTo(recipient, targetChain, amount, "AXELAR")
-} catch (error) {
-  if (error.message.includes("Insufficient fee")) {
-    // Handle insufficient fee
-  } else if (error.message.includes("limit")) {
-    // Handle limit exceeded
-  } else if (error.message.includes("balance")) {
-    // Handle insufficient balance
-  }
-}
-```
-
 ## Best Practices
 
-1. **Call `sdk.initialize()` after construction** — fetches and caches fees so `bridgeTo` calls don't incur an extra round trip
-2. **Check `canBridge` before submitting** — validates on-chain bridge limits for the user's amount
-3. **Handle decimal conversions properly** — use `normalizeAmount` for limit checks, viem's `parseUnits`/`formatUnits` for display
-4. **Track transaction status for user feedback** — poll `getTransactionStatus` and show the explorer link
-5. **Provide explorer links for transparency** — use `sdk.explorerLink(txHash, protocol)`
+1. **Use the 3-step flow** — `getBridgeConfig → getQuote → doBridge` handles all edge cases
+2. **Check `canBridge` before calling `doBridge`** — prevents failed transactions
+3. **Use `onStatus` for UX feedback** — surfaces approval and bridging steps to the user
+4. **Parse amounts with `parseUnits`** — use G$ decimals for the source chain (18 for Celo/XDC, 2 for ETH/Fuse)
+5. **Show explorer links** — use `sdk.explorerLink(txHash, protocol)` for transparency
 
 ## Demo Application
 
-See the demo application at `apps/demo-bridging-app` for a complete implementation example.
+See `apps/demo-bridging-app` for a complete end-to-end implementation.
 
 ## Contributing
 
