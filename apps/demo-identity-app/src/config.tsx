@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi"
 import React, { ReactNode } from "react"
 
+export const SDK_ENV = "development" as const
+
 const queryClient = new QueryClient()
 
 const projectId = "71dd03d057d89d0af68a4c627ec59694"

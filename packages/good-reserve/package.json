@@ -28,13 +28,15 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@vitest/ui": "^4.0.18",
-    "tsup": "^8.3.5",
     "typescript": "latest",
     "viem": "latest",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "viem": "*"
+  },
+  "dependencies": {
+    "tsup": "^8.3.5"
   },
   "keywords": [],
   "author": "",

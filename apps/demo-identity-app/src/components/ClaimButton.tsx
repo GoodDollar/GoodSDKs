@@ -9,6 +9,7 @@ import {
 } from "@goodsdks/citizen-sdk"
 import { formatUnits } from "viem"
 import { useAccount } from "wagmi"
+import { SDK_ENV } from "../config"
 
 export const ClaimButton: React.FC = () => {
   const { address, chainId } = useAccount()
@@ -16,7 +17,7 @@ export const ClaimButton: React.FC = () => {
   const [isClaiming, setIsClaiming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const { sdk: claimSDK, loading, error: sdkError } = useClaimSDK("development")
+  const { sdk: claimSDK, loading, error: sdkError } = useClaimSDK(SDK_ENV)
   const [sdk, setSdk] = useState<typeof claimSDK | null>(null)
   const [claimAmount, setClaimAmount] = useState<number | null>(null)
   const [altClaimAvailable, setAltClaimAvailable] = useState(false)
