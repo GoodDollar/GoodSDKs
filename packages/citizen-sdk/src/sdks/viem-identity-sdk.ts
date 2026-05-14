@@ -20,14 +20,22 @@ import {
   identityV2ABI,
   SupportedChains,
   isSupportedChain,
+  WALLET_LINK_SECURITY_MESSAGES,
 } from "../constants"
 
 import { resolveChainAndContract } from "../utils/chains"
+import {
+  createRpcIteratorRegistry,
+  getRpcFallbackClient,
+} from "../utils/rpcFallback"
 
 import type {
   IdentityContract,
   IdentityExpiryData,
   IdentityExpiry,
+  WalletLinkOptions,
+  WalletLinkAction,
+  ChainConnectedStatus,
 } from "../types"
 
 /**
@@ -62,6 +70,7 @@ export class IdentitySDK {
   public env: contractEnv = "production"
   private readonly chainId: SupportedChains
   private readonly fvDefaultChain: SupportedChains
+  private readonly rpcIterators = createRpcIteratorRegistry()
 
   /**
    * Initializes the IdentitySDK.
@@ -107,6 +116,36 @@ export class IdentitySDK {
   }
 
   /**
+   * Evaluates security constraints and prompts the user with security messages if required.
+   * Custodial/automated flows can bypass this entirely via `skipSecurityMessage: true`.
+   * For native wallet flows, `onSecurityMessage` receives the notice and must resolve
+   * to `true` for the transaction to proceed. Without either option the message is
+   * logged to `console.info` as a headless default.
+   * @param action - The wallet link action being performed ("connect" or "disconnect").
+   * @param options - Additional wallet link options including security prompt handlers.
+   */
+  private async runSecurityCheck(
+    action: keyof typeof WALLET_LINK_SECURITY_MESSAGES,
+    options?: WalletLinkOptions,
+  ): Promise<void> {
+    if (options?.skipSecurityMessage) return
+
+    const message = WALLET_LINK_SECURITY_MESSAGES[action]
+
+    if (options?.onSecurityMessage) {
+      const confirmed = await options.onSecurityMessage(message)
+      if (!confirmed) {
+        throw new Error(
+          `Wallet ${action} cancelled: user did not confirm security notice.`,
+        )
+      }
+      return
+    }
+
+    console.info(`[IdentitySDK] ${message}`)
+  }
+
+  /**
    * Submits a transaction and waits for its receipt.
    * @param params - Parameters for simulating the contract call.
    * @param onHash - Optional callback to receive the transaction hash.
@@ -130,8 +169,9 @@ export class IdentitySDK {
 
       return waitForTransactionReceipt(this.publicClient, { hash })
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("submitAndWait Error:", error)
-      throw new Error(`Failed to submit transaction: ${error.message}`)
+      throw new Error(`Failed to submit transaction: ${message}`)
     }
   }
 
@@ -157,9 +197,86 @@ export class IdentitySDK {
         root,
       }
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("getWhitelistedRoot Error:", error)
-      throw new Error(`Failed to get whitelisted root: ${error.message}`)
+      throw new Error(`Failed to get whitelisted root: ${message}`)
     }
+  }
+
+  /**
+   * Checks the wallet-link connection status of the given account.
+   *
+   * When `chainId` is provided the query is scoped to that single chain only.
+   * When omitted, all supported chains are queried in parallel via Promise.allSettled
+   * and one ChainConnectedStatus entry is returned per chain.
+   *
+   * App-provided public clients always take precedence. For the SDK's current
+   * chain `this.publicClient` is reused when no override is passed. For other
+   * chains the SDK falls back to local read-only RPC clients using the same
+   * fallback flow as other multi-chain reads.
+   *
+   * @param account - The account address to check.
+   * @param chainId - Optional. Restricts the query to this chain only.
+   * @param publicClients - Optional. App-level public clients keyed by SupportedChains ID.
+   * @returns An array of ChainConnectedStatus (one entry per queried chain).
+   */
+  async checkConnectedStatus(
+    account: Address,
+    chainId?: SupportedChains,
+    publicClients?: Record<SupportedChains, PublicClient>,
+  ): Promise<ChainConnectedStatus[]> {
+    const configs = chainId
+      ? Object.values(chainConfigs).filter((config) => config.id === chainId)
+      : Object.values(chainConfigs)
+
+    const settled = await Promise.allSettled(
+      configs.map(async (config) => {
+        const contracts = config.contracts[this.env]
+
+        if (!contracts) {
+          return {
+            chainId: config.id,
+            chainName: config.label,
+            isConnected: false,
+            root: zeroAddress as Address,
+            error: `No contract configured for env "${this.env}" on ${config.label}`,
+          } satisfies ChainConnectedStatus
+        }
+
+        const isPrimaryChain = this.chainId === config.id
+        const client =
+          publicClients?.[config.id] ??
+          (isPrimaryChain
+            ? this.publicClient
+            : getRpcFallbackClient(config.id, this.rpcIterators))
+
+        const root = (await client.readContract({
+          address: contracts.identityContract,
+          abi: identityV2ABI,
+          functionName: "connectedAccounts",
+          args: [account],
+        })) as Address
+
+        return {
+          chainId: config.id,
+          chainName: config.label,
+          isConnected: root !== zeroAddress,
+          root,
+        } satisfies ChainConnectedStatus
+      }),
+    )
+
+    return settled.map((result, i) => {
+      const config = configs[i]
+      if (result.status === "fulfilled") return result.value
+      return {
+        chainId: config.id,
+        chainName: config.label,
+        isConnected: false,
+        root: zeroAddress as Address,
+        error: (result.reason as Error)?.message ?? "Unknown RPC error",
+      }
+    })
   }
 
   /**
@@ -186,11 +303,83 @@ export class IdentitySDK {
 
       return { lastAuthenticated, authPeriod }
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("getIdentityExpiryData Error:", error)
       throw new Error(
-        `Failed to retrieve identity expiry data: ${error.message}`,
+        `Failed to retrieve identity expiry data: ${message}`,
       )
     }
+  }
+
+  /**
+   * Updates the wallet-link status of an account.
+   * The whitelisted root identity must be the signer for `connectAccount`,
+   * while `disconnectAccount` can be called by either the root identity or
+   * the connected account itself.
+   * Custodial flows can pass `skipSecurityMessage: true` to bypass the notice;
+   * the underlying transaction signing is handled by the app-provided walletClient
+   * (or IdentityCustodialSDK for LocalAccount signers).
+   * @param action - The wallet-link action to submit.
+   * @param account - The account address to update.
+   * @param options - Additional options, such as security prompts.
+   * @returns The transaction receipt.
+   */
+  async updateConnectionStatus(
+    action: WalletLinkAction,
+    account: Address,
+    options?: WalletLinkOptions,
+  ): Promise<any> {
+    const securityAction =
+      action === "connectAccount" ? "connect" : "disconnect"
+    const actionLabel =
+      action === "connectAccount" ? "connect" : "disconnect"
+
+    try {
+      await this.runSecurityCheck(securityAction, options)
+
+      return this.submitAndWait(
+        {
+          address: this.contract.contractAddress,
+          abi: identityV2ABI,
+          functionName: action,
+          args: [account],
+        },
+        options?.onHash,
+      )
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("updateConnectionStatus Error:", error)
+      throw new Error(`Failed to ${actionLabel} account: ${message}`)
+    }
+  }
+
+  /**
+   * Connects a new account to the identity.
+   * The whitelisted root identity must be the signer. No additional message
+   * signature is required beyond the transaction itself.
+   * @param account - The account address to connect.
+   * @param options - Additional options, such as security prompts.
+   * @returns The transaction receipt.
+   */
+  async connectAccount(
+    account: Address,
+    options?: WalletLinkOptions,
+  ): Promise<any> {
+    return this.updateConnectionStatus("connectAccount", account, options)
+  }
+
+  /**
+   * Disconnects an account from the identity.
+   * Either the root identity or the connected account itself can call this.
+   * @param account - The account address to disconnect.
+   * @param options - Additional options, such as security prompts.
+   * @returns The transaction receipt.
+   */
+  async disconnectAccount(
+    account: Address,
+    options?: WalletLinkOptions,
+  ): Promise<any> {
+    return this.updateConnectionStatus("disconnectAccount", account, options)
   }
 
   /**
@@ -203,7 +392,7 @@ export class IdentitySDK {
   async generateFVLink(
     popupMode: boolean = false,
     callbackUrl?: string,
-    chainId?: number,
+    chainId?: SupportedChains,
   ): Promise<string> {
     try {
       const address = this.account
@@ -255,9 +444,10 @@ export class IdentitySDK {
       )
       return url.toString()
     } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error)
       console.error("generateFVLink Error:", error)
       throw new Error(
-        `Failed to generate Face Verification link: ${error.message}`,
+        `Failed to generate Face Verification link: ${message}`,
       )
     }
   }
@@ -279,8 +469,6 @@ export class IdentitySDK {
     const expiryTimestamp =
       lastAuthenticated * BigInt(MS_IN_A_SECOND) + periodInMs
 
-    return {
-      expiryTimestamp,
-    }
+    return { expiryTimestamp }
   }
 }
