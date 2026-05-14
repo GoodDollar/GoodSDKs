@@ -47,6 +47,7 @@ export interface BridgeQuoteResult {
   needsApproval: boolean
   canBridge: boolean
   requirements: BridgeRequirement[]
+  targetBalance?: bigint
 }
 
 export interface BridgeStatus {
@@ -117,21 +118,6 @@ export interface FeeEstimate {
   protocol: BridgeProtocol
 }
 
-export interface BridgeParams {
-  target: Address
-  targetChainId: ChainId
-  amount: bigint
-  bridge: BridgeProtocol
-}
-
-export interface BridgeParamsWithLz extends BridgeParams {
-  adapterParams?: `0x${string}`
-}
-
-export interface BridgeParamsWithAxelar extends BridgeParams {
-  gasRefundAddress?: Address
-}
-
 export interface CanBridgeResult {
   isWithinLimit: boolean
   error?: string
@@ -145,11 +131,6 @@ export interface TransactionStatus {
   dstTxHash?: Hash
   timestamp?: number
   error?: string
-}
-
-export interface BridgeHistory {
-  requests: BridgeRequestEvent[]
-  executed: ExecutedTransferEvent[]
 }
 
 export interface BridgeTransaction {

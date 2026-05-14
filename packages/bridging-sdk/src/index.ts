@@ -10,7 +10,6 @@ export type {
   ExecutedTransferEvent,
   EventOptions,
   TransactionStatus,
-  BridgeHistory,
   BridgeTransaction,
   FeeEstimate,
   CanBridgeResult,

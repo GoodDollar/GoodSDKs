@@ -27,12 +27,10 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "typescript": "latest",
-    "viem": "latest"
+    "viem": "latest",
+    "tsup": "^8.3.5"
   },
   "peerDependencies": {
     "viem": "*"
-  },
-  "dependencies": {
-    "tsup": "^8.3.5"
   }
 }

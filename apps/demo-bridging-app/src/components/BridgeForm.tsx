@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAccount, useChainId, useSwitchChain } from "wagmi"
-import { parseUnits } from "viem"
+import { parseUnits, type Address } from "viem"
 import { useBridgingSDK } from "@goodsdks/react-hooks"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
+import { publicClients } from "../config"
 import type {
   BridgeProtocol,
   ChainId,
@@ -104,16 +105,25 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
 
     let cancelled = false
     const run = async () => {
-      setQuoteLoading(true)
+      const isNewRoute = 
+        !quoteResult || 
+        quoteResult.quote?.targetChainId !== toChain || 
+        quoteResult.quote?.protocol !== defaultProtocol
+
+      if (isNewRoute) {
+        setQuoteLoading(true)
+      }
+
       try {
-        const result = await sdk.getQuote(
-          amountInWei,
+        const result = await sdk.getQuote({
+          amount: amountInWei,
           fromChain,
           toChain,
-          (recipient || address) as `0x${string}`,
-          defaultProtocol,
-          config.allowance,
-        )
+          sender: address as Address,
+          recipient: (recipient || address) as Address,
+          protocol: defaultProtocol,
+          targetClient: publicClients[toChain],
+        })
         if (!cancelled) setQuoteResult(result)
       } catch (err) {
         if (!cancelled) console.error("getQuote failed:", err)
@@ -249,6 +259,28 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
               placeholder="1000"
             />
           </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between mb-3 px-1">
+            <label className="text-slate-900 font-bold text-lg">Recipient Address</label>
+            <span className="text-slate-400 font-medium text-sm">Optional</span>
+          </div>
+          <div className="relative group">
+            <input
+              type="text"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              placeholder={address || "0x..."}
+              className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 font-mono text-sm text-slate-900 focus:bg-white focus:border-blue-500 transition-all outline-none"
+            />
+            {!recipient && address && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 text-xs font-bold tracking-wider pointer-events-none uppercase">
+                Defaults to self
+              </div>
+            )}
+          </div>
+        </div>
 
           {/* Fee display from quote */}
           {amount && (
@@ -262,18 +294,27 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
                   Estimating bridge fee...
                 </div>
               ) : quoteResult?.quote ? (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 font-medium">Estimated bridge fee:</span>
-                  <span className="text-slate-700 font-semibold">
-                    {parseFloat(quoteResult.quote.feeInNative.split(" ")[0]).toFixed(6)}{" "}
-                    {SUPPORTED_CHAINS[fromChain].nativeCurrency.symbol}
-                  </span>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500 font-medium">Estimated bridge fee:</span>
+                    <span className="text-slate-700 font-semibold">
+                      {parseFloat(quoteResult.quote.feeInNative.split(" ")[0]).toFixed(6)}{" "}
+                      {SUPPORTED_CHAINS[fromChain].nativeCurrency.symbol}
+                    </span>
+                  </div>
+                  {quoteResult.targetBalance !== undefined && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500 font-medium">Recipient balance on {SUPPORTED_CHAINS[toChain].name}:</span>
+                      <span className="text-slate-700 font-semibold">
+                        {(Number(quoteResult.targetBalance) / Math.pow(10, SUPPORTED_CHAINS[toChain].decimals)).toFixed(2)} G$
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
           )}
         </div>
-      </div>
 
       {/* Requirements — non-approval blocking issues */}
       {blockingRequirements.length > 0 && (
