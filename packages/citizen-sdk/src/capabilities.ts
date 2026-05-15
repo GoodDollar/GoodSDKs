@@ -105,7 +105,7 @@ export const citizenSdkCapabilities = {
       id: "claim",
       method: "ClaimSDK.claim",
       needs: ["walletClient", "connectedWallet"],
-      effects: ["transaction"],
+      effects: ["transaction", "signature", "externalFlow"],
     },
   ],
 } as const satisfies SdkCapabilitySummary
