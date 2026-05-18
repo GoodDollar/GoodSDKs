@@ -228,7 +228,7 @@ export class GooddollarSavingsSDK {
     const hash = await this.walletClient.writeContract(request)
     if (onHash) onHash(hash)
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash })
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 })
 
     return receipt
   }
