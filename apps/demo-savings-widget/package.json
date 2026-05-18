@@ -1,0 +1,17 @@
+{
+  "name": "demo-savings-widget",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3001",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@goodsdks/savings-widget": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "6.3.5"
+  }
+}
