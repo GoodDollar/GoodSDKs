@@ -1,11 +1,31 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { createWalletClient, createPublicClient, custom, PublicClient, WalletClient, http, formatEther, parseEther } from 'viem'
-import { celo } from 'viem/chains';
-import { GooddollarSavingsSDK } from '@goodsdks/savings-sdk';
+import {
+  createWalletClient,
+  createPublicClient,
+  custom,
+  type Chain,
+  type PublicClient,
+  type WalletClient,
+  http,
+  formatEther,
+  parseEther,
+} from 'viem'
+import { celo, xdc } from 'viem/chains';
+import {
+  GooddollarSavingsSDK,
+  SUPPORTED_CHAIN_IDS,
+  getChainConfig,
+  isSupportedChain,
+} from '@goodsdks/savings-sdk';
 
-const CELO_CHAIN_ID = 42220;
-const CELO_CHAIN_ID_HEX = '0xa4ec';
+const CHAINS_BY_ID: Record<number, Chain> = {
+  [celo.id]: celo,
+  [xdc.id]: xdc,
+};
+
+const DEFAULT_SUPPORTED_CHAIN_IDS = SUPPORTED_CHAIN_IDS.slice();
+const DEFAULT_CHAIN_ID = DEFAULT_SUPPORTED_CHAIN_IDS[0] ?? celo.id;
 
 @customElement('gooddollar-savings-widget')
 export class GooddollarSavingsWidget extends LitElement {
@@ -33,6 +53,14 @@ export class GooddollarSavingsWidget extends LitElement {
       margin-bottom: 24px;
     }
 
+    .header-text {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .logo {
       width: 48px;
       height: 48px;
@@ -54,6 +82,65 @@ export class GooddollarSavingsWidget extends LitElement {
       font-weight: 600;
       color: #111827;
       margin: 0;
+    }
+
+    .chain-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #0369a1;
+      background: #e0f2fe;
+      border: 1px solid #bae6fd;
+      line-height: 1;
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    .chain-pill::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #0ea5e9;
+    }
+
+    .network-alert {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .network-alert-text {
+      flex: 1;
+      line-height: 1.4;
+    }
+
+    .network-alert-action {
+      background: #f59e0b;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .network-alert-action:hover {
+      background: #d97706;
     }
 
     .tab-container {
@@ -261,6 +348,12 @@ export class GooddollarSavingsWidget extends LitElement {
   @property({ type: Function })
   connectWallet: (() => void) | undefined = undefined;
 
+  @property({ type: Array, attribute: 'supported-chains' })
+  supportedChains: number[] = DEFAULT_SUPPORTED_CHAIN_IDS;
+
+  @property({ type: Number, attribute: 'default-chain-id' })
+  defaultChainId: number = DEFAULT_CHAIN_ID;
+
   @state()
   activeTab: string = 'stake';
 
@@ -303,13 +396,23 @@ export class GooddollarSavingsWidget extends LitElement {
   @state()
   transactionError: string = '';
 
+  @state()
+  activeChainId: number = DEFAULT_CHAIN_ID;
+
+  @state()
+  walletChainId: number | null = null;
+
   private walletClient: WalletClient | null = null;
-  private publicClient: PublicClient | null = null;
+  private publicClients: Map<number, PublicClient> = new Map();
   private sdk: GooddollarSavingsSDK | null = null;
   private userAddress: string | null = null;
+  private providerListenersAttachedTo: any = null;
+  private chainChangedHandler: ((chainIdHex: string) => void) | null = null;
+  private accountsChangedHandler: ((accounts: string[]) => void) | null = null;
 
   connectedCallback(): void {
     super.connectedCallback();
+    this.activeChainId = this.resolveActiveChainId();
     this.interval = setInterval(
       () => this.refreshData(),
       30_000
@@ -320,10 +423,25 @@ export class GooddollarSavingsWidget extends LitElement {
     if (this.interval) {
       clearInterval(this.interval);
     }
+    this.detachProviderListeners();
+    super.disconnectedCallback();
   }
   updated(changedProperties: Map<string, any>) {
     if (changedProperties.has('web3Provider')) {
+      this.detachProviderListeners();
+      this.attachProviderListeners();
       this.refreshData();
+    }
+    if (
+      changedProperties.has('supportedChains') ||
+      changedProperties.has('defaultChainId')
+    ) {
+      const next = this.resolveActiveChainId();
+      if (next !== this.activeChainId) {
+        this.activeChainId = next;
+        this.sdk = null;
+        this.refreshData();
+      }
     }
     if (changedProperties.has('walletBalance') || changedProperties.has('currentStake')) {
       this.validateInput();
@@ -331,15 +449,38 @@ export class GooddollarSavingsWidget extends LitElement {
   }
 
   render() {
-    const isConnected = !!(this.web3Provider && this.web3Provider.isConnected && this.userAddress);
+    const isWalletPresent = !!(this.web3Provider && this.web3Provider.isConnected);
+    const isConnected = !!(isWalletPresent && this.userAddress);
+    const activeChainName = this.getChainName(this.activeChainId);
+    const showWrongNetworkAlert =
+      isWalletPresent &&
+      this.walletChainId !== null &&
+      this.walletChainId !== this.activeChainId;
+    const wrongNetworkMessage = this.buildWrongNetworkMessage();
+
     return html`
       <div class="container">
         <div class="header">
           <div class="logo">
             <img alt="G$ logo" src="https://raw.githubusercontent.com/GoodDollar/GoodDAPP/master/src/assets/Splash/logo.svg" >
           </div>
-          <h1 class="title">Gooddollar Savings</h1>
+          <div class="header-text">
+            <h1 class="title">Gooddollar Savings</h1>
+            <span class="chain-pill" title="Active network">${activeChainName}</span>
+          </div>
         </div>
+
+        ${showWrongNetworkAlert
+        ? html`
+          <div class="network-alert" role="alert">
+            <span class="network-alert-text">${wrongNetworkMessage}</span>
+            <button class="network-alert-action" @click=${this.handleSwitchNetwork}>
+              Switch to ${activeChainName}
+            </button>
+          </div>
+        `
+        : ''
+      }
 
         <div class="tab-container">
           <button
@@ -408,7 +549,7 @@ export class GooddollarSavingsWidget extends LitElement {
       }
 
         <div class="stats-section">
-          <h3 class="stats-title">Staking Statistics</h3>
+          <h3 class="stats-title">Staking Statistics (${activeChainName})</h3>
 
           <div class="stat-row">
             <span class="stat-label">Total G$ Staked</span>
@@ -440,32 +581,141 @@ export class GooddollarSavingsWidget extends LitElement {
     `;
   }
 
+  private resolveActiveChainId(): number {
+    const supported = this.getSupportedChainsSafe();
+    if (
+      this.walletChainId !== null &&
+      supported.includes(this.walletChainId)
+    ) {
+      return this.walletChainId;
+    }
+    if (supported.includes(this.defaultChainId)) {
+      return this.defaultChainId;
+    }
+    return supported[0] ?? DEFAULT_CHAIN_ID;
+  }
+
+  private getSupportedChainsSafe(): number[] {
+    const list = (this.supportedChains ?? []).filter((id) =>
+      isSupportedChain(Number(id)),
+    );
+    return list.length > 0 ? list.map(Number) : DEFAULT_SUPPORTED_CHAIN_IDS;
+  }
+
+  private getPublicClient(chainId: number): PublicClient {
+    const cached = this.publicClients.get(chainId);
+    if (cached) return cached;
+    const chain = CHAINS_BY_ID[chainId];
+    if (!chain) {
+      throw new Error(`Unsupported chain id ${chainId}`);
+    }
+    const client = createPublicClient({
+      chain,
+      transport: http(),
+    }) as unknown as PublicClient;
+    this.publicClients.set(chainId, client);
+    return client;
+  }
+
+  private getChainName(chainId: number): string {
+    return getChainConfig(chainId)?.name ?? `Chain ${chainId}`;
+  }
+
+  private buildWrongNetworkMessage(): string {
+    const supported = this.getSupportedChainsSafe();
+    if (
+      this.walletChainId !== null &&
+      !supported.includes(this.walletChainId)
+    ) {
+      const supportedNames = supported.map((id) => this.getChainName(id)).join(' or ');
+      return `Your wallet is on an unsupported network. Please switch to ${supportedNames}.`;
+    }
+    return `Your wallet network does not match the selected network (${this.getChainName(this.activeChainId)}).`;
+  }
+
   private async refreshData() {
-    if (!this.publicClient) {
-      this.publicClient = createPublicClient({
-        chain: celo,
-        transport: http()
-      }) as unknown as PublicClient;
+    const supported = this.getSupportedChainsSafe();
+    let walletChainId: number | null = null;
+    if (this.web3Provider?.request) {
+      try {
+        const chainIdHex = await this.web3Provider.request({ method: 'eth_chainId' });
+        walletChainId = parseInt(chainIdHex, 16);
+      } catch (error) {
+        console.error('Failed to read wallet chain id:', error);
+        walletChainId = null;
+      }
+    }
+    this.walletChainId = walletChainId;
+
+    const previousActive = this.activeChainId;
+    let nextActive: number;
+    if (walletChainId !== null && supported.includes(walletChainId)) {
+      nextActive = walletChainId;
+    } else if (supported.includes(this.defaultChainId)) {
+      nextActive = this.defaultChainId;
+    } else {
+      nextActive = supported[0] ?? DEFAULT_CHAIN_ID;
     }
 
-    if (this.web3Provider && this.web3Provider.isConnected) {
-      this.walletClient = createWalletClient({
-        chain: celo,
-        transport: custom(this.web3Provider)
-      });
-      this.sdk = new GooddollarSavingsSDK(this.publicClient!, this.walletClient);
-      await this.loadStats();
+    if (nextActive !== previousActive) {
+      this.activeChainId = nextActive;
+      this.sdk = null;
+      this.resetUserStats();
+    }
 
-      const accounts = await this.web3Provider.request({ method: 'eth_accounts' });
-      if (accounts.length > 0) {
-        this.userAddress = accounts[0];
-        await this.loadUserStats();
-      } else {
-        this.resetUserStats();
+    const activeChain = CHAINS_BY_ID[this.activeChainId];
+    if (!activeChain) {
+      console.error(`No viem chain config for chain id ${this.activeChainId}`);
+      return;
+    }
+
+    const publicClient = this.getPublicClient(this.activeChainId);
+
+    const walletOnActiveChain =
+      !!this.web3Provider &&
+      this.web3Provider.isConnected &&
+      walletChainId === this.activeChainId;
+
+    if (walletOnActiveChain) {
+      this.walletClient = createWalletClient({
+        chain: activeChain,
+        transport: custom(this.web3Provider),
+      });
+      try {
+        this.sdk = new GooddollarSavingsSDK(publicClient, this.walletClient);
+      } catch (error) {
+        console.error('Failed to initialize SDK with wallet:', error);
+        this.sdk = new GooddollarSavingsSDK(publicClient);
+      }
+
+      try {
+        const accounts = await this.web3Provider.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          this.userAddress = accounts[0];
+        } else {
+          this.userAddress = null;
+        }
+      } catch (error) {
+        console.error('Failed to read accounts:', error);
+        this.userAddress = null;
       }
     } else {
-      this.sdk = new GooddollarSavingsSDK(this.publicClient);
-      await this.loadStats();
+      this.walletClient = null;
+      this.userAddress = null;
+      try {
+        this.sdk = new GooddollarSavingsSDK(publicClient);
+      } catch (error) {
+        console.error('Failed to initialize SDK:', error);
+        this.sdk = null;
+        return;
+      }
+    }
+
+    await this.loadStats();
+    if (this.userAddress) {
+      await this.loadUserStats();
+    } else {
+      this.resetUserStats();
     }
   }
 
@@ -497,6 +747,44 @@ export class GooddollarSavingsWidget extends LitElement {
     this.currentStake = 0n;
     this.unclaimedRewards = 0n;
     this.userWeeklyRewards = 0n;
+  }
+
+  private attachProviderListeners() {
+    if (!this.web3Provider?.on) return;
+    this.chainChangedHandler = (chainIdHex: string) => {
+      try {
+        this.walletChainId = parseInt(chainIdHex, 16);
+      } catch {
+        this.walletChainId = null;
+      }
+      this.refreshData().catch(console.error);
+    };
+    this.accountsChangedHandler = (accounts: string[]) => {
+      this.userAddress = accounts && accounts[0] ? accounts[0] : null;
+      this.refreshData().catch(console.error);
+    };
+    this.web3Provider.on('chainChanged', this.chainChangedHandler);
+    this.web3Provider.on('accountsChanged', this.accountsChangedHandler);
+    this.providerListenersAttachedTo = this.web3Provider;
+  }
+
+  private detachProviderListeners() {
+    const target = this.providerListenersAttachedTo;
+    if (!target?.removeListener) {
+      this.providerListenersAttachedTo = null;
+      this.chainChangedHandler = null;
+      this.accountsChangedHandler = null;
+      return;
+    }
+    if (this.chainChangedHandler) {
+      target.removeListener('chainChanged', this.chainChangedHandler);
+    }
+    if (this.accountsChangedHandler) {
+      target.removeListener('accountsChanged', this.accountsChangedHandler);
+    }
+    this.providerListenersAttachedTo = null;
+    this.chainChangedHandler = null;
+    this.accountsChangedHandler = null;
   }
 
   formatBigInt(num: bigint) {
@@ -536,7 +824,6 @@ export class GooddollarSavingsWidget extends LitElement {
       return;
     }
 
-    // Check for invalid characters (only numbers and decimal point allowed)
     const validInputRegex = /^[0-9]*\.?[0-9]*$/;
     if (!validInputRegex.test(this.inputAmount)) {
       this.inputError = 'Invalid value';
@@ -584,8 +871,8 @@ export class GooddollarSavingsWidget extends LitElement {
     }
 
     try {
-      const isCeloNetwork = await this.ensureCeloNetwork();
-      if (!isCeloNetwork) return;
+      const onActive = await this.ensureActiveNetwork();
+      if (!onActive) return;
 
       this.txLoading = true;
       this.transactionError = '';
@@ -613,8 +900,8 @@ export class GooddollarSavingsWidget extends LitElement {
     }
 
     try {
-      const isCeloNetwork = await this.ensureCeloNetwork();
-      if (!isCeloNetwork) return;
+      const onActive = await this.ensureActiveNetwork();
+      if (!onActive) return;
 
       this.txLoading = true;
       this.transactionError = '';
@@ -638,8 +925,8 @@ export class GooddollarSavingsWidget extends LitElement {
     if (!this.sdk || !this.userAddress) return;
 
     try {
-      const isCeloNetwork = await this.ensureCeloNetwork();
-      if (!isCeloNetwork) return;
+      const onActive = await this.ensureActiveNetwork();
+      if (!onActive) return;
 
       this.isClaiming = true;
       this.transactionError = '';
@@ -656,22 +943,34 @@ export class GooddollarSavingsWidget extends LitElement {
     }
   }
 
-  private async ensureCeloNetwork(): Promise<boolean> {
+  private async handleSwitchNetwork() {
+    const switched = await this.ensureActiveNetwork();
+    if (switched) {
+      await this.refreshData();
+    }
+  }
+
+  private async ensureActiveNetwork(): Promise<boolean> {
     if (!this.web3Provider?.request) return true;
 
     const chainIdHex = await this.web3Provider.request({ method: 'eth_chainId' });
     const currentChainId = parseInt(chainIdHex, 16);
-    if (currentChainId === CELO_CHAIN_ID) return true;
+    if (currentChainId === this.activeChainId) return true;
 
+    const targetHex = `0x${this.activeChainId.toString(16)}`;
     try {
       await this.web3Provider.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: CELO_CHAIN_ID_HEX }],
+        params: [{ chainId: targetHex }],
       });
       this.transactionError = '';
+      this.walletChainId = this.activeChainId;
       return true;
     } catch (error: any) {
-      this.transactionError = this.toUserErrorMessage(error, 'Failed to switch wallet network.');
+      this.transactionError = this.toUserErrorMessage(
+        error,
+        `Please switch your wallet to ${this.getChainName(this.activeChainId)}.`,
+      );
       return false;
     }
   }
@@ -707,10 +1006,10 @@ export class GooddollarSavingsWidget extends LitElement {
     if (
       lower.includes('wrong network') ||
       lower.includes('chain mismatch') ||
-      lower.includes('switch your wallet to celo') ||
+      lower.includes('switch your wallet') ||
       lower.includes('unsupported chain')
     ) {
-      return 'Please switch to Celo mainnet to continue.';
+      return `Please switch to ${this.getChainName(this.activeChainId)} to continue.`;
     }
 
     return cleaned || fallback;

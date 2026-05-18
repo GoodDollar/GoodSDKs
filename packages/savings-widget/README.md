@@ -63,3 +63,20 @@ Customize the `gooddollar-savings-widget` using these properties:
 
 - **`web3Provider`**: _(Set via JavaScript property)_  
   The web3Provider object when the wallet is connected. Wallet connection logic should be handeled outside of this component.
+
+- **`supported-chains`**: _(HTML attribute or JS property `supportedChains`)_  
+  Optional JSON array of supported chain ids the widget should accept (e.g. `supported-chains="[42220, 50]"`). Defaults to `[42220, 50]` (Celo and XDC).
+
+- **`default-chain-id`**: _(HTML attribute or JS property `defaultChainId`)_  
+  Numeric chain id used to display global stats when no wallet is connected or when the wallet is on an unsupported chain. Defaults to the first entry in `supported-chains`.
+
+### Networks
+
+The widget currently supports the following networks out of the box:
+
+| Network | Chain ID |
+| --- | --- |
+| Celo Mainnet | `42220` |
+| XDC Network | `50` |
+
+When the connected wallet is on one of these networks, the widget automatically targets that chain. If the wallet is on a different network, the widget displays a wrong-network alert with a button to switch to the active chain.

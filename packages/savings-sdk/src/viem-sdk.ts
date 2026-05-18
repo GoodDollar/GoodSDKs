@@ -24,22 +24,40 @@ const G$__ABI = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
 ])
 
-const STAKING_CONTRACT_ADDRESS =
-  "0x799a23dA264A157Db6F9c02BE62F82CE8d602A45" as const
-const GDOLLAR_CONTRACT_ADDRESS =
-  "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as const
+export interface ChainConfig {
+  chainId: number
+  name: string
+  stakingAddress: `0x${string}`
+  gdollarAddress: `0x${string}`
+}
+
 const CELO_MAINNET_CHAIN_ID = 42220
+const XDC_MAINNET_CHAIN_ID = 50
 
+const CHAIN_CONFIGS: Record<number, ChainConfig> = {
+  [CELO_MAINNET_CHAIN_ID]: {
+    chainId: CELO_MAINNET_CHAIN_ID,
+    name: "Celo",
+    stakingAddress: "0x799a23dA264A157Db6F9c02BE62F82CE8d602A45",
+    gdollarAddress: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A",
+  },
+  [XDC_MAINNET_CHAIN_ID]: {
+    chainId: XDC_MAINNET_CHAIN_ID,
+    name: "XDC",
+    stakingAddress: "0x61a1Da2a81FbaE6b1B3A45D94355A6A5c5973A52",
+    gdollarAddress: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c",
+  },
+}
 
-const stakingContract = {
-  address: STAKING_CONTRACT_ADDRESS,
-  abi: STAKING_CONTRACT_ABI,
-} as const
+export const SUPPORTED_CHAIN_IDS: number[] = [CELO_MAINNET_CHAIN_ID, XDC_MAINNET_CHAIN_ID]
 
-const gdollarContract = {
-  address: GDOLLAR_CONTRACT_ADDRESS,
-  abi: G$__ABI,
-} as const
+export function isSupportedChain(chainId: number | undefined): boolean {
+  return typeof chainId === "number" && chainId in CHAIN_CONFIGS
+}
+
+export function getChainConfig(chainId: number): ChainConfig | undefined {
+  return CHAIN_CONFIGS[chainId]
+}
 
 export interface GlobalStats {
   totalStaked: bigint // in GDollars wei
@@ -56,27 +74,56 @@ export interface UserStats {
 export class GooddollarSavingsSDK {
   private publicClient: PublicClient
   private walletClient: WalletClient | null = null
+  private chainConfig: ChainConfig
+  private stakingContract: {
+    address: `0x${string}`
+    abi: typeof STAKING_CONTRACT_ABI
+  }
+  private gdollarContract: {
+    address: `0x${string}`
+    abi: typeof G$__ABI
+  }
   private totalStaked: bigint = BigInt(0)
   private cachedRewardRate: bigint = BigInt(0)
 
-  constructor(
-    publicClient: PublicClient,
-    walletClient?: WalletClient,
-  ) {
+  constructor(publicClient: PublicClient, walletClient?: WalletClient) {
     if (!publicClient) throw new Error("Public client is required")
-    if (!(publicClient.chain?.id === CELO_MAINNET_CHAIN_ID)) {
-      throw new Error("Public client must be connected to Celo mainnet")
+    const chainId = publicClient.chain?.id
+    const config = chainId !== undefined ? CHAIN_CONFIGS[chainId] : undefined
+    if (!config) {
+      throw new Error(
+        `Unsupported chain id ${chainId}. Supported chains: ${SUPPORTED_CHAIN_IDS.join(", ")}`,
+      )
     }
     this.publicClient = publicClient
+    this.chainConfig = config
+    this.stakingContract = {
+      address: config.stakingAddress,
+      abi: STAKING_CONTRACT_ABI,
+    }
+    this.gdollarContract = {
+      address: config.gdollarAddress,
+      abi: G$__ABI,
+    }
     this.walletClient = null
     if (walletClient) {
       this.setWalletClient(walletClient)
     }
   }
 
+  get chainId(): number {
+    return this.chainConfig.chainId
+  }
+
+  get chainName(): string {
+    return this.chainConfig.name
+  }
+
   setWalletClient(walletClient: WalletClient) {
-    if (!(walletClient.chain?.id === CELO_MAINNET_CHAIN_ID)) {
-      throw new Error("Wallet client must be connected to Celo mainnet")
+    if (walletClient.chain?.id !== this.chainConfig.chainId) {
+      throw new Error(
+        `Wallet client must be connected to ${this.chainConfig.name} (chain id ${this.chainConfig.chainId})`,
+      )
     }
     this.walletClient = walletClient
   }
@@ -84,15 +131,15 @@ export class GooddollarSavingsSDK {
   async getGlobalStats(): Promise<GlobalStats> {
     const [totalSupply, periodFinish, effectiveRewardRate] = await Promise.all([
       this.publicClient.readContract({
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "totalSupply",
       }),
       this.publicClient.readContract({
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "periodFinish",
       }),
       this.publicClient.readContract({
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "getEffectiveRewardRate",
       }),
     ])
@@ -121,17 +168,17 @@ export class GooddollarSavingsSDK {
 
     const [balance, staked, earned] = await Promise.all([
       this.publicClient.readContract({
-        ...gdollarContract,
+        ...this.gdollarContract,
         functionName: "balanceOf",
         args: [account],
       }),
       this.publicClient.readContract({
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "balanceOf",
         args: [account],
       }),
       this.publicClient.readContract({
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "earned",
         args: [account],
       }),
@@ -166,7 +213,7 @@ export class GooddollarSavingsSDK {
     const account = await this.getAccount()
 
     const balance = await this.publicClient.readContract({
-      ...gdollarContract,
+      ...this.gdollarContract,
       functionName: "balanceOf",
       args: [account],
     })
@@ -179,7 +226,7 @@ export class GooddollarSavingsSDK {
 
     return this.submitAndWait(
       {
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "stake",
         args: [amount],
       },
@@ -192,7 +239,7 @@ export class GooddollarSavingsSDK {
 
     return this.submitAndWait(
       {
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "withdraw",
         args: [amount],
       },
@@ -203,7 +250,7 @@ export class GooddollarSavingsSDK {
   async claimReward(onHash?: (hash: `0x${string}`) => void) {
     return this.submitAndWait(
       {
-        ...stakingContract,
+        ...this.stakingContract,
         functionName: "getReward",
         args: [],
       },
@@ -216,7 +263,7 @@ export class GooddollarSavingsSDK {
     onHash?: (hash: `0x${string}`) => void,
   ) {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
-    await this.assertWalletOnCeloMainnet()
+    await this.assertWalletOnActiveChain()
 
     const account = await this.getAccount()
 
@@ -228,14 +275,14 @@ export class GooddollarSavingsSDK {
     const hash = await this.walletClient.writeContract(request)
     if (onHash) onHash(hash)
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 })
+    const receipt = await this.publicClient.waitForTransactionReceipt({
+      hash,
+      confirmations: 2,
+    })
 
     return receipt
   }
 
-  /**
-   * Helper method to get the current account address from wallet client
-   */
   private async getAccount(): Promise<`0x${string}`> {
     if (!this.walletClient) throw new Error("Wallet client not initialized")
     const [account] = await this.walletClient.getAddresses()
@@ -243,27 +290,23 @@ export class GooddollarSavingsSDK {
     return account
   }
 
-  /**
-   * Helper method to ensure the staking contract has sufficient allowance to spend G$ tokens
-   * If allowance is insufficient, it will request approval from the user
-   */
   private async ensureAllowance(
     amount: bigint,
     onHash?: (hash: `0x${string}`) => void,
   ) {
     const account = await this.getAccount()
     const allowance = await this.publicClient.readContract({
-      ...gdollarContract,
+      ...this.gdollarContract,
       functionName: "allowance",
-      args: [account, STAKING_CONTRACT_ADDRESS],
+      args: [account, this.chainConfig.stakingAddress],
     })
 
     if (allowance < amount) {
       const approvalReceipt = await this.submitAndWait(
         {
-          ...gdollarContract,
+          ...this.gdollarContract,
           functionName: "approve",
-          args: [STAKING_CONTRACT_ADDRESS, amount],
+          args: [this.chainConfig.stakingAddress, amount],
         },
         onHash,
       )
@@ -273,9 +316,9 @@ export class GooddollarSavingsSDK {
       }
 
       const updatedAllowance = await this.publicClient.readContract({
-        ...gdollarContract,
+        ...this.gdollarContract,
         functionName: "allowance",
-        args: [account, STAKING_CONTRACT_ADDRESS],
+        args: [account, this.chainConfig.stakingAddress],
       })
 
       if (updatedAllowance < amount) {
@@ -286,11 +329,13 @@ export class GooddollarSavingsSDK {
     }
   }
 
-  private async assertWalletOnCeloMainnet() {
+  private async assertWalletOnActiveChain() {
     if (!this.walletClient) return
     const walletChainId = await this.walletClient.getChainId()
-    if (walletChainId !== CELO_MAINNET_CHAIN_ID) {
-      throw new Error("Wrong network. Please switch your wallet to Celo mainnet.")
+    if (walletChainId !== this.chainConfig.chainId) {
+      throw new Error(
+        `Wrong network. Please switch your wallet to ${this.chainConfig.name}.`,
+      )
     }
   }
 
