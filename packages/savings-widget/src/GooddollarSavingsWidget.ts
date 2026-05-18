@@ -4,28 +4,22 @@ import {
   createWalletClient,
   createPublicClient,
   custom,
-  type Chain,
   type PublicClient,
   type WalletClient,
   http,
   formatEther,
   parseEther,
 } from 'viem'
-import { celo, xdc } from 'viem/chains';
 import {
   GooddollarSavingsSDK,
   SUPPORTED_CHAIN_IDS,
-  getChainConfig,
-  isSupportedChain,
+  SupportedChainId,
+  getSavingsChainConfig,
+  isSupportedChainId,
 } from '@goodsdks/savings-sdk';
 
-const CHAINS_BY_ID: Record<number, Chain> = {
-  [celo.id]: celo,
-  [xdc.id]: xdc,
-};
-
 const DEFAULT_SUPPORTED_CHAIN_IDS = SUPPORTED_CHAIN_IDS.slice();
-const DEFAULT_CHAIN_ID = DEFAULT_SUPPORTED_CHAIN_IDS[0] ?? celo.id;
+const DEFAULT_CHAIN_ID: number = DEFAULT_SUPPORTED_CHAIN_IDS[0] ?? SupportedChainId.CELO;
 
 @customElement('gooddollar-savings-widget')
 export class GooddollarSavingsWidget extends LitElement {
@@ -370,16 +364,22 @@ export class GooddollarSavingsWidget extends LitElement {
   unclaimedRewards: bigint = BigInt(0);
 
   @state()
+  streamedRewards: bigint = BigInt(0);
+
+  @state()
   totalStaked: bigint = BigInt(0);
 
   @state()
-  userWeeklyRewards: bigint = BigInt(0);
+  userDailyRewards: bigint = BigInt(0);
 
   @state()
   annualAPR: number = 0;
 
   @state()
-  interval: NodeJS.Timeout | null = null;
+  isStreaming: boolean = false;
+
+  @state()
+  interval: ReturnType<typeof setInterval> | null = null
 
   @state()
   isLoading: boolean = false;
@@ -520,13 +520,18 @@ export class GooddollarSavingsWidget extends LitElement {
         </div>
 
         <div class="rewards-section ${!isConnected ? "hidden" : ""}">
-          <span class="rewards-label">Unclaimed Rewards</span>
-          <div class="rewards-value">
-            <button class="claim-button" @click=${this.handleClaim} ?disabled=${this.isClaiming}>
-              ${this.isClaiming ? 'Claiming...' : 'Claim'}
-            </button>
-            <span>${this.isLoading ? 'Loading...' : this.formatBigInt(this.unclaimedRewards)}</span>
-          </div>
+          ${this.isStreaming
+          ? ''
+          : html`
+            <span class="rewards-label">Unclaimed Rewards</span>
+            <div class="rewards-value">
+              <button class="claim-button" @click=${this.handleClaim} ?disabled=${this.isClaiming}>
+                ${this.isClaiming ? 'Claiming...' : 'Claim'}
+              </button>
+              <span>${this.isLoading ? 'Loading...' : this.formatBigInt(this.unclaimedRewards)}</span>
+            </div>
+          `
+      }
         </div>
 
         ${this.transactionError ? html`<div class="error-message" style="margin-bottom: 16px; text-align: center;">${this.transactionError}</div>` : ''}
@@ -564,8 +569,12 @@ export class GooddollarSavingsWidget extends LitElement {
             </div>
 
             <div class="stat-row">
-              <span class="stat-label">Your Weekly Rewards</span>
-              <span class="stat-value">${this.isLoading ? 'Loading...' : this.formatBigInt(this.userWeeklyRewards)}</span>
+              <span class="stat-label">Your Daily Rewards</span>
+              <span class="stat-value">${this.isLoading ? 'Loading...' : this.formatBigInt(this.userDailyRewards)}</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Your Total Rewards So Far</span>
+              <span class="stat-value">${this.isLoading ? 'Loading...' : this.formatBigInt(this.streamedRewards)}</span>
             </div>
           `
         : ""
@@ -597,7 +606,7 @@ export class GooddollarSavingsWidget extends LitElement {
 
   private getSupportedChainsSafe(): number[] {
     const list = (this.supportedChains ?? []).filter((id) =>
-      isSupportedChain(Number(id)),
+      isSupportedChainId(Number(id)),
     );
     return list.length > 0 ? list.map(Number) : DEFAULT_SUPPORTED_CHAIN_IDS;
   }
@@ -605,12 +614,12 @@ export class GooddollarSavingsWidget extends LitElement {
   private getPublicClient(chainId: number): PublicClient {
     const cached = this.publicClients.get(chainId);
     if (cached) return cached;
-    const chain = CHAINS_BY_ID[chainId];
-    if (!chain) {
+    const config = getSavingsChainConfig(chainId);
+    if (!config) {
       throw new Error(`Unsupported chain id ${chainId}`);
     }
     const client = createPublicClient({
-      chain,
+      chain: config.chain,
       transport: http(),
     }) as unknown as PublicClient;
     this.publicClients.set(chainId, client);
@@ -618,7 +627,7 @@ export class GooddollarSavingsWidget extends LitElement {
   }
 
   private getChainName(chainId: number): string {
-    return getChainConfig(chainId)?.name ?? `Chain ${chainId}`;
+    return getSavingsChainConfig(chainId)?.label ?? `Chain ${chainId}`;
   }
 
   private buildWrongNetworkMessage(): string {
@@ -663,11 +672,12 @@ export class GooddollarSavingsWidget extends LitElement {
       this.resetUserStats();
     }
 
-    const activeChain = CHAINS_BY_ID[this.activeChainId];
-    if (!activeChain) {
+    const activeConfig = getSavingsChainConfig(this.activeChainId);
+    if (!activeConfig) {
       console.error(`No viem chain config for chain id ${this.activeChainId}`);
       return;
     }
+    const activeChain = activeConfig.chain;
 
     const publicClient = this.getPublicClient(this.activeChainId);
 
@@ -725,6 +735,7 @@ export class GooddollarSavingsWidget extends LitElement {
       const globalStats = await this.sdk.getGlobalStats();
       this.totalStaked = globalStats.totalStaked;
       this.annualAPR = globalStats.annualAPR;
+      this.isStreaming = globalStats.isStreaming;
     } catch (error) {
       console.error('Error loading global stats:', error);
     }
@@ -736,8 +747,9 @@ export class GooddollarSavingsWidget extends LitElement {
       const userStats = await this.sdk.getUserStats()
       this.walletBalance = userStats.walletBalance;
       this.currentStake = userStats.currentStake;
-      this.unclaimedRewards = userStats.unclaimedRewards;
-      this.userWeeklyRewards = userStats.userWeeklyRewards;
+      this.unclaimedRewards = userStats.unclaimedRewards ?? 0n;
+      this.streamedRewards = userStats.streamedRewards ?? 0n;
+      this.userDailyRewards = userStats.userDailyRewards;
     } catch (error) {
       console.error('Error loading user stats:', error);
     }
@@ -746,7 +758,8 @@ export class GooddollarSavingsWidget extends LitElement {
     this.walletBalance = 0n;
     this.currentStake = 0n;
     this.unclaimedRewards = 0n;
-    this.userWeeklyRewards = 0n;
+    this.streamedRewards = 0n;
+    this.userDailyRewards = 0n;
   }
 
   private attachProviderListeners() {
