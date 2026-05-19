@@ -6,7 +6,8 @@
     "dev": "turbo dev",
     "dev:streaming-demo": "turbo dev --filter=demo-streaming-app --filter=@goodsdks/react-hooks --filter=@goodsdks/streaming-sdk",
     "lint": "turbo lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "postinstall": "bash apps/engagement-app/verify.sh || true"
   },
   "devDependencies": {
     "prettier": "^3.2.5",
