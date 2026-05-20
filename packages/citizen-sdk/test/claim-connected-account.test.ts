@@ -80,6 +80,9 @@ describe("ClaimSDK connected account entitlement checks", () => {
       status: "can_claim",
       entitlement: 456n,
     })
+    expect(identitySDK.getWhitelistedRoot).toHaveBeenCalledWith(
+      CONNECTED_ACCOUNT,
+    )
     expect(publicClient.readContract).toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: "checkEntitlement",
