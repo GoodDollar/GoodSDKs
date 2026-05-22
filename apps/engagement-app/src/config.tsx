@@ -6,6 +6,7 @@ import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import React, { ReactNode } from 'react'
 
 // 0. Setup queryClient
+// testing comment
 const queryClient = new QueryClient()
 
 // 1. Get projectId from https://cloud.reown.com

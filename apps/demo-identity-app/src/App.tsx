@@ -23,6 +23,7 @@ import { WalletLinkWidget } from "./components/WalletLinkWidget"
 import { SDK_ENV } from "./config"
 
 const tamaguiConfig = createTamagui(config)
+const test = "test"
 
 const App: React.FC = () => {
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false)
