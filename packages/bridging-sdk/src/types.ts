@@ -47,7 +47,6 @@ export interface BridgeQuoteResult {
   needsApproval: boolean
   canBridge: boolean
   requirements: BridgeRequirement[]
-  targetBalance?: bigint
 }
 
 export interface BridgeStatus {

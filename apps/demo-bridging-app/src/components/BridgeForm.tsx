@@ -3,7 +3,6 @@ import { useAccount, useChainId, useSwitchChain } from "wagmi"
 import { parseUnits, type Address } from "viem"
 import { useBridgingSDK } from "@goodsdks/react-hooks"
 import { SUPPORTED_CHAINS, BRIDGE_PROTOCOLS } from "@goodsdks/bridging-sdk"
-import { publicClients } from "../config"
 import type {
   BridgeProtocol,
   ChainId,
@@ -122,7 +121,6 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
           sender: address as Address,
           recipient: (recipient || address) as Address,
           protocol: defaultProtocol,
-          targetClient: publicClients[toChain],
         })
         if (!cancelled) setQuoteResult(result)
       } catch (err) {
@@ -302,14 +300,6 @@ export function BridgeForm({ defaultProtocol }: BridgeFormProps) {
                       {SUPPORTED_CHAINS[fromChain].nativeCurrency.symbol}
                     </span>
                   </div>
-                  {quoteResult.targetBalance !== undefined && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500 font-medium">Recipient balance on {SUPPORTED_CHAINS[toChain].name}:</span>
-                      <span className="text-slate-700 font-semibold">
-                        {(Number(quoteResult.targetBalance) / Math.pow(10, SUPPORTED_CHAINS[toChain].decimals)).toFixed(2)} G$
-                      </span>
-                    </div>
-                  )}
                 </div>
               ) : null}
             </div>

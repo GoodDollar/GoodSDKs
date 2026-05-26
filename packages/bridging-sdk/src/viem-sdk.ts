@@ -353,9 +353,8 @@ export class BridgingSDK {
     fromChain: ChainId
     toChain: ChainId
     protocol: BridgeProtocol
-    targetClient?: PublicClient
   }): Promise<BridgeQuoteResult> {
-    const { sender, amount, fromChain, toChain, protocol, targetClient } = params
+    const { sender, amount, fromChain, toChain, protocol } = params
     const recipient = params.recipient || sender
     const requirements: BridgeRequirement[] = []
 
@@ -400,17 +399,7 @@ export class BridgingSDK {
       })
     }
 
-    // 4. Target Chain Balance Check (Optional UX helper)
-    let targetBalance: bigint | undefined
-    if (targetClient) {
-      try {
-        targetBalance = await this.getG$Balance(recipient, targetClient)
-      } catch (err) {
-        console.warn("Failed to fetch target chain balance", err)
-      }
-    }
-
-    // 5. Bridge Limits Check
+    // 4. Bridge Limits Check
     const canBridgeResult = await this.canBridge(sender, amount, toChain)
     if (!canBridgeResult.isWithinLimit) {
       requirements.push({
@@ -431,7 +420,7 @@ export class BridgingSDK {
       amount,
     }
 
-    return { quote, needsApproval, canBridge, requirements, targetBalance }
+    return { quote, needsApproval, canBridge, requirements }
   }
 
   /**
