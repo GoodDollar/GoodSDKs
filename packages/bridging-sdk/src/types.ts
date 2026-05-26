@@ -77,6 +77,7 @@ export interface BridgeChain {
 export interface BridgeRequestEvent {
   transactionHash: Hash
   blockNumber: bigint
+  timestamp: number
   address: Address
   chainId: ChainId
   args: {
@@ -93,6 +94,7 @@ export interface BridgeRequestEvent {
 export interface ExecutedTransferEvent {
   transactionHash: Hash
   blockNumber: bigint
+  timestamp: number
   address: Address
   chainId: ChainId
   args: {

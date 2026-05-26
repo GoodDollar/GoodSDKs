@@ -497,7 +497,7 @@ export class BridgingSDK {
       })
     )
 
-    const allEvents = results.flat().sort((a, b) => (b.blockNumber > a.blockNumber ? 1 : -1))
+    const allEvents = results.flat().sort((a, b) => b.timestamp - a.timestamp)
 
     return allEvents
   }
@@ -535,6 +535,7 @@ export class BridgingSDK {
     const formattedRequests = requests.map((log: any) => ({
       transactionHash: log.transactionHash,
       blockNumber: log.blockNumber,
+      timestamp: Number(log.args.timestamp),
       address: log.address,
       chainId,
       args: {
@@ -548,9 +549,14 @@ export class BridgingSDK {
       },
     }))
 
+    const uniqueBlocks = [...new Set(executed.map((log: any) => log.blockNumber))]
+    const blocks = await Promise.all(uniqueBlocks.map(bn => client.getBlock({ blockNumber: bn })))
+    const blockTimestamps = new Map(blocks.map(b => [b.number, Number(b.timestamp)]))
+
     const formattedExecuted = executed.map((log: any) => ({
       transactionHash: log.transactionHash,
       blockNumber: log.blockNumber,
+      timestamp: blockTimestamps.get(log.blockNumber) ?? 0,
       address: log.address,
       chainId,
       args: {
@@ -689,6 +695,7 @@ export class BridgingSDK {
           const formattedRequests = requests.map((log: any) => ({
             transactionHash: log.transactionHash,
             blockNumber: log.blockNumber,
+            timestamp: Number(log.args.timestamp),
             address: log.address,
             chainId: Number(chainId),
             args: {
@@ -702,9 +709,14 @@ export class BridgingSDK {
             },
           }))
 
+          const uniqueBlocks = [...new Set(executed.map((log: any) => log.blockNumber))]
+          const blocks = await Promise.all(uniqueBlocks.map(bn => client.getBlock({ blockNumber: bn })))
+          const blockTimestamps = new Map(blocks.map(b => [b.number, Number(b.timestamp)]))
+
           const formattedExecuted = executed.map((log: any) => ({
             transactionHash: log.transactionHash,
             blockNumber: log.blockNumber,
+            timestamp: blockTimestamps.get(log.blockNumber) ?? 0,
             address: log.address,
             chainId: Number(chainId),
             args: {
@@ -725,6 +737,6 @@ export class BridgingSDK {
       })
     )
 
-    return results.flat().sort((a, b) => (b.blockNumber > a.blockNumber ? 1 : -1))
+    return results.flat().sort((a, b) => b.timestamp - a.timestamp)
   }
 }
