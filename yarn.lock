@@ -2241,9 +2241,11 @@ __metadata:
   dependencies:
     "@goodsdks/citizen-sdk": "workspace:*"
     "@repo/typescript-config": "workspace:*"
+    "@vitest/ui": "npm:^4.0.18"
     tsup: "npm:^8.4.0"
     typescript: "npm:latest"
     viem: "npm:latest"
+    vitest: "npm:^4.0.18"
   peerDependencies:
     viem: "*"
   languageName: unknown

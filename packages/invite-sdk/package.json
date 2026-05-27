@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -25,8 +27,10 @@
   ],
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@vitest/ui": "^4.0.18",
     "typescript": "latest",
-    "viem": "latest"
+    "viem": "latest",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "viem": "*"
