@@ -16,7 +16,7 @@
       "import": "./dist/index.js"
     },
     "require": {
-      "types": "./dist/index.cts",
+      "types": "./dist/index.d.cts",
       "require": "./dist/index.cjs"
     }
   },
@@ -39,6 +39,8 @@
     "@goodsdks/citizen-sdk": "*",
     "@goodsdks/good-reserve": "workspace:*",
     "@goodsdks/invite-sdk": "workspace:*",
+    "@goodsdks/streaming-sdk": "*",
+    "@tanstack/react-query": "^4.36.1",
     "lz-string": "^1.5.0",
     "react": "^19.1.1",
     "tsup": "^8.4.0"

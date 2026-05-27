@@ -4,8 +4,6 @@
 
 ## Installation
 
-Install the hooks package alongside its peer dependencies:
-
 ```bash
 yarn add @goodsdks/react-hooks @goodsdks/citizen-sdk wagmi viem
 # or
@@ -73,6 +71,8 @@ export const App = () => (
 
 ## Hooks
 
+### Identity & Claim
+
 - `useIdentitySDK(env?: contractEnv)`
   - Initialises the `IdentitySDK` using the active Wagmi public and wallet clients.
   - `env` defaults to `"production"` and accepts `"staging"` or `"development"`.
@@ -83,7 +83,154 @@ export const App = () => (
   - Returns a ready `GoodReserveSDK` for reserve quotes, approvals, buys, and sells on the active chain.
   - Returns `error` when the connected chain/env pair is unsupported, such as XDC on `production`.
 
+### Streaming Hooks
+
+- `useStreamingSDK({ environment, defaultToken })`
+  - Returns `{ sdk, loading, error }` for components that want direct access to `StreamingSDK`.
+- `useStreamList({ account, environment, first, skip, enabled })`
+  - Fetches active streams for an account.
+  - Supports merged pagination via `first` and `skip`.
+- `useSuperTokenBalance({ account, token, environment, enabled })`
+  - Fetches the current SuperToken snapshot balance for the selected token.
+- `useBalanceHistory({ account, token, environment, first, skip, enabled })`
+  - Fetches historical balance snapshots from the subgraph.
+- `useFlowRate({ sender, receiver, token, environment, enabled })`
+  - Reads the current live CFA flow rate directly from the forwarder.
+- `usePoolMemberships({ account, enabled })`
+  - Fetches GDA pool memberships for an account, including `isConnected` status (recommended for most UIs).
+- `useSupReserves({ account, apiKey, enabled })`
+  - Fetches SUP reserve holdings for the provided account. **Requires `apiKey`** (The Graph Gateway) on Base mainnet.
+- `useCreateStream()`, `useUpdateStream()`, `useDeleteStream()`
+  - Low-level mutators for managing 1-to-1 streams. Supports `token` as `TokenSymbol` ('G$' | 'SUP') or `Address`.
+- `useSetStream()`
+  - Recommended create-or-update mutation backed by `setFlowrate`.
+- `useConnectToPool()`, `useDisconnectFromPool()`
+  - Mutators for GDA pool memberships.
+
+Both hooks re-run whenever the connected wallet, public client, or environment changes.
 These hooks re-run whenever the connected wallet, public client, or environment changes.
+
+### Wallet-Link (IdentityV4)
+
+All wallet-link hooks live in a dedicated file (`wagmi-wallet-link-sdk.ts`) and are exported from the package root.
+They build on the identity SDK initialised via `useIdentitySDK` (see the Identity & Claim section above), so the Wagmi public and wallet clients must already be configured.
+
+#### `useWalletLinkActions(sdk)`
+
+Manages both connect and disconnect flows, including the shared security confirmation prompt.
+
+```tsx
+const {
+  connect,
+  disconnect,
+  loading,
+  error,
+  txHash,
+  pendingSecurityConfirm,
+  confirmSecurity,
+  reset,
+} = useWalletLinkActions(sdk)
+
+// Trigger the flow - a confirmation dialog will appear via pendingSecurityConfirm
+await connect("0xSecondaryWallet")
+await disconnect("0xSecondaryWallet")
+
+// Render the security prompt
+if (pendingSecurityConfirm) {
+  return (
+    <div>
+      <pre>{pendingSecurityConfirm.message}</pre>
+      <button onClick={() => confirmSecurity(true)}>Confirm</button>
+      <button onClick={() => confirmSecurity(false)}>Cancel</button>
+    </div>
+  )
+}
+```
+
+#### `useConnectedStatus(sdk, account?, chainId?, publicClients?)`
+
+Fetches and watches wallet-link status. Omit `chainId` to query all supported chains. App-configured `publicClients` keyed by `SupportedChains` are used first when provided; otherwise the SDK reuses its active chain client and falls back to built-in read-only RPC clients for the other supported chains.
+
+```tsx
+import { createPublicClient, http } from "viem"
+import { SupportedChains } from "@goodsdks/citizen-sdk"
+
+const publicClients = {
+  [SupportedChains.CELO]: createPublicClient({ transport: http("https://forno.celo.org") }),
+  [SupportedChains.FUSE]: createPublicClient({ transport: http("https://rpc.fuse.io") }),
+  [SupportedChains.XDC]: createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
+}
+
+const { statuses, loading, error, refetch } = useConnectedStatus(
+  sdk,
+  "0xAccount",
+  undefined,
+  publicClients,
+)
+
+statuses.forEach(({ chainId, chainName, isConnected, root, error }) => {
+  console.log(chainId, chainName, isConnected, root, error)
+})
+```
+
+#### `useWalletLink(env?, watchAccount?, chainId?, publicClients?)`
+
+Composite hook. Returns `{ sdk, sdkLoading, sdkError, actions, connectedStatus }`. Reuses `useIdentitySDK` internally so there is a single SDK initialisation path.
+
+```tsx
+import { createPublicClient, http } from "viem"
+import { SupportedChains } from "@goodsdks/citizen-sdk"
+
+const publicClients = {
+  [SupportedChains.CELO]: createPublicClient({ transport: http("https://forno.celo.org") }),
+  [SupportedChains.FUSE]: createPublicClient({ transport: http("https://rpc.fuse.io") }),
+  [SupportedChains.XDC]: createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
+}
+
+const { actions, connectedStatus } = useWalletLink(
+  "production",
+  "0xAccount",
+  undefined,
+  publicClients,
+)
+
+// actions.connect(targetAddress)
+// actions.disconnect(targetAddress)
+// connectedStatus.statuses[0].isConnected
+```
+
+The `reset()` helper resets `loading`, `error`, `txHash`, and `pendingSecurityConfirm` together.
+
+#### Switching chains before connect/disconnect
+
+`actions.connect` and `actions.disconnect` act on the currently connected Wagmi wallet chain. If a user wants to perform a wallet-link action on another supported chain, switch first and let the hooks reinitialise with the new clients before sending the transaction.
+
+```tsx
+import { useChainId, useSwitchChain } from "wagmi"
+import { SupportedChains } from "@goodsdks/citizen-sdk"
+import { useWalletLink } from "@goodsdks/react-hooks"
+
+const WalletLinkAction = () => {
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
+  const { actions, sdkLoading } = useWalletLink("production", "0xAccount")
+
+  const connectOnCelo = async () => {
+    if (chainId !== SupportedChains.CELO) {
+      await switchChainAsync({ chainId: SupportedChains.CELO })
+      return
+    }
+
+    if (!sdkLoading) {
+      await actions.connect("0xSecondaryWallet")
+    }
+  }
+
+  return <button onClick={connectOnCelo}>Connect on Celo</button>
+}
+```
+
+If you want to keep the action in one click, wait until Wagmi finishes switching chains and `useWalletLink` has re-created the SDK for that chain before calling `connect` or `disconnect`.
 
 ## Demo & Further Reading
 
