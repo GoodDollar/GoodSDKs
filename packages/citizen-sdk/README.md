@@ -35,7 +35,10 @@ const identitySDK = await IdentitySDK.init({
 const { isWhitelisted } = await identitySDK.getWhitelistedRoot("0xYourAccount")
 
 if (!isWhitelisted) {
-  const link = await identitySDK.generateFVLink(false, "https://app.com/callback")
+  const link = await identitySDK.generateFVLink(
+    false,
+    "https://app.com/callback",
+  )
   console.log("Complete face verification at", link)
 }
 ```
@@ -82,12 +85,22 @@ const [celoStatus] = await identitySDK.checkConnectedStatus(
 // All chains — supply one app-configured client per chain so the SDK
 // never creates its own clients (headless contract).
 const publicClients = {
-  [SupportedChains.CELO]: createPublicClient({ transport: http("https://forno.celo.org") }),
-  [SupportedChains.FUSE]: createPublicClient({ transport: http("https://rpc.fuse.io") }),
-  [SupportedChains.XDC]:  createPublicClient({ transport: http("https://rpc.ankr.com/xdc") }),
+  [SupportedChains.CELO]: createPublicClient({
+    transport: http("https://forno.celo.org"),
+  }),
+  [SupportedChains.FUSE]: createPublicClient({
+    transport: http("https://rpc.fuse.io"),
+  }),
+  [SupportedChains.XDC]: createPublicClient({
+    transport: http("https://rpc.ankr.com/xdc"),
+  }),
 }
 
-const statuses = await identitySDK.checkConnectedStatus("0xAccount", undefined, publicClients)
+const statuses = await identitySDK.checkConnectedStatus(
+  "0xAccount",
+  undefined,
+  publicClients,
+)
 statuses.forEach(({ chainId, chainName, isConnected, root, error }) => {
   console.log(chainId, chainName, isConnected, root, error)
 })
@@ -97,11 +110,11 @@ statuses.forEach(({ chainId, chainName, isConnected, root, error }) => {
 
 ### WalletLinkOptions
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `skipSecurityMessage` | `boolean` | Skip the security confirmation entirely (use for custodial/automated flows). |
-| `onSecurityMessage` | `(msg: string) => Promise<boolean>` | Called with the security notice; return `true` to proceed, `false` to cancel. When omitted the message is logged to `console.info`. |
-| `onHash` | `(hash: \`0x${string}\`) => void` | Called with the transaction hash immediately after submission. |
+| Option                | Type                                | Description                                                                                                                         |
+| --------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `skipSecurityMessage` | `boolean`                           | Skip the security confirmation entirely (use for custodial/automated flows).                                                        |
+| `onSecurityMessage`   | `(msg: string) => Promise<boolean>` | Called with the security notice; return `true` to proceed, `false` to cancel. When omitted the message is logged to `console.info`. |
+| `onHash`              | `(hash: \`0x${string}\`) => void`   | Called with the transaction hash immediately after submission.                                                                      |
 
 ### Custodial / Native wallet flows
 
@@ -110,7 +123,12 @@ For custodial signers (e.g. a `LocalAccount` private key), use `IdentityCustodia
 ```ts
 import { IdentityCustodialSDK } from "@goodsdks/citizen-sdk"
 
-const sdk = new IdentityCustodialSDK({ account, publicClient, walletClient, env })
+const sdk = new IdentityCustodialSDK({
+  account,
+  publicClient,
+  walletClient,
+  env,
+})
 await sdk.connectAccount(secondaryWallet, { skipSecurityMessage: true })
 ```
 
@@ -151,6 +169,37 @@ const isWhitelisted = root !== "0x0000000000000000000000000000000000000000"
 
 This path skips the wallet client entirely while still reusing the ABI and address helpers from the SDK package.
 
+## Pop-up mode
+
+Use pop-up mode when you want the user to stay on your desktop app while completing face verification in a separate window. This is a UI pattern, not a different verification backend: the SDK still generates the same face-verification link, but with `popupMode` enabled so the callback is handled through the pop-up flow instead of a full-page redirect.
+
+The existing demo shows the redirect version in [`apps/demo-identity-app/src/components/VerifyButton.tsx`](../../apps/demo-identity-app/src/components/VerifyButton.tsx). For a pop-up flow, the only SDK change is the first argument to `generateFVLink`:
+
+```ts
+const callbackUrl = window.location.href
+const fvLink = await identitySDK.generateFVLink(true, callbackUrl, 42220)
+
+const popup = window.open(
+  fvLink,
+  "faceVerification",
+  "width=600,height=700,scrollbars=yes,resizable=yes",
+)
+
+if (!popup) {
+  throw new Error("Popup blocked by the browser")
+}
+
+const checkClosed = window.setInterval(() => {
+  if (popup.closed) {
+    window.clearInterval(checkClosed)
+    // Re-check identity status after the user finishes verification.
+    void checkIdentityStatus()
+  }
+}, 1000)
+```
+
+This pattern is best for desktop browsers. On mobile, redirect-based verification is usually the more reliable option, so use `generateFVLink(false, callbackUrl, chainId)` instead.
+
 ## Using with React
 
 For Wagmi-based React projects, use the hooks exposed from `@goodsdks/react-hooks`. They wrap these Viem clients with loading/error state and should be the default integration layer for UI code. See `packages/react-hooks/README.md` for full guidance and examples.
@@ -181,23 +230,26 @@ Explore the generated TypeScript definitions in `dist/` for the complete surface
 ## Contract Addresses
 
 ### Celo
-| Env | Address |
-|-----|---------|
-| production | `0xC361A6E67822a0EDc17D899227dd9FC50BD62F42` |
-| staging | `0x0108BBc09772973aC27983Fc17c7D82D8e87ef4D` |
+
+| Env         | Address                                      |
+| ----------- | -------------------------------------------- |
+| production  | `0xC361A6E67822a0EDc17D899227dd9FC50BD62F42` |
+| staging     | `0x0108BBc09772973aC27983Fc17c7D82D8e87ef4D` |
 | development | `0xF25fA0D4896271228193E782831F6f3CFCcF169C` |
 
 ### Fuse
-| Env | Address |
-|-----|---------|
-| production | `0x2F9C28de9e6d44b71B91b8BA337A5D82e308E7BE` |
-| staging | `0xb0cD4828Cc90C5BC28f4920Adf2Fd8F025003D7E` |
+
+| Env         | Address                                      |
+| ----------- | -------------------------------------------- |
+| production  | `0x2F9C28de9e6d44b71B91b8BA337A5D82e308E7BE` |
+| staging     | `0xb0cD4828Cc90C5BC28f4920Adf2Fd8F025003D7E` |
 | development | `0x1e006225cff7d37411db28f652e0Da9D20325eBb` |
 
 ### XDC
-| Env | Address |
-|-----|---------|
-| production | `0x27a4a02C9ed591E1a86e2e5D05870292c34622C9` |
+
+| Env         | Address                                      |
+| ----------- | -------------------------------------------- |
+| production  | `0x27a4a02C9ed591E1a86e2e5D05870292c34622C9` |
 | development | `0xa6632e9551A340E8582cc797017fbA645695E29f` |
 
 ## References
