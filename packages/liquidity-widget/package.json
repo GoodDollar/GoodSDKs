@@ -1,0 +1,35 @@
+{
+  "name": "@goodsdks/liquidity-widget",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "yarn build-liquidity-widget",
+    "dev": "tsc --watch",
+    "build-liquidity-widget": "tsup --config tsup.config.liquidity.ts",
+    "bump-liquidity-widget": "yarn version patch && yarn build-liquidity-widget && git add package.json && git commit -m \"version bump\""
+  },
+  "main": "./dist/index.global.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.global.js"
+    }
+  },
+  "devDependencies": {
+    "@goodsdks/liquidity-sdk": "*",
+    "@repo/typescript-config": "workspace:*",
+    "tsup": "^8.3.5",
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "lit": "^3.1.0",
+    "viem": "latest"
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "buildCommand": "turbo build",
+  "git": {
+    "deploymentEnabled": false
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ]
+}
