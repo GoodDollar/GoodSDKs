@@ -6,7 +6,9 @@ import {
   type Chain,
   type TransactionReceipt,
   decodeEventLog,
+  encodeFunctionData,
   zeroAddress,
+  zeroHash,
 } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
 import {
@@ -105,7 +107,7 @@ function parseBountyLogs(
 }
 
 /** Milliseconds to wait after tx submission before polling for the receipt. */
-const TX_SUBMISSION_DELAY_MS = 2000
+const TX_SUBMISSION_DELAY_MS = 500
 
 export interface InviteSDKOptions {
   publicClient: PublicClient
@@ -440,7 +442,7 @@ export class InviteSDK {
       throw new InviteSDKError("user has already joined", "USER_ALREADY_JOINED")
     }
     if (
-      inviterCode !== ("0x" + "00".repeat(32) as `0x${string}`) &&
+      inviterCode !== zeroHash &&
       myCode === inviterCode
     ) {
       throw new InviteSDKError("cannot invite yourself", "SELF_INVITE")
@@ -552,6 +554,27 @@ export class InviteSDK {
    */
   getAccount(): Address {
     return this.account
+  }
+
+  /**
+   * Returns the ABI-encoded call data for `join(myCode, inviterCode)`.
+   *
+   * Useful for external signers, multi-sig wallets, or meta-transactions
+   * where the caller needs to construct the tx data without submitting it.
+   *
+   * @param myCode      - bytes32 invite code for the caller.
+   * @param inviterCode - bytes32 invite code of the inviter (use `zeroHash` for no inviter).
+   * @returns ABI-encoded calldata as a hex string.
+   */
+  getJoinCallData(
+    myCode: `0x${string}`,
+    inviterCode: `0x${string}`,
+  ): `0x${string}` {
+    return encodeFunctionData({
+      abi: invitesV2ABI,
+      functionName: "join",
+      args: [myCode, inviterCode],
+    })
   }
 }
 

@@ -582,6 +582,29 @@ describe("InviteSDK", () => {
       expect(sdk.getAccount()).toBe(MOCK_INVITER)
     })
   })
+
+  // ─── getJoinCallData ─────────────────────────────────────────────────────
+
+  describe("getJoinCallData", () => {
+    it("returns ABI-encoded calldata starting with the join function selector", () => {
+      const data = sdk.getJoinCallData(MY_CODE, INVITER_CODE)
+      // join(bytes32,bytes32) selector = keccak256("join(bytes32,bytes32)")[0:4]
+      expect(data).toMatch(/^0x/)
+      expect(data.length).toBeGreaterThan(10)
+    })
+
+    it("returns consistent calldata for the same inputs", () => {
+      const data1 = sdk.getJoinCallData(MY_CODE, INVITER_CODE)
+      const data2 = sdk.getJoinCallData(MY_CODE, INVITER_CODE)
+      expect(data1).toBe(data2)
+    })
+
+    it("returns different calldata for different inputs", () => {
+      const data1 = sdk.getJoinCallData(MY_CODE, INVITER_CODE)
+      const data2 = sdk.getJoinCallData(INVITER_CODE, MY_CODE)
+      expect(data1).not.toBe(data2)
+    })
+  })
 })
 
 // ─── INVITES_V2_ADDRESSES coverage ───────────────────────────────────────────

@@ -6,6 +6,7 @@ import {
   type contractEnv,
   type BountyResult,
   type InviteUser,
+  type InviteLevel,
   InviteSDKError,
 } from "@goodsdks/invite-sdk"
 
@@ -59,6 +60,14 @@ export interface InviteStatus {
   eligible: boolean
   pendingBounties: bigint
   pendingInvitees: Address[]
+  /** All invitees registered under this address (including pending ones). */
+  invitees: Address[]
+  /** The bounty-level configuration for the user's current inviter level. */
+  bountyLevel: InviteLevel | null
+  /** Global minimum-claims threshold for bounty eligibility. */
+  minimumClaims: number
+  /** Global minimum-days threshold for bounty eligibility. */
+  minimumDays: number
   /** True when reverification is due (whitelist check fails despite past identity). */
   reverificationDue: boolean
   loading: boolean
@@ -74,11 +83,16 @@ export interface InviteStatus {
  * - The user's `InviteUser` record
  * - Whether they are currently eligible for a bounty
  * - Pending bounty count and invitee list
+ * - All invitees and current bounty level configuration
+ * - Global minimumClaims / minimumDays thresholds
  * - A `reverificationDue` flag when the whitelist check has lapsed
  */
-export const useInviteStatus = (invitee?: Address): InviteStatus => {
+export const useInviteStatus = (
+  invitee?: Address,
+  env: contractEnv = "production",
+): InviteStatus => {
   const { address: connectedAddress } = useAccount()
-  const { sdk, loading: sdkLoading, error: sdkError } = useInviteSDK()
+  const { sdk, loading: sdkLoading, error: sdkError } = useInviteSDK(env)
 
   const target = invitee ?? connectedAddress
 
@@ -86,6 +100,10 @@ export const useInviteStatus = (invitee?: Address): InviteStatus => {
   const [eligible, setEligible] = useState(false)
   const [pendingBounties, setPendingBounties] = useState(0n)
   const [pendingInvitees, setPendingInvitees] = useState<Address[]>([])
+  const [invitees, setInvitees] = useState<Address[]>([])
+  const [bountyLevel, setBountyLevel] = useState<InviteLevel | null>(null)
+  const [minimumClaims, setMinimumClaims] = useState(0)
+  const [minimumDays, setMinimumDays] = useState(0)
   const [reverificationDue, setReverificationDue] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,13 +123,22 @@ export const useInviteStatus = (invitee?: Address): InviteStatus => {
       sdk.checkEligibilityDetails(target),
       sdk.getPendingBounties(target),
       sdk.getPendingInvitees(target),
+      sdk.getInvitees(target),
+      sdk.getMinimums(),
     ])
-      .then(([u, eligibilityResult, pending, pendingInvs]) => {
+      .then(async ([u, eligibilityResult, pending, pendingInvs, allInvitees, minimums]) => {
         setUser(u)
         setEligible(eligibilityResult.eligible)
         setReverificationDue(eligibilityResult.details.reverificationDue)
         setPendingBounties(pending)
         setPendingInvitees(pendingInvs)
+        setInvitees(allInvitees)
+        setMinimumClaims(minimums.minimumClaims)
+        setMinimumDays(minimums.minimumDays)
+
+        // Fetch the user's current bounty level configuration
+        const level = await sdk.getLevel(Number(u.level)).catch(() => null)
+        setBountyLevel(level)
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : String(err))
@@ -126,6 +153,10 @@ export const useInviteStatus = (invitee?: Address): InviteStatus => {
     eligible,
     pendingBounties,
     pendingInvitees,
+    invitees,
+    bountyLevel,
+    minimumClaims,
+    minimumDays,
     reverificationDue,
     loading: sdkLoading || loading,
     error: sdkError ?? error,

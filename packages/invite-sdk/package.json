@@ -5,6 +5,7 @@
   "scripts": {
     "build": "tsup --clean",
     "dev": "tsc --watch",
+    "lint": "eslint src --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -17,7 +18,7 @@
       "import": "./dist/index.js"
     },
     "require": {
-      "types": "./dist/index.cts",
+      "types": "./dist/index.d.cts",
       "require": "./dist/index.cjs"
     }
   },
