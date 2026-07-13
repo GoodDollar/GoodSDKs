@@ -23,7 +23,7 @@ const INVITER_CODE = ("0x" + "bb".repeat(32)) as `0x${string}`
 type MockPublicClient = Pick<PublicClient, "readContract" | "simulateContract">
 type MockWalletClient = Pick<WalletClient, "account" | "chain" | "getAddresses" | "writeContract">
 
-function makeClients(chainId = SupportedChains.FUSE) {
+function makeClients(chainId = SupportedChains.CELO) {
   const publicClient: MockPublicClient = {
     readContract: vi.fn(),
     simulateContract: vi.fn().mockResolvedValue({ request: {} }),
@@ -103,20 +103,26 @@ function makeBountyReceipt(
 // ─── resolveInvitesAddress ────────────────────────────────────────────────────
 
 describe("resolveInvitesAddress", () => {
-  it("returns the correct Fuse production address", () => {
-    expect(resolveInvitesAddress("production", SupportedChains.FUSE)).toBe(
-      INVITES_V2_ADDRESSES.production[SupportedChains.FUSE],
+  it("returns the correct Celo production address", () => {
+    expect(resolveInvitesAddress("production", SupportedChains.CELO)).toBe(
+      INVITES_V2_ADDRESSES.production[SupportedChains.CELO],
     )
   })
 
-  it("returns the correct Celo staging address", () => {
+  it("returns the correct XDC production address", () => {
+    expect(resolveInvitesAddress("production", SupportedChains.XDC)).toBe(
+      INVITES_V2_ADDRESSES.production[SupportedChains.XDC],
+    )
+  })
+
+  it("normalises staging to development and returns the Celo development address", () => {
     expect(resolveInvitesAddress("staging", SupportedChains.CELO)).toBe(
-      INVITES_V2_ADDRESSES.staging[SupportedChains.CELO],
+      INVITES_V2_ADDRESSES.development[SupportedChains.CELO],
     )
   })
 
-  it("throws for an unconfigured env/chain combination", () => {
-    expect(() => resolveInvitesAddress("production", SupportedChains.XDC)).toThrow(
+  it("throws for an unconfigured env/chain combination (Fuse is not supported)", () => {
+    expect(() => resolveInvitesAddress("production", SupportedChains.FUSE)).toThrow(
       /address not configured/i,
     )
   })
@@ -125,25 +131,28 @@ describe("resolveInvitesAddress", () => {
 // ─── formatBounty ─────────────────────────────────────────────────────────────
 
 describe("formatBounty", () => {
-  it("formats a Fuse bounty in cents (2 decimals) correctly", () => {
-    // 1250 G¢ / 100 = 12.50 G$
-    expect(formatBounty(1250n, SupportedChains.FUSE)).toBe("12.50")
+  it("formats a zero bounty as '0.00' (Celo, 18 decimals)", () => {
+    expect(formatBounty(0n, SupportedChains.CELO)).toBe("0.00")
   })
 
-  it("formats a zero bounty as '0.00'", () => {
-    expect(formatBounty(0n, SupportedChains.FUSE)).toBe("0.00")
-  })
-
-  it("formats a whole-number bounty with '.00' suffix", () => {
-    expect(formatBounty(100n, SupportedChains.FUSE)).toBe("1.00")
-  })
-
-  it("formats a Celo bounty (18 decimals) correctly", () => {
+  it("formats a Celo bounty (18 decimals) correctly — 1.5 G$", () => {
     // 1.5 G$ on Celo = 1.5e18 = 1_500_000_000_000_000_000n
     const celoAmount = 1_500_000_000_000_000_000n
-    const result = formatBounty(celoAmount, SupportedChains.CELO)
-    // whole = 1, remainder = 5e17 → "50" after padding and trimming
-    expect(result).toBe("1.50")
+    expect(formatBounty(celoAmount, SupportedChains.CELO)).toBe("1.50")
+  })
+
+  it("formats a Celo bounty of exactly 12.50 G$", () => {
+    const amount = 12_500_000_000_000_000_000n // 12.5e18
+    expect(formatBounty(amount, SupportedChains.CELO)).toBe("12.50")
+  })
+
+  it("formats a whole-number Celo bounty with '.00' suffix", () => {
+    expect(formatBounty(1_000_000_000_000_000_000n, SupportedChains.CELO)).toBe("1.00")
+  })
+
+  it("formats an XDC bounty (18 decimals) the same as Celo", () => {
+    const amount = 2_000_000_000_000_000_000n // 2 G$
+    expect(formatBounty(amount, SupportedChains.XDC)).toBe("2.00")
   })
 })
 
@@ -216,13 +225,13 @@ describe("InviteSDK", () => {
     })
 
     it("resolves the contract address automatically from env + chain", async () => {
-      const { publicClient: pc, walletClient: wc } = makeClients(SupportedChains.FUSE)
+      const { publicClient: pc, walletClient: wc } = makeClients(SupportedChains.CELO)
       const s = await InviteSDK.init({
         publicClient: pc as PublicClient,
         walletClient: wc as WalletClient,
         env: "production",
       })
-      expect(s.contractAddress).toBe(INVITES_V2_ADDRESSES.production[SupportedChains.FUSE])
+      expect(s.contractAddress).toBe(INVITES_V2_ADDRESSES.production[SupportedChains.CELO])
     })
   })
 
@@ -351,6 +360,7 @@ describe("InviteSDK", () => {
   describe("checkEligibilityDetails", () => {
     it("returns eligible=true with all flags set when invitee is whitelisted", async () => {
       // Calls: getIdentity, active, canCollectBountyFor, minimumClaims, minimumDays, users, isWhitelisted(invitee)
+      // No lastAuthenticated call since invitee is whitelisted
       const userTuple = makeUserTuple({ invitedBy: zeroAddress })
       ;(publicClient.readContract as any)
         .mockResolvedValueOnce(MOCK_IDENTITY) // getIdentity
@@ -359,7 +369,7 @@ describe("InviteSDK", () => {
         .mockResolvedValueOnce(3)              // minimumClaims
         .mockResolvedValueOnce(14)             // minimumDays
         .mockResolvedValueOnce(userTuple)      // users
-        .mockResolvedValueOnce(true)           // isWhitelisted(invitee)
+        .mockResolvedValueOnce(true)           // isWhitelisted(invitee) → whitelisted, no lastAuthenticated call
 
       const { eligible, details } = await sdk.checkEligibilityDetails(MOCK_INVITEE)
       expect(eligible).toBe(true)
@@ -368,7 +378,7 @@ describe("InviteSDK", () => {
       expect(details.reverificationDue).toBe(false)
     })
 
-    it("sets reverificationDue=true when invitee exists but is not whitelisted", async () => {
+    it("sets reverificationDue=true when invitee had prior auth but is no longer whitelisted (lapsed)", async () => {
       const userTuple = makeUserTuple({ invitedBy: MOCK_INVITER, joinedAt: 9999n })
       ;(publicClient.readContract as any)
         .mockResolvedValueOnce(MOCK_IDENTITY) // getIdentity
@@ -378,6 +388,7 @@ describe("InviteSDK", () => {
         .mockResolvedValueOnce(14)             // minimumDays
         .mockResolvedValueOnce(userTuple)      // users
         .mockResolvedValueOnce(false)          // isWhitelisted(invitee) → not whitelisted
+        .mockResolvedValueOnce(1700000000n)    // lastAuthenticated(invitee) > 0 → lapsed
         .mockResolvedValueOnce(true)           // isWhitelisted(inviter)
 
       const { eligible, details } = await sdk.checkEligibilityDetails(MOCK_INVITEE)
@@ -386,7 +397,24 @@ describe("InviteSDK", () => {
       expect(details.reverificationDue).toBe(true)
     })
 
-    it("sets reverificationDue=true when inviter is not whitelisted", async () => {
+    it("reverificationDue=false when invitee is not whitelisted but has never authenticated", async () => {
+      const userTuple = makeUserTuple({ invitedBy: zeroAddress })
+      ;(publicClient.readContract as any)
+        .mockResolvedValueOnce(MOCK_IDENTITY) // getIdentity
+        .mockResolvedValueOnce(true)           // active
+        .mockResolvedValueOnce(false)          // canCollectBountyFor
+        .mockResolvedValueOnce(3)              // minimumClaims
+        .mockResolvedValueOnce(14)             // minimumDays
+        .mockResolvedValueOnce(userTuple)      // users
+        .mockResolvedValueOnce(false)          // isWhitelisted(invitee) → not whitelisted
+        .mockResolvedValueOnce(0n)             // lastAuthenticated(invitee) = 0 → never authenticated
+
+      const { eligible, details } = await sdk.checkEligibilityDetails(MOCK_INVITEE)
+      expect(details.inviteeWhitelisted).toBe(false)
+      expect(details.reverificationDue).toBe(false)
+    })
+
+    it("sets reverificationDue=true when inviter had prior auth but is no longer whitelisted", async () => {
       const userTuple = makeUserTuple({ invitedBy: MOCK_INVITER, joinedAt: 9999n })
       ;(publicClient.readContract as any)
         .mockResolvedValueOnce(MOCK_IDENTITY) // getIdentity
@@ -396,11 +424,30 @@ describe("InviteSDK", () => {
         .mockResolvedValueOnce(14)             // minimumDays
         .mockResolvedValueOnce(userTuple)      // users
         .mockResolvedValueOnce(true)           // isWhitelisted(invitee)
-        .mockResolvedValueOnce(false)          // isWhitelisted(inviter) → reverification
+        .mockResolvedValueOnce(false)          // isWhitelisted(inviter) → not whitelisted
+        .mockResolvedValueOnce(1700000000n)    // lastAuthenticated(inviter) > 0 → lapsed
 
       const { eligible, details } = await sdk.checkEligibilityDetails(MOCK_INVITEE)
       expect(details.inviterWhitelisted).toBe(false)
       expect(details.reverificationDue).toBe(true)
+    })
+
+    it("reverificationDue=false when identity read fails (no history determinable)", async () => {
+      const userTuple = makeUserTuple({ invitedBy: zeroAddress })
+      ;(publicClient.readContract as any)
+        .mockResolvedValueOnce(MOCK_IDENTITY) // getIdentity
+        .mockResolvedValueOnce(true)           // active
+        .mockResolvedValueOnce(false)          // canCollectBountyFor
+        .mockResolvedValueOnce(3)              // minimumClaims
+        .mockResolvedValueOnce(14)             // minimumDays
+        .mockResolvedValueOnce(userTuple)      // users
+        .mockRejectedValueOnce(new Error("identity contract error")) // isWhitelisted throws
+        // lastAuthenticated also throws — reverificationDue stays false
+        .mockRejectedValueOnce(new Error("identity contract error"))
+
+      const { details } = await sdk.checkEligibilityDetails(MOCK_INVITEE)
+      expect(details.inviteeWhitelisted).toBe(false)
+      expect(details.reverificationDue).toBe(false)
     })
 
     it("skips identity checks when identity address is zeroAddress", async () => {
@@ -518,7 +565,8 @@ describe("InviteSDK", () => {
         .mockResolvedValueOnce(3)              // minimumClaims
         .mockResolvedValueOnce(14)             // minimumDays
         .mockResolvedValueOnce(makeUserTuple({ invitedBy: zeroAddress })) // users
-        .mockResolvedValueOnce(false)          // isWhitelisted
+        .mockResolvedValueOnce(false)          // isWhitelisted(invitee) → false
+        .mockResolvedValueOnce(0n)             // lastAuthenticated(invitee) → 0 (never authed)
 
       await expect(sdk.collectBounty(MOCK_INVITEE)).rejects.toMatchObject({
         errorCode: "NOT_ELIGIBLE_BOUNTY",
@@ -610,18 +658,16 @@ describe("InviteSDK", () => {
 // ─── INVITES_V2_ADDRESSES coverage ───────────────────────────────────────────
 
 describe("INVITES_V2_ADDRESSES", () => {
-  it("has production addresses for Fuse and Celo", () => {
-    expect(INVITES_V2_ADDRESSES.production[SupportedChains.FUSE]).toMatch(/^0x/)
+  it("has production addresses for Celo and XDC", () => {
     expect(INVITES_V2_ADDRESSES.production[SupportedChains.CELO]).toMatch(/^0x/)
+    expect(INVITES_V2_ADDRESSES.production[SupportedChains.XDC]).toMatch(/^0x/)
   })
 
-  it("has staging addresses for Fuse and Celo", () => {
-    expect(INVITES_V2_ADDRESSES.staging[SupportedChains.FUSE]).toMatch(/^0x/)
-    expect(INVITES_V2_ADDRESSES.staging[SupportedChains.CELO]).toMatch(/^0x/)
+  it("does not have a production address for Fuse (unsupported)", () => {
+    expect(INVITES_V2_ADDRESSES.production[SupportedChains.FUSE]).toBeUndefined()
   })
 
-  it("has development addresses for Fuse, Celo, and XDC", () => {
-    expect(INVITES_V2_ADDRESSES.development[SupportedChains.FUSE]).toMatch(/^0x/)
+  it("has development addresses for Celo and XDC", () => {
     expect(INVITES_V2_ADDRESSES.development[SupportedChains.CELO]).toMatch(/^0x/)
     expect(INVITES_V2_ADDRESSES.development[SupportedChains.XDC]).toMatch(/^0x/)
   })

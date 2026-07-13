@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react"
+import { useEffect, useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { usePublicClient, useWalletClient, useAccount } from "wagmi"
 import { type Address, type PublicClient } from "viem"
 import {
@@ -10,10 +11,22 @@ import {
   InviteSDKError,
 } from "@goodsdks/invite-sdk"
 
+// ─── Query key factory ────────────────────────────────────────────────────────
+
+const inviteStatusKey = (
+  target: Address | undefined,
+  env: contractEnv,
+  contractAddress: Address | undefined,
+) => ["invite-status", target, env, contractAddress] as const
+
 // ─── useInviteSDK ─────────────────────────────────────────────────────────────
 
 /**
  * Initialises and returns an `InviteSDK` instance tied to the connected wallet.
+ *
+ * When the wallet or public client is not yet available the hook returns
+ * `{ sdk: null, loading: false, error: null }` — a neutral/disconnected state
+ * with no error set.
  */
 export const useInviteSDK = (
   env: contractEnv = "production",
@@ -22,7 +35,7 @@ export const useInviteSDK = (
   loading: boolean
   error: string | null
 } => {
-  const publicClient = usePublicClient() as PublicClient
+  const publicClient = usePublicClient() as PublicClient | undefined
   const { data: walletClient } = useWalletClient()
 
   const [sdk, setSdk] = useState<InviteSDK | null>(null)
@@ -31,8 +44,9 @@ export const useInviteSDK = (
 
   useEffect(() => {
     if (!publicClient || !walletClient) {
+      // Neutral/disconnected state — no error
       setSdk(null)
-      setError("Wallet or Public client not initialized")
+      setError(null)
       return
     }
 
@@ -55,8 +69,8 @@ export const useInviteSDK = (
 
 // ─── useInviteStatus ─────────────────────────────────────────────────────────
 
-export interface InviteStatus {
-  user: InviteUser | null
+export interface InviteStatusData {
+  user: InviteUser
   eligible: boolean
   pendingBounties: bigint
   pendingInvitees: Address[]
@@ -70,256 +84,142 @@ export interface InviteStatus {
   minimumDays: number
   /** True when reverification is due (whitelist check fails despite past identity). */
   reverificationDue: boolean
-  loading: boolean
-  error: string | null
-  /** Re-fetch all data. */
-  refetch: () => void
 }
 
 /**
- * Reads the invite status for the connected wallet (or a given `invitee` address).
+ * Reads the invite status for the connected wallet (or a given `invitee` address)
+ * using React Query for caching and automatic invalidation.
  *
- * Returns:
- * - The user's `InviteUser` record
- * - Whether they are currently eligible for a bounty
- * - Pending bounty count and invitee list
- * - All invitees and current bounty level configuration
- * - Global minimumClaims / minimumDays thresholds
- * - A `reverificationDue` flag when the whitelist check has lapsed
+ * Returns the standard React Query result object (`data`, `isLoading`, `error`, `refetch`).
+ * All result fields are nested under `data` when available.
  */
 export const useInviteStatus = (
   invitee?: Address,
   env: contractEnv = "production",
-): InviteStatus => {
+) => {
   const { address: connectedAddress } = useAccount()
-  const { sdk, loading: sdkLoading, error: sdkError } = useInviteSDK(env)
+  const { sdk } = useInviteSDK(env)
 
   const target = invitee ?? connectedAddress
 
-  const [user, setUser] = useState<InviteUser | null>(null)
-  const [eligible, setEligible] = useState(false)
-  const [pendingBounties, setPendingBounties] = useState(0n)
-  const [pendingInvitees, setPendingInvitees] = useState<Address[]>([])
-  const [invitees, setInvitees] = useState<Address[]>([])
-  const [bountyLevel, setBountyLevel] = useState<InviteLevel | null>(null)
-  const [minimumClaims, setMinimumClaims] = useState(0)
-  const [minimumDays, setMinimumDays] = useState(0)
-  const [reverificationDue, setReverificationDue] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
+  return useQuery<InviteStatusData | null>({
+    queryKey: inviteStatusKey(target, env, sdk?.contractAddress),
+    queryFn: async () => {
+      if (!sdk || !target) return null
 
-  useEffect(() => {
-    if (!sdk || !target) {
-      setUser(null)
-      return
-    }
+      const [user, eligibilityResult, pending, pendingInvs, allInvitees, minimums] =
+        await Promise.all([
+          sdk.getUser(target),
+          sdk.checkEligibilityDetails(target),
+          sdk.getPendingBounties(target),
+          sdk.getPendingInvitees(target),
+          sdk.getInvitees(target),
+          sdk.getMinimums(),
+        ])
 
-    setLoading(true)
-    setError(null)
+      const bountyLevel = await sdk.getLevel(Number(user.level)).catch(() => null)
 
-    Promise.all([
-      sdk.getUser(target),
-      sdk.checkEligibilityDetails(target),
-      sdk.getPendingBounties(target),
-      sdk.getPendingInvitees(target),
-      sdk.getInvitees(target),
-      sdk.getMinimums(),
-    ])
-      .then(async ([u, eligibilityResult, pending, pendingInvs, allInvitees, minimums]) => {
-        setUser(u)
-        setEligible(eligibilityResult.eligible)
-        setReverificationDue(eligibilityResult.details.reverificationDue)
-        setPendingBounties(pending)
-        setPendingInvitees(pendingInvs)
-        setInvitees(allInvitees)
-        setMinimumClaims(minimums.minimumClaims)
-        setMinimumDays(minimums.minimumDays)
-
-        // Fetch the user's current bounty level configuration
-        const level = await sdk.getLevel(Number(u.level)).catch(() => null)
-        setBountyLevel(level)
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err))
-      })
-      .finally(() => setLoading(false))
-  }, [sdk, target, tick])
-
-  const refetch = useCallback(() => setTick((t) => t + 1), [])
-
-  return {
-    user,
-    eligible,
-    pendingBounties,
-    pendingInvitees,
-    invitees,
-    bountyLevel,
-    minimumClaims,
-    minimumDays,
-    reverificationDue,
-    loading: sdkLoading || loading,
-    error: sdkError ?? error,
-    refetch,
-  }
+      return {
+        user,
+        eligible: eligibilityResult.eligible,
+        reverificationDue: eligibilityResult.details.reverificationDue,
+        pendingBounties: pending,
+        pendingInvitees: pendingInvs,
+        invitees: allInvitees,
+        bountyLevel,
+        minimumClaims: minimums.minimumClaims,
+        minimumDays: minimums.minimumDays,
+      }
+    },
+    enabled: !!sdk && !!target,
+  })
 }
 
 // ─── useJoin ─────────────────────────────────────────────────────────────────
 
-export interface UseJoinResult {
-  join: (myCode: `0x${string}`, inviterCode: `0x${string}`) => Promise<`0x${string}`>
-  loading: boolean
-  error: string | null
-  txHash: `0x${string}` | null
-}
-
 /**
- * Returns a `join(myCode, inviterCode)` action together with its loading/error state.
+ * Returns a `useMutation` for `join(myCode, inviterCode)`.
  *
- * Pre-checks (contract must be active, code must be free, user must not have joined)
- * are run before simulation to surface errors before signing.
+ * Pre-checks (contract must be active, code must be free, user must not have
+ * joined) are run inside the SDK before simulation to surface errors before
+ * signing. On success, the invite-status query is invalidated automatically.
  */
-export const useJoin = (env: contractEnv = "production"): UseJoinResult => {
+export const useJoin = (env: contractEnv = "production") => {
   const { sdk } = useInviteSDK(env)
+  const queryClient = useQueryClient()
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
-
-  const join = useCallback(
-    async (myCode: `0x${string}`, inviterCode: `0x${string}`) => {
+  return useMutation({
+    mutationFn: async ({
+      myCode,
+      inviterCode,
+    }: {
+      myCode: `0x${string}`
+      inviterCode: `0x${string}`
+    }) => {
       if (!sdk) throw new Error("InviteSDK not initialized")
-
-      setLoading(true)
-      setError(null)
-      setTxHash(null)
-
-      try {
-        const hash = await sdk.join(myCode, inviterCode)
-        setTxHash(hash)
-        return hash
-      } catch (err) {
-        const msg =
-          err instanceof InviteSDKError
-            ? `[${err.errorCode}] ${err.message}`
-            : err instanceof Error
-              ? err.message
-              : String(err)
-        setError(msg)
-        throw err
-      } finally {
-        setLoading(false)
+      return sdk.join(myCode, inviterCode)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invite-status"] })
+    },
+    onError: (err) => {
+      if (err instanceof InviteSDKError) {
+        // Re-throw with errorCode included in message for downstream consumers
+        throw new InviteSDKError(
+          `[${err.errorCode}] ${err.message}`,
+          err.errorCode,
+        )
       }
     },
-    [sdk],
-  )
-
-  return { join, loading, error, txHash }
+  })
 }
 
 // ─── useCollectBounty ────────────────────────────────────────────────────────
 
-export interface UseCollectBountyResult {
-  collectBounty: (invitee: Address) => Promise<BountyResult>
-  loading: boolean
-  error: string | null
-  result: BountyResult | null
-}
-
 /**
- * Returns a `collectBounty(invitee)` action + tx state.
+ * Returns a `useMutation` for `collectBounty(invitee)`.
  *
- * Pre-checks that the contract is active and `canCollectBountyFor(invitee)` is true.
- * On failure the error includes the specific ineligibility reason.
+ * Pre-checks that the contract is active and `canCollectBountyFor(invitee)` is
+ * true. On success, the invite-status query is invalidated automatically.
  */
-export const useCollectBounty = (
-  env: contractEnv = "production",
-): UseCollectBountyResult => {
+export const useCollectBounty = (env: contractEnv = "production") => {
   const { sdk } = useInviteSDK(env)
+  const queryClient = useQueryClient()
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<BountyResult | null>(null)
-
-  const collectBounty = useCallback(
-    async (invitee: Address) => {
+  return useMutation({
+    mutationFn: async (invitee: Address): Promise<BountyResult> => {
       if (!sdk) throw new Error("InviteSDK not initialized")
-
-      setLoading(true)
-      setError(null)
-      setResult(null)
-
-      try {
-        const bountyResult = await sdk.collectBounty(invitee)
-        setResult(bountyResult)
-        return bountyResult
-      } catch (err) {
-        const msg =
-          err instanceof InviteSDKError
-            ? `[${err.errorCode}] ${err.message}`
-            : err instanceof Error
-              ? err.message
-              : String(err)
-        setError(msg)
-        throw err
-      } finally {
-        setLoading(false)
-      }
+      return sdk.collectBounty(invitee)
     },
-    [sdk],
-  )
-
-  return { collectBounty, loading, error, result }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invite-status"] })
+    },
+  })
 }
 
 // ─── useCollectAllBounties ───────────────────────────────────────────────────
 
-export interface UseCollectAllBountiesResult {
-  collectAllBounties: () => Promise<BountyResult[]>
-  loading: boolean
-  error: string | null
-  results: BountyResult[]
-}
-
 /**
- * Returns a `collectAllBounties()` action + tx state.
+ * Returns a `useMutation` for `collectAllBounties()`.
  *
  * Batches all pending invitee payouts for the caller in a single transaction.
- * Pre-checks that the contract is active.
+ * Pre-checks that the contract is active. On success, the invite-status query
+ * is invalidated automatically.
  */
-export const useCollectAllBounties = (
-  env: contractEnv = "production",
-): UseCollectAllBountiesResult => {
+export const useCollectAllBounties = (env: contractEnv = "production") => {
   const { sdk } = useInviteSDK(env)
+  const queryClient = useQueryClient()
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [results, setResults] = useState<BountyResult[]>([])
-
-  const collectAllBounties = useCallback(async () => {
-    if (!sdk) throw new Error("InviteSDK not initialized")
-
-    setLoading(true)
-    setError(null)
-    setResults([])
-
-    try {
-      const bountyResults = await sdk.collectAllBounties()
-      setResults(bountyResults)
-      return bountyResults
-    } catch (err) {
-      const msg =
-        err instanceof InviteSDKError
-          ? `[${err.errorCode}] ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err)
-      setError(msg)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [sdk])
-
-  return { collectAllBounties, loading, error, results }
+  return useMutation({
+    mutationFn: async (): Promise<BountyResult[]> => {
+      if (!sdk) throw new Error("InviteSDK not initialized")
+      return sdk.collectAllBounties()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invite-status"] })
+    },
+  })
 }
+
+// Re-export error class so callers can branch on err.errorCode
+export { InviteSDKError }

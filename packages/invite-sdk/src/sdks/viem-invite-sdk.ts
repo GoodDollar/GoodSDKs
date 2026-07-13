@@ -29,7 +29,7 @@ import type {
 } from "../types"
 import { InviteSDKError } from "../types"
 
-/** Identity ABI — only the isWhitelisted function needed for diagnostic checks. */
+/** Identity ABI — view functions needed for diagnostic checks. */
 const identityABI = [
   {
     type: "function",
@@ -37,6 +37,13 @@ const identityABI = [
     stateMutability: "view",
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "lastAuthenticated",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
   },
 ] as const
 
@@ -164,7 +171,7 @@ export class InviteSDK {
     const chainId = walletClient.chain?.id
     if (!isSupportedChain(chainId)) {
       throw new Error(
-        `InviteSDK: unsupported chain id ${chainId}. Connected wallet must be on Fuse, Celo, or XDC.`,
+        `InviteSDK: unsupported chain id ${chainId}. Connected wallet must be on Celo or XDC.`,
       )
     }
 
@@ -269,7 +276,7 @@ export class InviteSDK {
 
   /**
    * Returns the `InviteLevel` configuration for level `lvl`.
-   * `bounty` is in G$ cents (2 decimals on Fuse, 18 on Celo).
+   * `bounty` is in G$ cents (18 decimals on Celo/XDC).
    */
   async getLevel(lvl: number): Promise<InviteLevel> {
     const result = await this.read<readonly [bigint, bigint, bigint]>("levels", [BigInt(lvl)])
@@ -370,7 +377,24 @@ export class InviteSDK {
           args: [invitee],
         })) as boolean
       } catch {
-        // Identity contract unavailable — treat as not whitelisted
+        // Identity contract unavailable — treat as not whitelisted, no reverification
+      }
+
+      // `reverificationDue` is true only when the user has authenticated before
+      // (lastAuthenticated > 0) but is no longer whitelisted. This distinguishes
+      // "auth has lapsed" from "user has never verified".
+      if (!inviteeWhitelisted) {
+        try {
+          const lastAuth = (await this.publicClient.readContract({
+            address: identityAddress,
+            abi: identityABI,
+            functionName: "lastAuthenticated",
+            args: [invitee],
+          })) as bigint
+          if (lastAuth > 0n) reverificationDue = true
+        } catch {
+          // Cannot determine auth history — treat as never authenticated
+        }
       }
 
       if (user.invitedBy !== zeroAddress) {
@@ -384,13 +408,21 @@ export class InviteSDK {
         } catch {
           inviterWhitelisted = null
         }
-      }
 
-      // Reverification is due when the user exists in identity storage but
-      // isWhitelisted() returns false (their auth period has lapsed).
-      reverificationDue =
-        !inviteeWhitelisted ||
-        (inviterWhitelisted !== null && !inviterWhitelisted)
+        if (inviterWhitelisted === false) {
+          try {
+            const inviterLastAuth = (await this.publicClient.readContract({
+              address: identityAddress,
+              abi: identityABI,
+              functionName: "lastAuthenticated",
+              args: [user.invitedBy],
+            })) as bigint
+            if (inviterLastAuth > 0n) reverificationDue = true
+          } catch {
+            // Cannot determine inviter auth history — treat as never authenticated
+          }
+        }
+      }
     }
 
     return {
@@ -581,23 +613,20 @@ export class InviteSDK {
 // ─── formatBounty helper ──────────────────────────────────────────────────────
 
 /**
- * Converts a bounty amount stored in G$ cents to a human-readable G$ string.
+ * Converts a bounty amount stored in G$ wei-like units to a human-readable G$ string.
  *
- * On **Fuse** the token has 2 decimal places, so the contract stores amounts
- * already in cents (divide by 100 to get G$).
+ * On **Celo** and **XDC** the token has 18 decimal places, so the raw value is
+ * in wei-like units (divide by 1e18 to get G$).
  *
- * On **Celo** the token has 18 decimal places, so the raw value is in wei-like
- * units (divide by 1e18 to get G$).
- *
- * @param cents  - Raw bounty value from the contract.
+ * @param amount  - Raw bounty value from the contract.
  * @param chainId - Chain the contract is deployed on.
  * @returns A human-readable G$ string, e.g. `"12.50"`.
  */
-export function formatBounty(cents: bigint, chainId: SupportedChains): string {
+export function formatBounty(amount: bigint, chainId: SupportedChains): string {
   const decimals = CHAIN_DECIMALS[chainId] ?? 2
-  const divisor = BigInt(10 ** decimals)
-  const whole = cents / divisor
-  const remainder = cents % divisor
+  const divisor = 10n ** BigInt(decimals)
+  const whole = amount / divisor
+  const remainder = amount % divisor
 
   const fractionStr = remainder.toString().padStart(decimals, "0")
   // Trim trailing zeros but keep at least 2 decimal places
