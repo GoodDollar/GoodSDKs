@@ -162,15 +162,6 @@ export const useJoin = (env: contractEnv = "production") => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invite-status"] })
     },
-    onError: (err) => {
-      if (err instanceof InviteSDKError) {
-        // Re-throw with errorCode included in message for downstream consumers
-        throw new InviteSDKError(
-          `[${err.errorCode}] ${err.message}`,
-          err.errorCode,
-        )
-      }
-    },
   })
 }
 

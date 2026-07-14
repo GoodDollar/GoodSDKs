@@ -1,0 +1,10 @@
+# Gitleaks configuration
+# Used by Sourcery AI and other secret scanners
+
+# The hex strings in constants.ts are public blockchain contract addresses,
+# not API keys or secrets. They are viewable on-chain by anyone.
+[[allowlist]]
+description = "Public blockchain contract addresses (not secrets)"
+paths = [
+  '''packages/bridging-sdk/src/constants\.ts''',
+]
