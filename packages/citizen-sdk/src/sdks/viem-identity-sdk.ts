@@ -6,6 +6,7 @@ import {
   WalletClient,
   SimulateContractParameters,
   WalletActions,
+  getAddress,
   zeroAddress,
 } from "viem"
 
@@ -395,7 +396,7 @@ export class IdentitySDK {
     chainId?: SupportedChains,
   ): Promise<string> {
     try {
-      const address = this.account
+      const address = getAddress(this.account)
       if (!address) throw new Error("No wallet address found.")
 
       const nonce = Math.floor(Date.now() / 1000).toString()

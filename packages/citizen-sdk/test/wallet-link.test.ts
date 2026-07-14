@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { zeroAddress } from "viem"
 import type { PublicClient, WalletClient } from "viem"
+import { decompressFromEncodedURIComponent } from "lz-string"
 import { IdentitySDK } from "../src/sdks/viem-identity-sdk"
 import * as rpcFallback from "../src/utils/rpcFallback"
 import { SupportedChains, WALLET_LINK_SECURITY_MESSAGES } from "../src/constants"
@@ -12,7 +13,11 @@ type MockPublicClient = Pick<PublicClient, "readContract" | "simulateContract">
 type MockWalletClient = Pick<
   WalletClient,
   "account" | "chain" | "getAddresses" | "writeContract"
+  | "signMessage"
 >
+
+const LOWERCASE_ACCOUNT = "0x52908400098527886e0f7030069857d2e4169ee7"
+const CHECKSUMMED_ACCOUNT = "0x52908400098527886E0F7030069857D2E4169EE7"
 
 describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
   let publicClient: MockPublicClient
@@ -33,6 +38,7 @@ describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
       chain: { id: SupportedChains.CELO },
       getAddresses: vi.fn().mockResolvedValue([MOCK_ROOT_ACCOUNT]),
       writeContract: vi.fn().mockResolvedValue("0xMockTxHash"),
+      signMessage: vi.fn().mockResolvedValue("0xMockSignature"),
     }
 
     sdk = new IdentitySDK({
@@ -171,6 +177,34 @@ describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
   })
 
   describe("Write Paths: connectAccount & disconnectAccount", () => {
+    it("checksums the address used for Face Verification", async () => {
+      walletClient.account = { address: LOWERCASE_ACCOUNT }
+      walletClient.signMessage = vi.fn().mockResolvedValue("0xMockSignature")
+      sdk = new IdentitySDK({
+        publicClient: publicClient as PublicClient,
+        walletClient: walletClient as WalletClient,
+        env: "development",
+      })
+
+      const link = await sdk.generateFVLink(
+        false,
+        "https://example.com/callback",
+        SupportedChains.CELO,
+      )
+      const encodedParams = new URL(link).searchParams.get("lz")
+      const params = JSON.parse(decompressFromEncodedURIComponent(encodedParams!)!)
+
+      expect(params.account).toBe(CHECKSUMMED_ACCOUNT)
+      expect(walletClient.signMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ account: CHECKSUMMED_ACCOUNT }),
+      )
+      expect(walletClient.signMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining(CHECKSUMMED_ACCOUNT),
+        }),
+      )
+    })
+
     it("connectAccount executes custom onSecurityMessage and submits when true", async () => {
       const onSecurityMessage = vi.fn().mockResolvedValue(true)
 
