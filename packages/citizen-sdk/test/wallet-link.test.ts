@@ -3,6 +3,7 @@ import { zeroAddress } from "viem"
 import type { PublicClient, WalletClient } from "viem"
 import { decompressFromEncodedURIComponent } from "lz-string"
 import { IdentitySDK } from "../src/sdks/viem-identity-sdk"
+import { IdentityCustodialSDK } from "../src/sdks/viem-custodial-identity-sdk"
 import * as rpcFallback from "../src/utils/rpcFallback"
 import { SupportedChains, WALLET_LINK_SECURITY_MESSAGES } from "../src/constants"
 
@@ -187,6 +188,64 @@ describe("IdentitySDK - Wallet Link Flows (Mocked)", () => {
       })
 
       const link = await sdk.generateFVLink(
+        false,
+        "https://example.com/callback",
+        SupportedChains.CELO,
+      )
+      const encodedParams = new URL(link).searchParams.get("lz")
+      const params = JSON.parse(decompressFromEncodedURIComponent(encodedParams!)!)
+
+      expect(params.account).toBe(CHECKSUMMED_ACCOUNT)
+      expect(walletClient.signMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ account: CHECKSUMMED_ACCOUNT }),
+      )
+      expect(walletClient.signMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining(CHECKSUMMED_ACCOUNT),
+        }),
+      )
+    })
+
+    it("checksums the address in custodial local-account signing messages", async () => {
+      const localSignMessage = vi.fn().mockResolvedValue("0xMockSignature")
+      walletClient.account = {
+        address: LOWERCASE_ACCOUNT,
+        signMessage: localSignMessage,
+      } as any
+
+      const custodialSdk = new IdentityCustodialSDK({
+        publicClient: publicClient as PublicClient,
+        walletClient: walletClient as WalletClient,
+        env: "development",
+      })
+
+      const link = await custodialSdk.generateFVLink(
+        false,
+        "https://example.com/callback",
+        SupportedChains.CELO,
+      )
+      const encodedParams = new URL(link).searchParams.get("lz")
+      const params = JSON.parse(decompressFromEncodedURIComponent(encodedParams!)!)
+
+      expect(params.account).toBe(CHECKSUMMED_ACCOUNT)
+      expect(localSignMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining(CHECKSUMMED_ACCOUNT),
+        }),
+      )
+    })
+
+    it("checksums the address in custodial wallet-client signing messages", async () => {
+      walletClient.account = { address: LOWERCASE_ACCOUNT } as any
+      walletClient.signMessage = vi.fn().mockResolvedValue("0xMockSignature")
+
+      const custodialSdk = new IdentityCustodialSDK({
+        publicClient: publicClient as PublicClient,
+        walletClient: walletClient as WalletClient,
+        env: "development",
+      })
+
+      const link = await custodialSdk.generateFVLink(
         false,
         "https://example.com/callback",
         SupportedChains.CELO,

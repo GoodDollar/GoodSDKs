@@ -1,4 +1,5 @@
 import {
+    getAddress,
     Address,
     PublicClient,
     WalletClient,
@@ -62,9 +63,10 @@ export class IdentityCustodialSDK extends IdentitySDK {
         try {
             const account = this.walletClient.account
             if (!account?.address) throw new Error("No wallet address found.")
+            const address = getAddress(account.address)
 
             const nonce = Math.floor(Date.now() / 1000).toString()
-            const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", account.address)
+            const fvSigMessage = FV_IDENTIFIER_MSG2.replace("<account>", address)
 
             // For self-provisioned wallets, sign locally to avoid Celo RPC limitations
             let fvSig: string;
@@ -78,7 +80,7 @@ export class IdentityCustodialSDK extends IdentitySDK {
                 // Fallback to wallet client signing (might fail on Celo RPC)
                 try {
                     fvSig = await this.walletClient.signMessage({
-                        account: account.address,
+                        account: address,
                         message: fvSigMessage,
                     })
                 } catch (rpcError: any) {
@@ -101,7 +103,7 @@ export class IdentityCustodialSDK extends IdentitySDK {
 
             const url = new URL(identityUrl)
             const params: Record<string, string | number> = {
-                account: account.address,
+                account: address,
                 nonce,
                 fvsig: fvSig,
                 chain: chainId || (await this.publicClient.getChainId()),
