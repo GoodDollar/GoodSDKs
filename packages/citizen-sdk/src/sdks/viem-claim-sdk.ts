@@ -8,21 +8,15 @@ import {
   type WalletClient,
   ContractFunctionExecutionError,
   TransactionReceipt,
+  zeroAddress,
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
 
 import { IdentitySDK } from "./viem-identity-sdk"
-import {
-  contractEnv,
-  chainConfigs,
-  FALLBACK_CHAIN_PRIORITY,
-  SupportedChains,
-  faucetABI,
-  isSupportedChain,
-  ubiSchemeV2ABI,
-} from "../constants"
+import { contractEnv, chainConfigs, FALLBACK_CHAIN_PRIORITY, SupportedChains, faucetABI, isSupportedChain, ubiSchemeV2ABI } from "../constants"
 import type { ContractAddresses } from "../constants"
+import { createVerificationCallbackUrl } from "../utils/auth"
 import { resolveChainAndContract } from "../utils/chains"
 import { triggerFaucet as triggerFaucetUtil } from "../utils/triggerFaucet"
 import {
@@ -147,7 +141,7 @@ export class ClaimSDK {
   private readonly faucetAddress: Address
   private readonly account: Address
   private readonly env: contractEnv
-  public readonly rdu: string
+  public rdu: string
 
   constructor({
     account,
@@ -164,9 +158,12 @@ export class ClaimSDK {
     this.walletClient = walletClient
     this.identitySDK = identitySDK
     this.account = account ?? walletClient.account.address
+    this.env = env
 
     this.rdu = rdu
-    this.env = env
+    createVerificationCallbackUrl(rdu, { source: "gooddollar_claim_verification" }).then(
+      (resolvedUrl: string) => { this.rdu = resolvedUrl },
+    ).catch(() => {})
 
     const { chainId, contractEnvAddresses } = resolveChainAndContract(
       walletClient,
@@ -206,6 +203,7 @@ export class ClaimSDK {
     this.ubiSchemeAddress = contractEnvAddresses.ubiContract as Address
     this.faucetAddress = contractEnvAddresses.faucetContract as Address
   }
+
 
   private getContractsForChain(chainId: SupportedChains): ContractAddresses {
     const contracts = this.chainContracts.get(chainId)
@@ -519,15 +517,15 @@ export class ClaimSDK {
 
   /**
    * Redirects the user through the face-verification flow.
-   * @throws If face verification redirect fails.
+   * @throws If face verification redirect is only supported in browser environments.
    */
   private async fvRedirect(): Promise<void> {
-    const fvChainId = this.fvDefaultChain ?? this.chainId
     const fvLink = await this.identitySDK.generateFVLink(
       false,
       this.rdu,
-      fvChainId,
+      this.chainId
     )
+
     if (typeof window !== "undefined") {
       window.location.href = fvLink
     } else {

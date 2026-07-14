@@ -9,12 +9,11 @@ export const SDK_ENV = "development" as const
 
 const queryClient = new QueryClient()
 
-const projectId = "71dd03d057d89d0af68a4c627ec59694"
-
+const projectId = "71dd03d057d89d0af68a4c627ec59694" 
 const metadata = {
   name: "AppKit",
   description: "AppKit Example",
-  url: "https://example.com", // origin must match your domain & subdomain
+  url: "http://localhost:3000",
   icons: ["https://avatars.githubusercontent.com/u/179229932"],
 }
 
@@ -45,6 +44,11 @@ createAppKit({
     "--w3m-color-mix-strength": 40,
     "--w3m-accent": "#00BB7F",
   },
+  allowUnsupportedChain: false,
+  enableWalletConnect: true,
+  enableInjected: true,
+  enableEIP6963: true,
+  enableCoinbase: true,
 })
 
 type ComponentProps = {

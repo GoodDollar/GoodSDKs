@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { usePublicClient, useWalletClient } from "wagmi"
 import { PublicClient } from "viem"
-import { contractEnv, ClaimSDK } from "@goodsdks/citizen-sdk"
+import { contractEnv, ClaimSDK, FarcasterAppConfig } from "@goodsdks/citizen-sdk"
 import { useIdentitySDK } from "./wagmi-identity-sdk"
 
 export const useClaimSDK = (

@@ -1,3 +1,4 @@
+
 import {
   type Account,
   Address,
@@ -6,6 +7,7 @@ import {
   WalletClient,
   SimulateContractParameters,
   WalletActions,
+  LocalAccount,
   zeroAddress,
 } from "viem"
 
@@ -25,6 +27,11 @@ import {
 
 import { resolveChainAndContract } from "../utils/chains"
 import {
+  navigateToUrl,
+  createVerificationCallbackUrl,
+  createFarcasterUniversalLink,
+  type FarcasterAppConfig,
+} from "../utils/auth"
   createRpcIteratorRegistry,
   getRpcFallbackClient,
 } from "../utils/rpcFallback"
@@ -108,6 +115,11 @@ export class IdentitySDK {
     )
   }
 
+  /**
+   * Initializes the IdentitySDK with an account from the wallet client.
+   * @param props - SDK options without account (account is auto-detected)
+   * @returns A new IdentitySDK instance
+   */
   static async init(
     props: Omit<IdentitySDKOptions, "account">,
   ): Promise<IdentitySDK> {
@@ -435,7 +447,8 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        params[popupMode ? "cbu" : "rdu"] = callbackUrl
+        const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl);
+        params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
       }
 
       url.searchParams.append(
@@ -450,6 +463,38 @@ export class IdentitySDK {
         `Failed to generate Face Verification link: ${message}`,
       )
     }
+  }
+
+  /**
+   * Navigates the user to Face Verification.
+   * In Farcaster Mini App context, uses `sdk.actions.openUrl` to open a new browser tab.
+   * In regular browsers, falls back to `window.location.href`.
+   * @param callbackUrl - The URL to return to after verification.
+   * @param chainId - The blockchain network ID.
+   * @param popupMode - Whether to use popup mode.
+   */
+  async navigateToFaceVerification(
+    callbackUrl: string,
+    chainId?: number,
+    popupMode = false,
+  ): Promise<void> {
+    const fvLink = await this.generateFVLink(popupMode, callbackUrl, chainId)
+    await navigateToUrl(fvLink, false)
+  }
+
+  /**
+   * Generates a Farcaster Universal Link to be used as a callback URL.
+   * @param farcasterConfig - The Farcaster App config.
+   * @param callbackType - The callback type for Farcaster links (e.g., 'verify').
+   * @returns The generated Farcaster universal link.
+   */
+  generateFarcasterCallback(
+    farcasterConfig: FarcasterAppConfig,
+    callbackType: "verify" | "callback" | "claim" = "verify",
+  ): string {
+    return createFarcasterUniversalLink(farcasterConfig, callbackType, {
+      source: `gooddollar_${callbackType}_verification`,
+    })
   }
 
   /**
@@ -471,4 +516,5 @@ export class IdentitySDK {
 
     return { expiryTimestamp }
   }
+
 }

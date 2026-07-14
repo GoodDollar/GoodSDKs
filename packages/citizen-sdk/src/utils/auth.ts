@@ -1,5 +1,156 @@
 import { Account, createWalletClient, http } from "viem";
 import { Envs, FV_IDENTIFIER_MSG2 } from "../constants";
+import { sdk } from "@farcaster/miniapp-sdk";
+
+async function detectFarcasterContext(): Promise<boolean> {
+  try {
+    const ctx = await sdk.context;
+    return !!(ctx.location && ctx.location.type != null);
+  } catch {
+    return false;
+  }
+}
+
+export async function isInFarcasterMiniApp(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    return await sdk.isInMiniApp();
+  } catch {
+    return detectFarcasterContext();
+  }
+}
+
+export async function canUseFarcasterNavigation(): Promise<boolean> {
+  if (!await isInFarcasterMiniApp()) return false;
+  try {
+    const capabilities = await sdk.getCapabilities();
+    return capabilities?.includes('actions.openUrl') ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function isInFarcasterMiniAppSync(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return false;
+  }
+}
+
+export async function navigateToUrl(url: string, fallbackToNewTab = true): Promise<void> {
+  if (typeof window === 'undefined') {
+    throw new Error('Navigation not supported in this environment');
+  }
+
+  const isInFarcaster = await isInFarcasterMiniApp();
+
+  if (isInFarcaster) {
+    try {
+      await sdk.actions.openUrl(url);
+      return;
+    } catch {
+      window.open(url, '_blank');
+      return;
+    }
+  }
+
+  if (fallbackToNewTab) {
+    window.open(url, '_blank');
+  } else {
+    window.location.href = url;
+  }
+}
+
+
+
+export interface FarcasterAppConfig {
+  domain: string;
+  appId?: string;
+  appSlug?: string;
+}
+
+export function createFarcasterUniversalLink(
+  config: FarcasterAppConfig,
+  subPath?: string,
+  queryParams?: Record<string, string>
+): string {
+  const hasUniversalLinkConfig = config.appId && config.appSlug;
+
+  let baseUrl: string;
+
+  if (hasUniversalLinkConfig) {
+    baseUrl = `https://farcaster.xyz/miniapps/${config.appId}/${config.appSlug}`;
+    if (subPath) {
+      const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
+      baseUrl += `/${cleanSubPath}`;
+    }
+  } else {
+    baseUrl = `https://farcaster.xyz/~/mini-apps/launch`;
+    queryParams = { domain: config.domain, ...queryParams };
+  }
+
+  if (queryParams && Object.keys(queryParams).length > 0) {
+    const urlObj = new URL(baseUrl);
+    Object.entries(queryParams).forEach(([key, value]) => {
+      urlObj.searchParams.set(key, value);
+    });
+    return urlObj.toString();
+  }
+
+  return baseUrl;
+}
+
+/**
+ * Appends query parameters to a callback URL for Face Verification.
+ * Does not modify the URL path — developers control their own routing.
+ *
+ * @param baseUrl - The callback URL provided by the developer.
+ * @param additionalParams - Optional query parameters to append.
+ * @returns The callback URL with appended parameters.
+ */
+export async function createVerificationCallbackUrl(
+  baseUrl: string,
+  additionalParams?: Record<string, string>
+): Promise<string> {
+  const url = new URL(baseUrl);
+  if (!url.protocol.startsWith("http")) {
+    return baseUrl;
+  }
+
+  if (additionalParams) {
+    Object.entries(additionalParams).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+  }
+
+  return url.toString();
+}
+
+/**
+ * Parses the `verified` query parameter from the current URL (or a provided URL/search string).
+ * Returns true if the user has been successfully face-verified.
+ *
+ * @param searchString - Optional URL search string to parse. Defaults to window.location.search.
+ * @returns Whether the verification was successful.
+ */
+export function parseVerificationResult(searchString?: string): boolean {
+  const search = searchString ?? (typeof window !== "undefined" ? window.location.search : "");
+  const params = new URLSearchParams(search);
+  return params.get("verified") === "true";
+}
+
+export function createFarcasterCallbackUniversalLink(
+  config: FarcasterAppConfig,
+  callbackType: 'verify' | 'callback' | 'claim' = 'verify',
+  additionalParams?: Record<string, string>
+): string {
+  return createFarcasterUniversalLink(config, callbackType, {
+    source: "gooddollar_identity_verification",
+    ...additionalParams
+  });
+}
 
 async function signMessageWithViem(
   account: Account,
