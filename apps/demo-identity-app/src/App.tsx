@@ -19,6 +19,8 @@ import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
 import { SigningModal } from "./components/SigningModal"
 import { ClaimButton } from "./components/ClaimButton"
+import { WalletLinkWidget } from "./components/WalletLinkWidget" 
+import { SDK_ENV } from "./config"
 
 const tamaguiConfig = createTamagui(config)
 
@@ -37,7 +39,7 @@ const App: React.FC = () => {
   const [connectedAccount, setConnectedAccount] = useState<string | undefined>(
     undefined,
   )
-  const { sdk: identitySDK, loading, error } = useIdentitySDK("development")
+  const { sdk: identitySDK, loading, error } = useIdentitySDK(SDK_ENV)
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search)
@@ -257,6 +259,14 @@ const App: React.FC = () => {
             </>
           )}
         </YStack>
+
+        {/* --- NEW WALLET LINK WIDGET SECTION --- */}
+        {isConnected && (
+          <YStack width="100%" maxWidth={600} marginTop={24}>
+            <WalletLinkWidget />
+          </YStack>
+        )}
+        {/* -------------------------------------- */}
 
         <SigningModal
           open={isSigningModalOpen}

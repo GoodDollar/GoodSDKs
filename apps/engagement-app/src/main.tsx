@@ -10,4 +10,3 @@ ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
     <AppKitProvider><App/></AppKitProvider>
   </React.StrictMode>,
 )
-

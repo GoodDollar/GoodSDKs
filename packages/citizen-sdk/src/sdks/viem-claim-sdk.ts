@@ -48,6 +48,18 @@ export interface CheckEntitlementOptions {
   chainOverride?: SupportedChains
 }
 
+export interface CheckGenericEntitlementOptions {
+  publicClient: PublicClient
+  chainId: SupportedChains
+  env?: contractEnv
+}
+
+export interface CheckGenericDailyStatsOptions {
+  publicClient: PublicClient
+  chainId: SupportedChains
+  env?: contractEnv
+}
+
 export interface ClaimEntitlementResult {
   amount: bigint
   altClaimAvailable: boolean
@@ -58,6 +70,58 @@ export interface ClaimEntitlementResult {
 type AltClaimCandidate = {
   chainId: SupportedChains
   amount: bigint
+}
+
+/**
+ * Reads the chain-level entitlement using the no-argument UBIScheme method.
+ * This path does not require a wallet account and is suitable for
+ * disconnected pre-connect UI states.
+ */
+export async function checkGenericEntitlement(
+  options: CheckGenericEntitlementOptions,
+): Promise<bigint> {
+  const env = options.env ?? "production"
+  const config = chainConfigs[options.chainId]
+  const contracts = config?.contracts?.[env]
+
+  if (!config || !contracts) {
+    throw new Error(
+      `No UBIScheme contract configuration for chain ${options.chainId} in env "${env}"`,
+    )
+  }
+
+  return options.publicClient.readContract({
+    address: contracts.ubiContract,
+    abi: ubiSchemeV2ABI,
+    functionName: "checkEntitlement",
+    args: [],
+  }) as Promise<bigint>
+}
+
+/**
+ * Reads chain-level daily claim stats without requiring wallet/account context.
+ */
+export async function checkGenericDailyStats(
+  options: CheckGenericDailyStatsOptions,
+): Promise<{ claimers: bigint; amount: bigint }> {
+  const env = options.env ?? "production"
+  const config = chainConfigs[options.chainId]
+  const contracts = config?.contracts?.[env]
+
+  if (!config || !contracts) {
+    throw new Error(
+      `No UBIScheme contract configuration for chain ${options.chainId} in env "${env}"`,
+    )
+  }
+
+  const [claimers, amount] = await options.publicClient.readContract({
+    address: contracts.ubiContract,
+    abi: ubiSchemeV2ABI,
+    functionName: "getDailyStats",
+    args: [],
+  })
+
+  return { claimers, amount }
 }
 
 export class ClaimSDK {

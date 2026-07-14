@@ -21,7 +21,7 @@ export interface TriggerFaucetParams {
 }
 
 /**
- * Checks if the user has sufficient balance to claim UBI.
+ * Checks if the user has sufficient gas balance to claim UBI.
  * @param chainId - The chain ID
  * @param account - User's wallet address
  * @param publicClient - Viem public client
@@ -39,7 +39,14 @@ async function canClaim(
   toppingAmount: bigint,
   minTopping: number,
 ): Promise<boolean> {
-  const gasPrice = chainConfigs[chainId]?.defaultGasPrice ?? undefined
+  const fees = await publicClient
+    .estimateFeesPerGas()
+    .catch((error) => console.log("Error estimating fees per gas:", error))
+  const gasPrice =
+    fees?.maxFeePerGas ??
+    fees?.gasPrice ??
+    chainConfigs[chainId]?.defaultGasPrice
+
   if (!gasPrice) {
     throw new Error(
       "Cannot determine gasPrice for the current connected chain.",

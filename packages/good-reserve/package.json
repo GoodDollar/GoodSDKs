@@ -1,0 +1,45 @@
+{
+  "name": "@goodsdks/good-reserve",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "require": {
+      "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@vitest/ui": "^4.0.18",
+    "typescript": "latest",
+    "viem": "latest",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "viem": "*"
+  },
+  "dependencies": {
+    "tsup": "^8.3.5"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "GoodDollar Reserve SDK — buy and sell G$ through the reserve using viem"
+}

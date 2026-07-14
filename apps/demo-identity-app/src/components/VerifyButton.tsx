@@ -2,6 +2,7 @@ import React from "react"
 import { Button } from "tamagui"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
 import { useAccount } from "wagmi"
+import { SDK_ENV } from "../config"
 
 import { isInFarcasterMiniApp } from "@goodsdks/citizen-sdk"
 import { FARCASTER_CONFIG } from "../App"
@@ -12,7 +13,7 @@ interface VerifyButtonProps {
 
 export const VerifyButton: React.FC<VerifyButtonProps> = () => {
   const { address } = useAccount()
-  const { sdk: identitySDK } = useIdentitySDK("development")
+  const { sdk: identitySDK } = useIdentitySDK(SDK_ENV)
 
   const handleVerify = async () => {
     if (!identitySDK || !address) return

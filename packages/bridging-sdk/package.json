@@ -1,0 +1,36 @@
+{
+  "name": "@goodsdks/bridging-sdk",
+  "version": "1.0.5",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --clean",
+    "dev": "tsc --watch",
+    "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "require": {
+      "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "tsup": "^8.3.5",
+    "typescript": "latest",
+    "viem": "latest"
+  },
+  "peerDependencies": {
+    "viem": "*"
+  }
+}
