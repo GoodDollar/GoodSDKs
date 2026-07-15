@@ -1,5 +1,7 @@
 import { Address } from "viem"
 
+export type { contractEnv, SupportedChains } from "./constants"
+
 // ─── Core data types ─────────────────────────────────────────────────────────
 
 /**
@@ -93,10 +95,6 @@ export interface BountyEligibilityDetails {
    */
   reverificationDue: boolean
 }
-
-// ─── SDK Options ─────────────────────────────────────────────────────────────
-
-export type { contractEnv, SupportedChains } from "@goodsdks/citizen-sdk"
 
 // ─── Error class ─────────────────────────────────────────────────────────────
 

@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { zeroAddress, encodeEventTopics, encodeAbiParameters, parseAbiParameters } from "viem"
 import type { PublicClient, WalletClient, TransactionReceipt } from "viem"
-import { SupportedChains } from "@goodsdks/citizen-sdk"
 import { InviteSDK, formatBounty } from "../src/sdks/viem-invite-sdk"
 import { InviteSDKError } from "../src/types"
-import { resolveInvitesAddress, INVITES_V2_ADDRESSES } from "../src/constants"
+import {
+  resolveInvitesAddress,
+  INVITES_V2_ADDRESSES,
+  SupportedChains,
+} from "../src/constants"
 import { invitesV2ABI } from "../src/abi"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -23,7 +26,7 @@ const INVITER_CODE = ("0x" + "bb".repeat(32)) as `0x${string}`
 type MockPublicClient = Pick<PublicClient, "readContract" | "simulateContract">
 type MockWalletClient = Pick<WalletClient, "account" | "chain" | "getAddresses" | "writeContract">
 
-function makeClients(chainId = SupportedChains.CELO) {
+function makeClients(chainId: number = SupportedChains.CELO) {
   const publicClient: MockPublicClient = {
     readContract: vi.fn(),
     simulateContract: vi.fn().mockResolvedValue({ request: {} }),
@@ -122,7 +125,7 @@ describe("resolveInvitesAddress", () => {
   })
 
   it("throws for an unconfigured env/chain combination (Fuse is not supported)", () => {
-    expect(() => resolveInvitesAddress("production", SupportedChains.FUSE)).toThrow(
+    expect(() => resolveInvitesAddress("production", 122)).toThrow(
       /address not configured/i,
     )
   })
@@ -182,7 +185,7 @@ describe("InviteSDK", () => {
   let sdk: InviteSDK
 
   beforeEach(async () => {
-    const clients = makeClients(SupportedChains.FUSE)
+    const clients = makeClients(SupportedChains.CELO)
     publicClient = clients.publicClient
     walletClient = clients.walletClient
 
@@ -201,7 +204,7 @@ describe("InviteSDK", () => {
 
   describe("init", () => {
     it("throws when the wallet is on an unsupported chain", async () => {
-      const { publicClient: pc, walletClient: wc } = makeClients(99999 as SupportedChains)
+      const { publicClient: pc, walletClient: wc } = makeClients(99999)
       await expect(
         InviteSDK.init({
           publicClient: pc as PublicClient,
@@ -664,7 +667,7 @@ describe("INVITES_V2_ADDRESSES", () => {
   })
 
   it("does not have a production address for Fuse (unsupported)", () => {
-    expect(INVITES_V2_ADDRESSES.production[SupportedChains.FUSE]).toBeUndefined()
+    expect(INVITES_V2_ADDRESSES.production).not.toHaveProperty("122")
   })
 
   it("has development addresses for Celo and XDC", () => {

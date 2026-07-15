@@ -1,5 +1,30 @@
 import { type Address } from "viem"
-import { type contractEnv, SupportedChains } from "@goodsdks/citizen-sdk"
+
+/** Environments accepted by the GoodDollar InvitesV2 deployments. */
+export type contractEnv = "production" | "staging" | "development"
+
+/** Networks on which an InvitesV2 deployment is available. */
+export enum SupportedChains {
+  CELO = 42220,
+  XDC = 50,
+}
+
+/** Decimal precision of G$ amounts on each InvitesV2 network. */
+export const CHAIN_DECIMALS: Record<SupportedChains, number> = {
+  [SupportedChains.CELO]: 18,
+  [SupportedChains.XDC]: 18,
+}
+
+const supportedChainIds = new Set<number>([
+  SupportedChains.CELO,
+  SupportedChains.XDC,
+])
+
+/** Returns whether a chain has an InvitesV2 deployment. */
+export const isSupportedChain = (
+  chainId: number | undefined,
+): chainId is SupportedChains =>
+  typeof chainId === "number" && supportedChainIds.has(chainId)
 
 /**
  * The two invite environments. `staging` and any unknown env are normalised
@@ -44,10 +69,12 @@ export function toInviteEnv(env: contractEnv): InviteEnv {
  */
 export const resolveInvitesAddress = (
   env: contractEnv,
-  chainId: SupportedChains,
+  chainId: number,
 ): Address => {
   const effectiveEnv = toInviteEnv(env)
-  const address = INVITES_V2_ADDRESSES[effectiveEnv]?.[chainId]
+  const address = INVITES_V2_ADDRESSES[effectiveEnv]?.[
+    chainId as SupportedChains
+  ]
   if (!address) {
     throw new Error(
       `InvitesV2 address not configured for env="${env}" chainId=${chainId}. Supported chains: Celo and XDC.`,

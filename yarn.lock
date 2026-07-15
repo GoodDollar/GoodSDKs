@@ -2112,7 +2112,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
+"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/citizen-sdk@workspace:packages/citizen-sdk"
   dependencies:
@@ -2252,7 +2252,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@goodsdks/invite-sdk@workspace:packages/invite-sdk"
   dependencies:
-    "@goodsdks/citizen-sdk": "workspace:*"
     "@repo/typescript-config": "workspace:*"
     "@vitest/ui": "npm:^4.0.18"
     tsup: "npm:^8.4.0"

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
+    "prepack": "yarn build",
     "dev": "tsc --watch",
     "lint": "eslint src --max-warnings 0",
     "test": "vitest run",
@@ -29,16 +30,13 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@vitest/ui": "^4.0.18",
+    "tsup": "^8.4.0",
     "typescript": "latest",
     "viem": "latest",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "viem": "*"
-  },
-  "dependencies": {
-    "@goodsdks/citizen-sdk": "workspace:*",
-    "tsup": "^8.4.0"
   },
   "keywords": [],
   "author": "",

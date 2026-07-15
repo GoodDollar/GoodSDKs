@@ -16,10 +16,10 @@ import {
   SupportedChains,
   CHAIN_DECIMALS,
   isSupportedChain,
-} from "@goodsdks/citizen-sdk"
+  resolveInvitesAddress,
+} from "../constants"
 
 import { invitesV2ABI } from "../abi"
-import { resolveInvitesAddress } from "../constants"
 import type {
   InviteUser,
   InviteLevel,
