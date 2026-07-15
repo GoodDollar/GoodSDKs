@@ -2112,7 +2112,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
+"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/citizen-sdk@workspace:packages/citizen-sdk"
   dependencies:
@@ -2248,6 +2248,22 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@goodsdks/invite-sdk@workspace:*, @goodsdks/invite-sdk@workspace:packages/invite-sdk":
+  version: 0.0.0-use.local
+  resolution: "@goodsdks/invite-sdk@workspace:packages/invite-sdk"
+  dependencies:
+    "@goodsdks/citizen-sdk": "workspace:*"
+    "@repo/typescript-config": "workspace:*"
+    "@vitest/ui": "npm:^4.0.18"
+    tsup: "npm:^8.4.0"
+    typescript: "npm:latest"
+    viem: "npm:latest"
+    vitest: "npm:^4.0.18"
+  peerDependencies:
+    viem: "*"
+  languageName: unknown
+  linkType: soft
+
 "@goodsdks/react-hooks@npm:*, @goodsdks/react-hooks@workspace:*, @goodsdks/react-hooks@workspace:packages/react-hooks":
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
@@ -2255,6 +2271,7 @@ __metadata:
     "@goodsdks/bridging-sdk": "workspace:*"
     "@goodsdks/citizen-sdk": "npm:*"
     "@goodsdks/good-reserve": "workspace:*"
+    "@goodsdks/invite-sdk": "workspace:*"
     "@goodsdks/streaming-sdk": "npm:*"
     "@repo/typescript-config": "workspace:*"
     "@tanstack/react-query": "npm:^4.36.1"

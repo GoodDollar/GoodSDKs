@@ -20,6 +20,7 @@ import { IdentityCard } from "./components/IdentityCard"
 import { SigningModal } from "./components/SigningModal"
 import { ClaimButton } from "./components/ClaimButton"
 import { WalletLinkWidget } from "./components/WalletLinkWidget" 
+import { InviteSection } from "./components/InviteSection"
 import { SDK_ENV } from "./config"
 
 const tamaguiConfig = createTamagui(config)
@@ -272,6 +273,10 @@ const App: React.FC = () => {
           </YStack>
         )}
         {/* -------------------------------------- */}
+
+        {/* --- INVITE FLOW DEMO SECTION --- */}
+        {isConnected && <InviteSection />}
+        {/* -------------------------------- */}
 
         <SigningModal
           open={isSigningModalOpen}
