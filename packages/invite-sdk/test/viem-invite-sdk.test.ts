@@ -13,6 +13,7 @@ import { invitesV2ABI } from "../src/abi"
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MOCK_INVITER = "0x1111111111111111111111111111111111111111" as const
+const MIXED_CASE_MOCK_INVITER = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" as const
 const MOCK_INVITEE = "0x2222222222222222222222222222222222222222" as const
 const MOCK_IDENTITY = "0x3333333333333333333333333333333333333333" as const
 const MOCK_CONTRACT = "0xCa2F09c3ccFD7aD5cB9276918Bd1868f2b922ea0" as const
@@ -322,6 +323,19 @@ describe("InviteSDK", () => {
       ;(publicClient.readContract as any).mockResolvedValueOnce(3n)
       expect(await sdk.getPendingBounties(MOCK_INVITER)).toBe(3n)
     })
+
+    it("getCollectableInvitees returns only eligible pending invitees", async () => {
+      ;(publicClient.readContract as any)
+        .mockResolvedValueOnce([MOCK_INVITEE, MOCK_IDENTITY])
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+
+      expect(await sdk.getCollectableInvitees()).toEqual([MOCK_INVITEE])
+      expect(publicClient.readContract).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ functionName: "getPendingInvitees", args: [MOCK_INVITER] }),
+      )
+    })
   })
 
   describe("canCollectBounty", () => {
@@ -513,6 +527,14 @@ describe("InviteSDK", () => {
       })
     })
 
+    it("allows a code owned by the caller with a mixed-case address", async () => {
+      sdk["account"] = MIXED_CASE_MOCK_INVITER.toLowerCase() as `0x${string}`
+      mockJoinPreChecks({ codeOwner: MIXED_CASE_MOCK_INVITER })
+      ;(sdk["submitAndWait"] as any).mockResolvedValueOnce({ transactionHash: MOCK_TX_HASH })
+
+      await expect(sdk.join(MY_CODE, ZERO_BYTES32)).resolves.toBe(MOCK_TX_HASH)
+    })
+
     it("allows a caller to attach an inviter after registering their own code", async () => {
       mockJoinPreChecks()
       ;(sdk["submitAndWait"] as any).mockResolvedValueOnce({ transactionHash: MOCK_TX_HASH })
@@ -556,6 +578,13 @@ describe("InviteSDK", () => {
         callerUser: makeUserTuple({ inviteCode: MY_CODE }),
         inviterOwner: zeroAddress,
       })
+      await expect(sdk.join(MY_CODE, INVITER_CODE)).rejects.toMatchObject({
+        errorCode: "INVALID_INVITER",
+      })
+    })
+
+    it("throws INVALID_INVITER when a first-time user supplies an unknown inviter code", async () => {
+      mockJoinPreChecks({ inviterOwner: zeroAddress })
       await expect(sdk.join(MY_CODE, INVITER_CODE)).rejects.toMatchObject({
         errorCode: "INVALID_INVITER",
       })

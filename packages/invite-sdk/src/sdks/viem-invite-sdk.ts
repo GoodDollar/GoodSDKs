@@ -7,6 +7,7 @@ import {
   type TransactionReceipt,
   decodeEventLog,
   encodeFunctionData,
+  isAddressEqual,
   zeroAddress,
   zeroHash,
 } from "viem"
@@ -328,6 +329,20 @@ export class InviteSDK {
   }
 
   /**
+   * Returns pending invitees that are currently eligible for bounty collection.
+   */
+  async getCollectableInvitees(inviter: Address = this.account): Promise<Address[]> {
+    const pending = await this.getPendingInvitees(inviter)
+    const checks = await Promise.all(
+      pending.map(async (invitee) => ({
+        invitee,
+        eligible: await this.canCollectBounty(invitee),
+      })),
+    )
+    return checks.filter(({ eligible }) => eligible).map(({ invitee }) => invitee)
+  }
+
+  /**
    * Resolves an invite code (bytes32) to the address that registered it.
    * Returns zeroAddress if the code is not yet registered.
    */
@@ -468,7 +483,7 @@ export class InviteSDK {
     if (!isActive) {
       throw new InviteSDKError("contract is not active", "NOT_ACTIVE")
     }
-    if (existingOwner !== zeroAddress && existingOwner !== this.account) {
+    if (existingOwner !== zeroAddress && !isAddressEqual(existingOwner, this.account)) {
       throw new InviteSDKError("invite code already in use", "INVITE_CODE_IN_USE")
     }
     if (
@@ -483,8 +498,12 @@ export class InviteSDK {
         ? zeroAddress
         : await this.read<Address>("codeToUser", [inviterCode])
 
-    if (inviter === this.account) {
+    if (isAddressEqual(inviter, this.account)) {
       throw new InviteSDKError("cannot invite yourself", "SELF_INVITE")
+    }
+
+    if (inviterCode !== zeroHash && inviter === zeroAddress) {
+      throw new InviteSDKError("inviter code is not registered", "INVALID_INVITER")
     }
 
     if (callerUser.bountyPaid) {
@@ -497,9 +516,6 @@ export class InviteSDK {
           "user already has an inviter attached",
           "INVITER_ALREADY_ATTACHED",
         )
-      }
-      if (inviter === zeroAddress) {
-        throw new InviteSDKError("inviter code is not registered", "INVALID_INVITER")
       }
     }
 
