@@ -476,16 +476,22 @@ describe("InviteSDK", () => {
     function mockJoinPreChecks({
       isActive = true,
       codeOwner = zeroAddress,
-      joinedAt = 0n,
+      callerUser = makeUserTuple(),
+      inviterOwner,
     } = {}) {
       ;(publicClient.readContract as any)
         .mockResolvedValueOnce(isActive)     // active
         .mockResolvedValueOnce(codeOwner)    // codeToUser(myCode)
-        .mockResolvedValueOnce(makeUserTuple({ joinedAt })) // users(account)
+        .mockResolvedValueOnce(callerUser)   // users(account)
+
+      if (inviterOwner !== undefined) {
+        ;(publicClient.readContract as any)
+          .mockResolvedValueOnce(inviterOwner) // codeToUser(inviterCode)
+      }
     }
 
     it("calls submitAndWait with join args and returns txHash", async () => {
-      mockJoinPreChecks()
+      mockJoinPreChecks({ inviterOwner: MOCK_INVITEE })
       ;(sdk["submitAndWait"] as any).mockResolvedValueOnce({ transactionHash: MOCK_TX_HASH })
 
       const hash = await sdk.join(MY_CODE, INVITER_CODE)
@@ -501,22 +507,70 @@ describe("InviteSDK", () => {
     })
 
     it("throws INVITE_CODE_IN_USE when the code is already registered", async () => {
-      mockJoinPreChecks({ codeOwner: MOCK_INVITER })
+      mockJoinPreChecks({ codeOwner: MOCK_INVITEE })
       await expect(sdk.join(MY_CODE, INVITER_CODE)).rejects.toMatchObject({
         errorCode: "INVITE_CODE_IN_USE",
       })
     })
 
-    it("throws USER_ALREADY_JOINED when caller has already joined", async () => {
-      mockJoinPreChecks({ joinedAt: 9999n })
+    it("allows a caller to attach an inviter after registering their own code", async () => {
+      mockJoinPreChecks()
+      ;(sdk["submitAndWait"] as any).mockResolvedValueOnce({ transactionHash: MOCK_TX_HASH })
+      await expect(sdk.join(MY_CODE, ZERO_BYTES32)).resolves.toBe(MOCK_TX_HASH)
+
+      mockJoinPreChecks({
+        codeOwner: MOCK_INVITER,
+        callerUser: makeUserTuple({ inviteCode: MY_CODE, joinedAt: 9999n }),
+        inviterOwner: MOCK_INVITEE,
+      })
+      ;(sdk["submitAndWait"] as any).mockResolvedValueOnce({ transactionHash: MOCK_TX_HASH })
+      await expect(sdk.join(MY_CODE, INVITER_CODE)).resolves.toBe(MOCK_TX_HASH)
+      expect(sdk["submitAndWait"]).toHaveBeenLastCalledWith("join", [MY_CODE, INVITER_CODE])
+    })
+
+    it("throws INVITER_ALREADY_ATTACHED when caller already has an inviter", async () => {
+      mockJoinPreChecks({
+        codeOwner: MOCK_INVITER,
+        callerUser: makeUserTuple({ inviteCode: MY_CODE, invitedBy: MOCK_INVITEE }),
+        inviterOwner: MOCK_IDENTITY,
+      })
       await expect(sdk.join(MY_CODE, INVITER_CODE)).rejects.toMatchObject({
-        errorCode: "USER_ALREADY_JOINED",
+        errorCode: "INVITER_ALREADY_ATTACHED",
+      })
+    })
+
+    it("throws BOUNTY_ALREADY_PAID when caller has received their bounty", async () => {
+      mockJoinPreChecks({
+        codeOwner: MOCK_INVITER,
+        callerUser: makeUserTuple({ inviteCode: MY_CODE, bountyPaid: true }),
+        inviterOwner: MOCK_INVITEE,
+      })
+      await expect(sdk.join(MY_CODE, INVITER_CODE)).rejects.toMatchObject({
+        errorCode: "BOUNTY_ALREADY_PAID",
+      })
+    })
+
+    it("throws INVALID_INVITER when attaching an unknown inviter code", async () => {
+      mockJoinPreChecks({
+        codeOwner: MOCK_INVITER,
+        callerUser: makeUserTuple({ inviteCode: MY_CODE }),
+        inviterOwner: zeroAddress,
+      })
+      await expect(sdk.join(MY_CODE, INVITER_CODE)).rejects.toMatchObject({
+        errorCode: "INVALID_INVITER",
       })
     })
 
     it("throws SELF_INVITE when myCode equals inviterCode", async () => {
       mockJoinPreChecks()
       await expect(sdk.join(MY_CODE, MY_CODE)).rejects.toMatchObject({
+        errorCode: "SELF_INVITE",
+      })
+    })
+
+    it("throws SELF_INVITE when inviter code belongs to the caller", async () => {
+      mockJoinPreChecks({ inviterOwner: MOCK_INVITER })
+      await expect(sdk.join(MY_CODE, INVITER_CODE)).rejects.toMatchObject({
         errorCode: "SELF_INVITE",
       })
     })
