@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "gooddollar": {
+      "source": "GoodDollar/GoodSkills",
+      "sourceType": "github",
+      "skillPath": "skills/gooddollar/SKILL.md",
+      "computedHash": "9fd8c012d60d3eeb403757cfd4a328e330025dc3311671a6d0927a24a1b38208"
+    }
+  }
+}
