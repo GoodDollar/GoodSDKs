@@ -109,6 +109,9 @@ export class InviteSDKError extends Error {
     | "INVITE_CODE_IN_USE"
     | "SELF_INVITE"
     | "USER_ALREADY_JOINED"
+    | "INVALID_INVITER"
+    | "INVITER_ALREADY_ATTACHED"
+    | "BOUNTY_ALREADY_PAID"
     | "NOT_ELIGIBLE_BOUNTY"
     | "UNKNOWN"
 

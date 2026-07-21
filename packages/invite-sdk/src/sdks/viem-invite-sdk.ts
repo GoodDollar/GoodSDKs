@@ -7,6 +7,7 @@ import {
   type TransactionReceipt,
   decodeEventLog,
   encodeFunctionData,
+  isAddressEqual,
   zeroAddress,
   zeroHash,
 } from "viem"
@@ -328,6 +329,20 @@ export class InviteSDK {
   }
 
   /**
+   * Returns pending invitees that are currently eligible for bounty collection.
+   */
+  async getCollectableInvitees(inviter: Address = this.account): Promise<Address[]> {
+    const pending = await this.getPendingInvitees(inviter)
+    const checks = await Promise.all(
+      pending.map(async (invitee) => ({
+        invitee,
+        eligible: await this.canCollectBounty(invitee),
+      })),
+    )
+    return checks.filter(({ eligible }) => eligible).map(({ invitee }) => invitee)
+  }
+
+  /**
    * Resolves an invite code (bytes32) to the address that registered it.
    * Returns zeroAddress if the code is not yet registered.
    */
@@ -445,8 +460,9 @@ export class InviteSDK {
    *
    * Pre-checks (before simulation):
    * - The contract must be active.
-   * - `myCode` must not already be in use.
-   * - The caller must not have already joined.
+   * - `myCode` must be unused or already owned by the caller.
+   * - A caller may attach one valid inviter after registering their own code,
+   *   provided no inviter is already attached and their bounty is unpaid.
    * - `myCode` and `inviterCode` must not be the same.
    *
    * @param myCode     - bytes32 invite code for the caller.
@@ -467,17 +483,40 @@ export class InviteSDK {
     if (!isActive) {
       throw new InviteSDKError("contract is not active", "NOT_ACTIVE")
     }
-    if (existingOwner !== zeroAddress) {
+    if (existingOwner !== zeroAddress && !isAddressEqual(existingOwner, this.account)) {
       throw new InviteSDKError("invite code already in use", "INVITE_CODE_IN_USE")
-    }
-    if (callerUser.joinedAt > 0n) {
-      throw new InviteSDKError("user has already joined", "USER_ALREADY_JOINED")
     }
     if (
       inviterCode !== zeroHash &&
       myCode === inviterCode
     ) {
       throw new InviteSDKError("cannot invite yourself", "SELF_INVITE")
+    }
+
+    const inviter =
+      inviterCode === zeroHash
+        ? zeroAddress
+        : await this.read<Address>("codeToUser", [inviterCode])
+
+    if (isAddressEqual(inviter, this.account)) {
+      throw new InviteSDKError("cannot invite yourself", "SELF_INVITE")
+    }
+
+    if (inviterCode !== zeroHash && inviter === zeroAddress) {
+      throw new InviteSDKError("inviter code is not registered", "INVALID_INVITER")
+    }
+
+    if (callerUser.bountyPaid) {
+      throw new InviteSDKError("user bounty has already been paid", "BOUNTY_ALREADY_PAID")
+    }
+
+    if (callerUser.inviteCode !== zeroHash) {
+      if (callerUser.invitedBy !== zeroAddress) {
+        throw new InviteSDKError(
+          "user already has an inviter attached",
+          "INVITER_ALREADY_ATTACHED",
+        )
+      }
     }
 
     try {
