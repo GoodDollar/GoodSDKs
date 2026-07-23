@@ -14,6 +14,7 @@ import { config } from "@tamagui/config/v3"
 import { useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
 import { useIdentitySDK } from "@goodsdks/react-hooks"
+import { sdk } from "@farcaster/miniapp-sdk"
 
 import { VerifyButton } from "./components/VerifyButton"
 import { IdentityCard } from "./components/IdentityCard"
@@ -23,6 +24,10 @@ import { WalletLinkWidget } from "./components/WalletLinkWidget"
 import { SDK_ENV } from "./config"
 
 const tamaguiConfig = createTamagui(config)
+
+export const FARCASTER_CONFIG = {
+  domain: typeof window === "undefined" ? "" : window.location.host,
+}
 
 const App: React.FC = () => {
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false)
@@ -40,6 +45,10 @@ const App: React.FC = () => {
     undefined,
   )
   const { sdk: identitySDK, loading, error } = useIdentitySDK(SDK_ENV)
+
+  useEffect(() => {
+    void sdk.actions.ready().catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search)
