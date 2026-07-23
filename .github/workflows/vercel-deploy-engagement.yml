@@ -22,6 +22,8 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
       - run: npm install --global turbo@latest
@@ -34,5 +36,7 @@ jobs:
       - run: vercel build --prod --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
         working-directory: apps/engagement-app
       - id: deploy
-        run: echo "::set-output name=url::$(vercel deploy --prod --prebuilt --token=${{ secrets.VERCEL_DEPLOY_TOKEN }})"
+        run: |
+          url="$(vercel deploy --prod --prebuilt --token=${{ secrets.VERCEL_DEPLOY_TOKEN }})"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
         working-directory: apps/engagement-app

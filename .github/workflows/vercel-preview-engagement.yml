@@ -39,6 +39,8 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
       - run: npm install --global turbo@latest
