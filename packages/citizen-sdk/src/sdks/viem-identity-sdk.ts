@@ -1,4 +1,3 @@
-
 import {
   type Account,
   Address,
@@ -32,6 +31,7 @@ import {
   createFarcasterUniversalLink,
   type FarcasterAppConfig,
 } from "../utils/auth"
+import {
   createRpcIteratorRegistry,
   getRpcFallbackClient,
 } from "../utils/rpcFallback"
@@ -317,9 +317,7 @@ export class IdentitySDK {
     } catch (error: any) {
       const message = error instanceof Error ? error.message : String(error)
       console.error("getIdentityExpiryData Error:", error)
-      throw new Error(
-        `Failed to retrieve identity expiry data: ${message}`,
-      )
+      throw new Error(`Failed to retrieve identity expiry data: ${message}`)
     }
   }
 
@@ -343,8 +341,7 @@ export class IdentitySDK {
   ): Promise<any> {
     const securityAction =
       action === "connectAccount" ? "connect" : "disconnect"
-    const actionLabel =
-      action === "connectAccount" ? "connect" : "disconnect"
+    const actionLabel = action === "connectAccount" ? "connect" : "disconnect"
 
     try {
       await this.runSecurityCheck(securityAction, options)
@@ -447,8 +444,9 @@ export class IdentitySDK {
       }
 
       if (callbackUrl) {
-        const callbackUrlWithParams = await createVerificationCallbackUrl(callbackUrl);
-        params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams;
+        const callbackUrlWithParams =
+          await createVerificationCallbackUrl(callbackUrl)
+        params[popupMode ? "cbu" : "rdu"] = callbackUrlWithParams
       }
 
       url.searchParams.append(
@@ -459,9 +457,7 @@ export class IdentitySDK {
     } catch (error: any) {
       const message = error instanceof Error ? error.message : String(error)
       console.error("generateFVLink Error:", error)
-      throw new Error(
-        `Failed to generate Face Verification link: ${message}`,
-      )
+      throw new Error(`Failed to generate Face Verification link: ${message}`)
     }
   }
 
@@ -516,5 +512,4 @@ export class IdentitySDK {
 
     return { expiryTimestamp }
   }
-
 }

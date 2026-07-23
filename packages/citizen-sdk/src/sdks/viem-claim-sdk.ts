@@ -8,7 +8,6 @@ import {
   type WalletClient,
   ContractFunctionExecutionError,
   TransactionReceipt,
-  zeroAddress,
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
