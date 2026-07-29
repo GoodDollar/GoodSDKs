@@ -1,0 +1,127 @@
+name: Release affected SDK packages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Publish current bootstrap versions or recover a failed registry publish
+        type: choice
+        required: true
+        options: [recover, bootstrap]
+      packages:
+        description: Comma-separated allowlisted packages (recovery only)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Prevent two merges from racing while choosing immutable npm versions.
+  group: goodsdks-npm-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # The release commit lands on main and would otherwise trigger itself again.
+    if: "${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release): publish') }}"
+    runs-on: ubuntu-latest
+    environment: release
+    # Write and OIDC permissions are scoped to the protected release job only.
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Require main for manual operations
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: test "$GITHUB_REF" = "refs/heads/main"
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.19.1
+          cache: yarn
+          registry-url: https://registry.npmjs.org
+
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn release:test
+      - run: yarn release:validate
+
+      - name: Require completed registry bootstrap
+        if: ${{ github.event_name == 'push' }}
+        # Automatic patching starts only after both historical 1.0.5 versions
+        # have been reconciled with npm through the manual bootstrap mode.
+        run: node scripts/release/release.mjs check-bootstrap
+
+      - name: Prepare affected patch versions
+        id: release
+        if: ${{ github.event_name == 'push' }}
+        run: node scripts/release/release.mjs prepare --base=${{ github.event.before }} --head=${{ github.sha }} --registry
+
+      - name: Select recovery packages
+        id: recovery
+        if: ${{ inputs.mode == 'recover' }}
+        # Recovery republishes only an already committed allowlisted selection;
+        # it never recalculates or mutates versions.
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          test -n "$PACKAGES"
+          [[ "$PACKAGES" =~ ^@goodsdks/[a-z-]+(,@goodsdks/[a-z-]+)*$ ]]
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+
+      - name: Select bootstrap packages
+        id: bootstrap
+        if: ${{ inputs.mode == 'bootstrap' }}
+        run: |
+          node scripts/release/release.mjs assert-bootstrap
+          echo "packages=@goodsdks/bridging-sdk,@goodsdks/engagement-sdk" >> "$GITHUB_OUTPUT"
+
+      - name: Update and verify authoritative lockfile
+        if: ${{ github.event_name == 'push' && steps.release.outputs.packages != '' }}
+        run: |
+          yarn install --mode=update-lockfile
+          yarn install --immutable
+
+      - name: Resolve package selection
+        id: selected
+        env:
+          PUSH_PACKAGES: ${{ steps.release.outputs.packages }}
+          RECOVERY_PACKAGES: ${{ steps.recovery.outputs.packages }}
+          BOOTSTRAP_PACKAGES: ${{ steps.bootstrap.outputs.packages }}
+        run: echo "packages=${PUSH_PACKAGES:-${RECOVERY_PACKAGES:-$BOOTSTRAP_PACKAGES}}" >> "$GITHUB_OUTPUT"
+
+      - name: Build, lint, test, and inspect tarballs
+        if: ${{ steps.selected.outputs.packages != '' }}
+        env:
+          PACKAGES: ${{ steps.selected.outputs.packages }}
+        run: |
+          node scripts/release/release.mjs verify --packages="$PACKAGES"
+          node scripts/release/release.mjs pack --packages="$PACKAGES"
+
+      - name: Commit versions and immutable lockfile
+        if: ${{ github.event_name == 'push' && steps.selected.outputs.packages != '' }}
+        env:
+          PACKAGES: ${{ steps.selected.outputs.packages }}
+        run: |
+          git config user.name "gooddollar-release-bot"
+          git config user.email "gooddollar-release-bot@users.noreply.github.com"
+          git add packages/*/package.json yarn.lock
+          # The marker is also the release-loop guard in this workflow and CLI.
+          git commit -m "chore(release): publish ${PACKAGES} [skip release]"
+          git push origin HEAD:main
+          node scripts/release/release.mjs tag --packages="$PACKAGES"
+          git push origin --tags
+
+      - name: Publish topologically and verify registry
+        if: ${{ steps.selected.outputs.packages != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGES: ${{ steps.selected.outputs.packages }}
+        run: node scripts/release/release.mjs publish --packages="$PACKAGES"
