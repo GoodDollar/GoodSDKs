@@ -423,7 +423,17 @@ export class EngagementRewardsSDK {
       functionName: "getAppliedApps",
     })
 
-    return apps
+    // Some deployments contain an app address more than once in `appliedApps`.
+    // `getAppliedApps` resolves every occurrence from the same mapping entry, so
+    // callers should receive one current record per application address.
+    const seenApps = new Set<string>()
+    return apps.filter((app) => {
+      const appAddress = app.app.toLowerCase()
+      if (seenApps.has(appAddress)) return false
+
+      seenApps.add(appAddress)
+      return true
+    })
   }
 
   async getAppRewards(app: Address) {
