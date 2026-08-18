@@ -570,7 +570,7 @@ export class GoodReserveSDK {
     // the amount needed for this swap. If exactApproval=false, we approve maxUint256
     // so users don't have to eat the gas cost of another approval next time.
     const approvalAmount = this.exactApproval ? amount : maxUint256
-    await this.submitAndWait(
+    const { receipt } = await this.submitAndWait(
       {
         address: token,
         abi: erc20ABI,
@@ -579,6 +579,36 @@ export class GoodReserveSDK {
       },
       onHash,
     )
+    if (receipt.status !== "success") {
+      throw new Error("Approval transaction reverted on-chain.")
+    }
+    await this.waitUntilAllowance(token, account, spender, amount)
+  }
+
+  private async waitUntilAllowance(
+    token: Address,
+    owner: Address,
+    spender: Address,
+    amount: bigint,
+  ) {
+    const deadline = Date.now() + 10_000
+    while (true) {
+      const visibleAllowance = await this.publicClient.readContract({
+        address: token,
+        abi: erc20ABI,
+        functionName: "allowance",
+        args: [owner, spender],
+      })
+      if (visibleAllowance >= amount) return
+      if (Date.now() >= deadline) {
+        throw new Error(
+          "Timed out waiting for the approved allowance to become visible.",
+        )
+      }
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 250)
+      })
+    }
   }
 
   private async submitAndWait(
