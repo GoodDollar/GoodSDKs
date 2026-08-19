@@ -274,8 +274,9 @@ export class ClaimSDK {
   ): Promise<void> {
     try {
       await onTransactionSubmitted?.(hash)
-    } catch {
+    } catch (error) {
       // Intentionally swallow callback errors so a UI state hook cannot fail the claim.
+      console.warn("[ClaimSDK] onTransactionSubmitted callback failed", error)
     }
   }
 

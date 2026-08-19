@@ -102,6 +102,7 @@ describe("ClaimSDK claim callbacks", () => {
 
   it("swallows onTransactionSubmitted errors so claim still resolves", async () => {
     vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const onTransactionSubmitted = vi
       .fn()
       .mockRejectedValue(new Error("ui callback failed"))
@@ -117,6 +118,10 @@ describe("ClaimSDK claim callbacks", () => {
     await expect(claimPromise).resolves.toMatchObject({
       transactionHash: MOCK_HASH,
     })
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[ClaimSDK] onTransactionSubmitted callback failed",
+      expect.any(Error),
+    )
   })
 
   it("supports legacy claim txConfirm and onTxHash callbacks", async () => {
