@@ -11,8 +11,11 @@ import {
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
-import { ClaimSDK, type ClaimSDKOptions } from "./viem-claim-sdk" // Import the base ClaimSDK
-import type { ClaimTransactionSubmittedCallback } from "./viem-claim-sdk"
+import {
+    ClaimSDK,
+    type ClaimSDKOptions,
+    type ClaimTransactionSubmittedCallback,
+} from "./viem-claim-sdk" // Import the base ClaimSDK
 import type { WalletClaimStatus } from "../types"
 
 interface ClaimCustodialSDKOptions extends Omit<ClaimSDKOptions, 'account'> {
