@@ -63,11 +63,21 @@ describe("ClaimSDK claim callbacks", () => {
   })
 
   it("calls onTransactionSubmitted once after claim submission and before confirmation", async () => {
-    vi.useFakeTimers()
     const events: string[] = []
+    let confirmReceipt: (receipt: TransactionReceipt) => void = () => {}
+    const receiptPromise = new Promise<TransactionReceipt>((resolve) => {
+      confirmReceipt = resolve
+    })
     const onTransactionSubmitted = vi.fn(() => {
       events.push("submitted")
     })
+    vi.spyOn(sdk, "submitAndWait").mockImplementation(
+      async (_params, onSubmitted) => {
+        await onSubmitted?.(MOCK_HASH)
+        events.push("waiting")
+        return receiptPromise
+      },
+    )
 
     const claimPromise = sdk
       .claim({ onTransactionSubmitted })
@@ -81,13 +91,13 @@ describe("ClaimSDK claim callbacks", () => {
     })
 
     expect(onTransactionSubmitted).toHaveBeenCalledTimes(1)
-    expect(events).toEqual(["submitted"])
+    expect(events).toEqual(["submitted", "waiting"])
 
-    await vi.advanceTimersByTimeAsync(5000)
+    confirmReceipt({ transactionHash: MOCK_HASH } as TransactionReceipt)
 
     const receipt = await claimPromise
     expect(receipt.transactionHash).toBe(MOCK_HASH)
-    expect(events).toEqual(["submitted", "confirmed"])
+    expect(events).toEqual(["submitted", "waiting", "confirmed"])
   })
 
   it("swallows onTransactionSubmitted errors so claim still resolves", async () => {
