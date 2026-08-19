@@ -529,7 +529,7 @@ export class ClaimSDK {
    */
   async claim(
     optionsOrTxConfirm?: ClaimOptions | ClaimTxConfirmCallback,
-  ): Promise<TransactionReceipt | any> {
+  ): Promise<TransactionReceipt> {
     const claimOptions = this.normalizeClaimOptions(optionsOrTxConfirm)
     const userAddress = this.account
 
