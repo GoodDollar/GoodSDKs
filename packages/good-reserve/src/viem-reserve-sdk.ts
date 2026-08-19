@@ -570,7 +570,7 @@ export class GoodReserveSDK {
     // the amount needed for this swap. If exactApproval=false, we approve maxUint256
     // so users don't have to eat the gas cost of another approval next time.
     const approvalAmount = this.exactApproval ? amount : maxUint256
-    await this.submitAndWait(
+    const { receipt } = await this.submitAndWait(
       {
         address: token,
         abi: erc20ABI,
@@ -579,38 +579,42 @@ export class GoodReserveSDK {
       },
       onHash,
     )
-    await this.waitUntilAllowance(token, account, spender, amount)
+    if (!receipt.blockNumber) {
+      throw new Error("Approval receipt missing block number.")
+    }
+    await this.verifyAllowanceAtBlock(
+      token,
+      account,
+      spender,
+      amount,
+      receipt.blockNumber,
+    )
   }
 
-  private async waitUntilAllowance(
+  private async verifyAllowanceAtBlock(
     token: Address,
     owner: Address,
     spender: Address,
     amount: bigint,
+    blockNumber: bigint,
   ) {
-    const deadline = Date.now() + 10_000
-    // Celo's public Forno RPC is load-balanced across nodes. waitForTransactionReceipt
-    // resolves as soon as one node confirms the approve tx, but the subsequent
-    // readContract (eth_call with "latest") can land on a different node that has
-    // not yet propagated that block. We poll until the updated allowance is visible
-    // before attempting swapIn, avoiding a spurious "insufficient allowance" revert.
-    while (true) {
+    const maxAttempts = 5
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const visibleAllowance = await this.publicClient.readContract({
         address: token,
         abi: erc20ABI,
         functionName: "allowance",
         args: [owner, spender],
+        blockNumber,
       })
       if (visibleAllowance >= amount) return
-      if (Date.now() >= deadline) {
-        throw new Error(
-          "Timed out waiting for the approved allowance to become visible.",
-        )
+      if (attempt < maxAttempts - 1) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 250)
+        })
       }
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 250)
-      })
     }
+    throw new Error("Approved allowance not visible at the approval block.")
   }
 
   private async submitAndWait(

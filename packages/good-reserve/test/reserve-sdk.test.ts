@@ -23,6 +23,7 @@ const MOCK_EXCHANGE_ID =
   "0x0000000000000000000000000000000000000000000000000000000000001111" as `0x${string}`
 const MOCK_TX_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000001234" as `0x${string}`
+const MOCK_BLOCK_NUMBER = 12_345n
 
 // ─── Mock factories ────────────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ describe("GoodReserveSDK", () => {
     mockedWaitForTransactionReceipt.mockResolvedValue({
       transactionHash: MOCK_TX_HASH,
       status: "success",
+      blockNumber: MOCK_BLOCK_NUMBER,
     } as Awaited<ReturnType<typeof waitForTransactionReceipt>>)
   })
 
@@ -280,7 +282,7 @@ describe("GoodReserveSDK", () => {
       }
     })
 
-    it("waits until the approved allowance is visible before swapIn", async () => {
+    it("reads allowance at the approval block before swapIn", async () => {
       let allowanceReads = 0
       const rc = vi.fn().mockImplementation(
         makeAsyncFn((req) => {
@@ -290,7 +292,9 @@ describe("GoodReserveSDK", () => {
             return [CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1]
           if (fn === "allowance") {
             allowanceReads += 1
-            return allowanceReads >= 3 ? 100n : 0n
+            if (allowanceReads === 1) return 0n
+            if (req.blockNumber === MOCK_BLOCK_NUMBER) return 100n
+            return 0n
           }
           return 0n
         }),
@@ -309,7 +313,12 @@ describe("GoodReserveSDK", () => {
       )
 
       expect(result.hash).toBe(MOCK_TX_HASH)
-      expect(allowanceReads).toBeGreaterThanOrEqual(3)
+      expect(rc).toHaveBeenCalledWith(
+        expect.objectContaining({
+          functionName: "allowance",
+          blockNumber: MOCK_BLOCK_NUMBER,
+        }),
+      )
       expect(simulateContract).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({ functionName: "approve" }),
@@ -320,8 +329,7 @@ describe("GoodReserveSDK", () => {
       )
     })
 
-    it("throws when the approved allowance does not become visible", async () => {
-      vi.useFakeTimers()
+    it("throws when the approved allowance is not visible at the approval block", async () => {
       const rc = vi.fn().mockImplementation(
         makeAsyncFn((req) => {
           const fn = String(req.functionName)
@@ -339,26 +347,13 @@ describe("GoodReserveSDK", () => {
         simulateContract,
       } as any)
 
-      try {
-        const buyPromise = new GoodReserveSDK(publicClient, wc).buy(
-          CELO_PROD_STABLE,
-          100n,
-          90n,
-        )
-        const assertion = expect(buyPromise).rejects.toThrow(
-          "Timed out waiting for the approved allowance to become visible.",
-        )
-        await vi.advanceTimersByTimeAsync(9_999)
-        expect(simulateContract).toHaveBeenCalledTimes(1)
-        await vi.advanceTimersByTimeAsync(1)
-        await assertion
-        expect(simulateContract).toHaveBeenCalledTimes(1)
-        expect(simulateContract).toHaveBeenCalledWith(
-          expect.objectContaining({ functionName: "approve" }),
-        )
-      } finally {
-        vi.useRealTimers()
-      }
+      await expect(
+        new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
+      ).rejects.toThrow("Approved allowance not visible at the approval block.")
+      expect(simulateContract).toHaveBeenCalledTimes(1)
+      expect(simulateContract).toHaveBeenCalledWith(
+        expect.objectContaining({ functionName: "approve" }),
+      )
     })
 
   })
