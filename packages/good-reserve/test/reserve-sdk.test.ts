@@ -356,6 +356,30 @@ describe("GoodReserveSDK", () => {
       )
     })
 
+    it("throws when the approval receipt is reverted", async () => {
+      mockedWaitForTransactionReceipt.mockResolvedValueOnce({
+        transactionHash: MOCK_TX_HASH,
+        status: "reverted",
+        blockNumber: MOCK_BLOCK_NUMBER,
+      } as Awaited<ReturnType<typeof waitForTransactionReceipt>>)
+
+      const rc = makeMentoReadContract(CELO_PROD_STABLE, CELO_PROD_GD)
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({
+        readContract: rc,
+        simulateContract,
+      } as any)
+
+      await expect(
+        new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
+      ).rejects.toThrow("Approval transaction reverted on-chain.")
+      expect(simulateContract).toHaveBeenCalledTimes(1)
+      expect(simulateContract).toHaveBeenCalledWith(
+        expect.objectContaining({ functionName: "approve" }),
+      )
+    })
+
   })
 
   // ── sell ─────────────────────────────────────────────────────────────────────

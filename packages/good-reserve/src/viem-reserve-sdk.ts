@@ -579,6 +579,9 @@ export class GoodReserveSDK {
       },
       onHash,
     )
+    if (receipt.status !== "success") {
+      throw new Error("Approval transaction reverted on-chain.")
+    }
     if (!receipt.blockNumber) {
       throw new Error("Approval receipt missing block number.")
     }
