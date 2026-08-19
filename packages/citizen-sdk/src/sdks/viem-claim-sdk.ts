@@ -374,7 +374,11 @@ export class ClaimSDK {
     })
 
     const hash = await this.walletClient.writeContract(request)
-    await safeInvokeSubmittedCallback(hash, onHash)
+    await safeInvokeSubmittedCallback(
+      hash,
+      onHash,
+      "[ClaimSDK] onClaimSubmitted callback",
+    )
 
     // Wait one block to prevent waitFor... from immediately throwing an error
     await new Promise((res) => setTimeout(res, 5000))

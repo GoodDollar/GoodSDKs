@@ -98,7 +98,11 @@ export class ClaimCustodialSDK extends ClaimSDK {
                 hash = await this.walletClient.writeContract(request)
             }
 
-            await safeInvokeSubmittedCallback(hash, onHash)
+            await safeInvokeSubmittedCallback(
+                hash,
+                onHash,
+                "[ClaimSDK] onClaimSubmitted callback",
+            )
 
             // Wait one block to prevent immediate errors
             await new Promise((res) => setTimeout(res, 5000))

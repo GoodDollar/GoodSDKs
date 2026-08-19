@@ -5,10 +5,11 @@ export type TransactionSubmittedCallback = (
 export async function safeInvokeSubmittedCallback(
   hash: `0x${string}`,
   onSubmitted?: TransactionSubmittedCallback,
+  label = "Transaction submitted callback",
 ): Promise<void> {
   try {
     await onSubmitted?.(hash)
   } catch (error) {
-    console.warn("[ClaimSDK] onClaimSubmitted callback failed", error)
+    console.warn(`${label} failed`, error)
   }
 }
