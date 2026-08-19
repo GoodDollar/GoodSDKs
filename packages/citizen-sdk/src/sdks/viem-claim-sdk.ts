@@ -246,6 +246,9 @@ export class ClaimSDK {
     return this.chainId
   }
 
+  /**
+   * Normalizes legacy positional txConfirm usage and resolves submitted-callback aliases by newest name first.
+   */
   private normalizeClaimOptions(
     optionsOrTxConfirm?: ClaimOptions | ClaimTxConfirmCallback,
   ): Pick<ClaimOptions, "txConfirm" | "onTransactionSubmitted"> {
