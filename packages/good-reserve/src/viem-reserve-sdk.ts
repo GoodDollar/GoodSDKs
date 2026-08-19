@@ -570,7 +570,7 @@ export class GoodReserveSDK {
     // the amount needed for this swap. If exactApproval=false, we approve maxUint256
     // so users don't have to eat the gas cost of another approval next time.
     const approvalAmount = this.exactApproval ? amount : maxUint256
-    const { receipt } = await this.submitAndWait(
+    await this.submitAndWait(
       {
         address: token,
         abi: erc20ABI,
@@ -579,9 +579,6 @@ export class GoodReserveSDK {
       },
       onHash,
     )
-    if (receipt.status !== "success") {
-      throw new Error("Approval transaction reverted on-chain.")
-    }
     await this.waitUntilAllowance(token, account, spender, amount)
   }
 
@@ -592,6 +589,11 @@ export class GoodReserveSDK {
     amount: bigint,
   ) {
     const deadline = Date.now() + 10_000
+    // Celo's public Forno RPC is load-balanced across nodes. waitForTransactionReceipt
+    // resolves as soon as one node confirms the approve tx, but the subsequent
+    // readContract (eth_call with "latest") can land on a different node that has
+    // not yet propagated that block. We poll until the updated allowance is visible
+    // before attempting swapIn, avoiding a spurious "insufficient allowance" revert.
     while (true) {
       const visibleAllowance = await this.publicClient.readContract({
         address: token,
