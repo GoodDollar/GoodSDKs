@@ -62,13 +62,13 @@ describe("ClaimSDK claim callbacks", () => {
     vi.spyOn(sdk, "checkBalanceWithRetry").mockResolvedValue(true)
   })
 
-  it("calls onTransactionSubmitted once after claim submission and before confirmation", async () => {
+  it("calls onClaimSubmitted once after claim submission and before confirmation", async () => {
     const events: string[] = []
     let confirmReceipt: (receipt: TransactionReceipt) => void = () => {}
     const receiptPromise = new Promise<TransactionReceipt>((resolve) => {
       confirmReceipt = resolve
     })
-    const onTransactionSubmitted = vi.fn(() => {
+    const onClaimSubmitted = vi.fn(() => {
       events.push("submitted")
     })
     vi.spyOn(sdk, "submitAndWait").mockImplementation(
@@ -80,17 +80,17 @@ describe("ClaimSDK claim callbacks", () => {
     )
 
     const claimPromise = sdk
-      .claim({ onTransactionSubmitted })
+      .claim(undefined, onClaimSubmitted)
       .then((receipt) => {
         events.push("confirmed")
         return receipt as TransactionReceipt
       })
 
     await vi.waitFor(() => {
-      expect(onTransactionSubmitted).toHaveBeenCalledWith(MOCK_HASH)
+      expect(onClaimSubmitted).toHaveBeenCalledWith(MOCK_HASH)
     })
 
-    expect(onTransactionSubmitted).toHaveBeenCalledTimes(1)
+    expect(onClaimSubmitted).toHaveBeenCalledTimes(1)
     expect(events).toEqual(["submitted", "waiting"])
 
     confirmReceipt({ transactionHash: MOCK_HASH } as TransactionReceipt)
@@ -100,17 +100,17 @@ describe("ClaimSDK claim callbacks", () => {
     expect(events).toEqual(["submitted", "waiting", "confirmed"])
   })
 
-  it("swallows onTransactionSubmitted errors so claim still resolves", async () => {
+  it("swallows onClaimSubmitted errors so claim still resolves", async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
-    const onTransactionSubmitted = vi
+    const onClaimSubmitted = vi
       .fn()
       .mockRejectedValue(new Error("ui callback failed"))
 
-    const claimPromise = sdk.claim({ onTransactionSubmitted })
+    const claimPromise = sdk.claim(undefined, onClaimSubmitted)
 
     await vi.waitFor(() => {
-      expect(onTransactionSubmitted).toHaveBeenCalledTimes(1)
+      expect(onClaimSubmitted).toHaveBeenCalledTimes(1)
     })
 
     await vi.advanceTimersByTimeAsync(5000)
@@ -119,37 +119,23 @@ describe("ClaimSDK claim callbacks", () => {
       transactionHash: MOCK_HASH,
     })
     expect(warnSpy).toHaveBeenCalledWith(
-      "[ClaimSDK] onTransactionSubmitted callback failed",
+      "[ClaimSDK] onClaimSubmitted callback failed",
       expect.any(Error),
     )
   })
 
-  it("supports legacy claim txConfirm and onTxHash callbacks", async () => {
+  it("supports onConfirmFaucetTx and onClaimSubmitted callbacks", async () => {
     vi.useFakeTimers()
-    const txConfirm = vi.fn()
-    const onTxHash = vi.fn()
+    const onConfirmFaucetTx = vi.fn()
+    const onClaimSubmitted = vi.fn()
 
-    const claimPromise = sdk.claim({ txConfirm, onTxHash })
+    const claimPromise = sdk.claim(onConfirmFaucetTx, onClaimSubmitted)
 
     await vi.waitFor(() => {
-      expect(onTxHash).toHaveBeenCalledWith(MOCK_HASH)
+      expect(onClaimSubmitted).toHaveBeenCalledWith(MOCK_HASH)
     })
 
-    expect(sdk.checkBalanceWithRetry).toHaveBeenCalledWith(txConfirm)
-
-    await vi.advanceTimersByTimeAsync(5000)
-    await claimPromise
-  })
-
-  it("supports the lowercase onTxhash compatibility alias", async () => {
-    vi.useFakeTimers()
-    const onTxhash = vi.fn()
-
-    const claimPromise = sdk.claim({ onTxhash })
-
-    await vi.waitFor(() => {
-      expect(onTxhash).toHaveBeenCalledWith(MOCK_HASH)
-    })
+    expect(sdk.checkBalanceWithRetry).toHaveBeenCalledWith(onConfirmFaucetTx)
 
     await vi.advanceTimersByTimeAsync(5000)
     await claimPromise

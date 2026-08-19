@@ -97,7 +97,11 @@ export class ClaimCustodialSDK extends ClaimSDK {
                 hash = await this.walletClient.writeContract(request)
             }
 
-            await this.notifyTransactionSubmitted(hash, onHash)
+            try {
+                await onHash?.(hash)
+            } catch (error) {
+                console.warn("[ClaimSDK] onClaimSubmitted callback failed", error)
+            }
 
             // Wait one block to prevent immediate errors
             await new Promise((res) => setTimeout(res, 5000))
