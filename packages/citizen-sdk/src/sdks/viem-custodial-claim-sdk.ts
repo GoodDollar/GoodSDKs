@@ -16,6 +16,7 @@ import {
   type ClaimSDKOptions,
   type ClaimTransactionSubmittedCallback,
 } from "./viem-claim-sdk" // Import the base ClaimSDK
+import { safeInvokeSubmittedCallback } from "../utils/transactionCallbacks"
 import type { WalletClaimStatus } from "../types"
 
 interface ClaimCustodialSDKOptions extends Omit<ClaimSDKOptions, 'account'> {
@@ -97,11 +98,7 @@ export class ClaimCustodialSDK extends ClaimSDK {
                 hash = await this.walletClient.writeContract(request)
             }
 
-            try {
-                await onHash?.(hash)
-            } catch (error) {
-                console.warn("[ClaimSDK] onClaimSubmitted callback failed", error)
-            }
+            await safeInvokeSubmittedCallback(hash, onHash)
 
             // Wait one block to prevent immediate errors
             await new Promise((res) => setTimeout(res, 5000))

@@ -31,6 +31,10 @@ import {
   getRpcFallbackClient,
   shouldRetryRpcFallback,
 } from "../utils/rpcFallback"
+import {
+  safeInvokeSubmittedCallback,
+  type TransactionSubmittedCallback,
+} from "../utils/transactionCallbacks"
 
 export interface ClaimSDKOptions {
   account: Address
@@ -75,9 +79,7 @@ export interface ClaimEntitlementResult {
 
 export type ClaimTxConfirmCallback = (message: string) => void | Promise<void>
 
-export type ClaimTransactionSubmittedCallback = (
-  hash: `0x${string}`,
-) => void | Promise<void>
+export type ClaimTransactionSubmittedCallback = TransactionSubmittedCallback
 
 type AltClaimCandidate = {
   chainId: SupportedChains
@@ -372,11 +374,7 @@ export class ClaimSDK {
     })
 
     const hash = await this.walletClient.writeContract(request)
-    try {
-      await onHash?.(hash)
-    } catch (error) {
-      console.warn("[ClaimSDK] onClaimSubmitted callback failed", error)
-    }
+    await safeInvokeSubmittedCallback(hash, onHash)
 
     // Wait one block to prevent waitFor... from immediately throwing an error
     await new Promise((res) => setTimeout(res, 5000))
