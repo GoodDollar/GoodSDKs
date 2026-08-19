@@ -126,6 +126,20 @@ describe("ClaimSDK claim callbacks", () => {
     await claimPromise
   })
 
+  it("supports the lowercase onTxhash compatibility alias", async () => {
+    vi.useFakeTimers()
+    const onTxhash = vi.fn()
+
+    const claimPromise = sdk.claim({ onTxhash })
+
+    await vi.waitFor(() => {
+      expect(onTxhash).toHaveBeenCalledWith(MOCK_HASH)
+    })
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await claimPromise
+  })
+
   it("preserves the positional txConfirm callback signature", async () => {
     vi.useFakeTimers()
     const txConfirm = vi.fn()

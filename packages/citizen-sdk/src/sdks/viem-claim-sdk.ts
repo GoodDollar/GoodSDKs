@@ -86,7 +86,7 @@ export interface ClaimOptions {
   onTransactionSubmitted?: ClaimTransactionSubmittedCallback
   /** @deprecated Use onTransactionSubmitted for the post-broadcast, pre-confirmation stage. */
   onTxHash?: ClaimTransactionSubmittedCallback
-  /** @deprecated Use onTransactionSubmitted for the post-broadcast, pre-confirmation stage. */
+  /** @deprecated Use onTransactionSubmitted; this alias preserves integrations that used the lowercase-h spelling. */
   onTxhash?: ClaimTransactionSubmittedCallback
 }
 
