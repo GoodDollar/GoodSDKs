@@ -12,9 +12,9 @@ import {
 
 import { waitForTransactionReceipt } from "viem/actions"
 import {
-    ClaimSDK,
-    type ClaimSDKOptions,
-    type ClaimTransactionSubmittedCallback,
+  ClaimSDK,
+  type ClaimSDKOptions,
+  type ClaimTransactionSubmittedCallback,
 } from "./viem-claim-sdk" // Import the base ClaimSDK
 import type { WalletClaimStatus } from "../types"
 
