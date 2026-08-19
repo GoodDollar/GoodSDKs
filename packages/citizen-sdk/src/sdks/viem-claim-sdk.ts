@@ -80,7 +80,7 @@ export type ClaimTransactionSubmittedCallback = (
 ) => void | Promise<void>
 
 export interface ClaimOptions {
-  /** Called before any wallet confirmation that may be needed for the claim flow. */
+  /** Called during the balance check step to confirm faucet or retry actions. */
   txConfirm?: ClaimTxConfirmCallback
   /** Called once after the claim transaction is broadcast and before receipt confirmation. */
   onTransactionSubmitted?: ClaimTransactionSubmittedCallback
