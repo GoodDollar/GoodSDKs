@@ -73,6 +73,23 @@ export interface ClaimEntitlementResult {
   altAmount: bigint | null
 }
 
+export type ClaimTxConfirmCallback = (message: string) => void | Promise<void>
+
+export type ClaimTransactionSubmittedCallback = (
+  hash: `0x${string}`,
+) => void | Promise<void>
+
+export interface ClaimOptions {
+  /** Called before any wallet confirmation that may be needed for the claim flow. */
+  txConfirm?: ClaimTxConfirmCallback
+  /** Called once after the claim transaction is broadcast and before receipt confirmation. */
+  onTransactionSubmitted?: ClaimTransactionSubmittedCallback
+  /** @deprecated Use onTransactionSubmitted for the post-broadcast, pre-confirmation stage. */
+  onTxHash?: ClaimTransactionSubmittedCallback
+  /** @deprecated Use onTransactionSubmitted for the post-broadcast, pre-confirmation stage. */
+  onTxhash?: ClaimTransactionSubmittedCallback
+}
+
 type AltClaimCandidate = {
   chainId: SupportedChains
   amount: bigint
@@ -229,6 +246,39 @@ export class ClaimSDK {
     return this.chainId
   }
 
+  private normalizeClaimOptions(
+    optionsOrTxConfirm?: ClaimOptions | ClaimTxConfirmCallback,
+  ): Pick<ClaimOptions, "txConfirm" | "onTransactionSubmitted"> {
+    if (typeof optionsOrTxConfirm === "function") {
+      return {
+        txConfirm: optionsOrTxConfirm,
+        onTransactionSubmitted: undefined,
+      }
+    }
+
+    const options = optionsOrTxConfirm ?? {}
+
+    return {
+      txConfirm: options.txConfirm,
+      onTransactionSubmitted:
+        options.onTransactionSubmitted ?? options.onTxHash ?? options.onTxhash,
+    }
+  }
+
+  /**
+   * Delivers the submitted transaction hash without letting UI callback failures affect the transaction flow.
+   */
+  protected async notifyTransactionSubmitted(
+    hash: `0x${string}`,
+    onTransactionSubmitted?: ClaimTransactionSubmittedCallback,
+  ): Promise<void> {
+    try {
+      await onTransactionSubmitted?.(hash)
+    } catch {
+      // Intentionally swallow callback errors so a UI state hook cannot fail the claim.
+    }
+  }
+
   private async readChainEntitlement(
     chainId: SupportedChains,
     client?: PublicClient,
@@ -348,13 +398,13 @@ export class ClaimSDK {
   /**
    * Submits a transaction and waits for its receipt.
    * @param params - Parameters for simulating the contract call.
-   * @param onHash - Optional callback to receive the transaction hash.
+   * @param onHash - Optional callback invoked after broadcast and before receipt confirmation.
    * @returns The transaction receipt.
    * @throws If submission fails or no active wallet address is found.
    */
   async submitAndWait(
     params: SimulateContractParameters,
-    onHash?: (hash: `0x${string}`) => void,
+    onHash?: ClaimTransactionSubmittedCallback,
   ): Promise<TransactionReceipt> {
     if (!this.account) {
       throw new Error("No active wallet address found.")
@@ -366,7 +416,7 @@ export class ClaimSDK {
     })
 
     const hash = await this.walletClient.writeContract(request)
-    onHash?.(hash)
+    await this.notifyTransactionSubmitted(hash, onHash)
 
     // Wait one block to prevent waitFor... from immediately throwing an error
     await new Promise((res) => setTimeout(res, 5000))
@@ -472,13 +522,14 @@ export class ClaimSDK {
    * 4. If whitelisted and can claim, checks if the user has sufficient balance.
    * 5. If the user cannot claim due to low balance, triggers a faucet request and waits.
    * 6. If whitelisted and can claim, proceeds to call the claim function on the UBIScheme contract.
-   * @param txConfirm - Optional callback to confirm transactions before execution.
+   * @param optionsOrTxConfirm - Optional claim callbacks, or the legacy txConfirm callback.
    * @returns The transaction receipt if the claim is successful.
    * @throws If the user is not whitelisted, not entitled to claim, balance check fails, or claim transaction fails.
    */
   async claim(
-    txConfirm?: (message: string) => void | Promise<void>,
+    optionsOrTxConfirm?: ClaimOptions | ClaimTxConfirmCallback,
   ): Promise<TransactionReceipt | any> {
+    const claimOptions = this.normalizeClaimOptions(optionsOrTxConfirm)
     const userAddress = this.account
 
     // 1. Check whitelisting status
@@ -496,19 +547,22 @@ export class ClaimSDK {
     }
 
     // 3. Ensure the user has sufficient balance to claim
-    const canClaim = await this.checkBalanceWithRetry(txConfirm)
+    const canClaim = await this.checkBalanceWithRetry(claimOptions.txConfirm)
     if (!canClaim) {
       throw new Error("Failed to meet balance threshold after faucet request.")
     }
 
     // 4. Execute the claim transaction
     try {
-      return await this.submitAndWait({
-        address: this.ubiSchemeAddress,
-        abi: ubiSchemeV2ABI,
-        functionName: "claim",
-        chain: this.walletClient.chain,
-      })
+      return await this.submitAndWait(
+        {
+          address: this.ubiSchemeAddress,
+          abi: ubiSchemeV2ABI,
+          functionName: "claim",
+          chain: this.walletClient.chain,
+        },
+        claimOptions.onTransactionSubmitted,
+      )
     } catch (error: any) {
       if (error instanceof ContractFunctionExecutionError) {
         throw new Error(`Claim failed: ${error.shortMessage}`)
