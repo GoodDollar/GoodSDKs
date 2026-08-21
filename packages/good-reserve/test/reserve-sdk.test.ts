@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { waitForTransactionReceipt } from "viem/actions"
 import { GoodReserveSDK } from "../src/viem-reserve-sdk"
 import {
   CELO_CHAIN_ID,
@@ -7,13 +8,11 @@ import {
 } from "../src/constants"
 import type { PublicClient, WalletClient } from "viem"
 
-// Mock viem/actions so we can intercept waitForTransactionReceipt.
 vi.mock("viem/actions", () => ({
-  waitForTransactionReceipt: vi.fn().mockResolvedValue({
-    transactionHash:
-      "0x0000000000000000000000000000000000000000000000000000000000001234",
-  }),
+  waitForTransactionReceipt: vi.fn(),
 }))
+
+const mockedWaitForTransactionReceipt = vi.mocked(waitForTransactionReceipt)
 
 const CELO_PROD_STABLE = RESERVE_CONTRACT_ADDRESSES.production.celo.stableToken
 const CELO_PROD_GD = RESERVE_CONTRACT_ADDRESSES.production.celo.goodDollar
@@ -24,6 +23,7 @@ const MOCK_EXCHANGE_ID =
   "0x0000000000000000000000000000000000000000000000000000000000001111" as `0x${string}`
 const MOCK_TX_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000001234" as `0x${string}`
+const MOCK_BLOCK_NUMBER = 12_345n
 
 // ─── Mock factories ────────────────────────────────────────────────────────────
 
@@ -61,8 +61,9 @@ const makeMentoReadContract = (
   stable: `0x${string}`,
   gd: `0x${string}`,
   quoteAmount = 500n,
-) =>
-  vi.fn().mockImplementation(
+) => {
+  let allowanceReads = 0
+  return vi.fn().mockImplementation(
     makeAsyncFn((req) => {
       const fn = String(req.functionName)
       if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
@@ -71,16 +72,28 @@ const makeMentoReadContract = (
       if (fn === "getAmountOut") return quoteAmount
       if (fn === "totalSupply") return 123456789n
       if (fn === "decimals") return 18
-      if (fn === "allowance") return 0n
+      if (fn === "allowance") {
+        allowanceReads += 1
+        return allowanceReads === 1 ? 0n : 10_000_000n
+      }
       return 0n
     }),
   )
+}
 
 
 // ─── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("GoodReserveSDK", () => {
-  // ── constructor ──────────────────────────────────────────────────────────────
+  beforeEach(() => {
+    mockedWaitForTransactionReceipt.mockReset()
+    mockedWaitForTransactionReceipt.mockResolvedValue({
+      transactionHash: MOCK_TX_HASH,
+      status: "success",
+      blockNumber: MOCK_BLOCK_NUMBER,
+    } as Awaited<ReturnType<typeof waitForTransactionReceipt>>)
+  })
+
   describe("constructor", () => {
     it("throws on unsupported chain", () => {
       const client = makeMockClient({ chain: { id: 1 } } as any)
@@ -268,6 +281,105 @@ describe("GoodReserveSDK", () => {
         expect((args as any).functionName).not.toBe("approve")
       }
     })
+
+    it("reads allowance at the approval block before swapIn", async () => {
+      let allowanceReads = 0
+      const rc = vi.fn().mockImplementation(
+        makeAsyncFn((req) => {
+          const fn = String(req.functionName)
+          if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+          if (fn === "getPoolExchange")
+            return [CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1]
+          if (fn === "allowance") {
+            allowanceReads += 1
+            if (allowanceReads === 1) return 0n
+            if (req.blockNumber === MOCK_BLOCK_NUMBER) return 100n
+            return 0n
+          }
+          return 0n
+        }),
+      )
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({
+        readContract: rc,
+        simulateContract,
+      } as any)
+
+      const result = await new GoodReserveSDK(publicClient, wc).buy(
+        CELO_PROD_STABLE,
+        100n,
+        90n,
+      )
+
+      expect(result.hash).toBe(MOCK_TX_HASH)
+      expect(rc).toHaveBeenCalledWith(
+        expect.objectContaining({
+          functionName: "allowance",
+          blockNumber: MOCK_BLOCK_NUMBER,
+        }),
+      )
+      expect(simulateContract).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ functionName: "approve" }),
+      )
+      expect(simulateContract).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ functionName: "swapIn" }),
+      )
+    })
+
+    it("throws when the approved allowance is not visible at the approval block", async () => {
+      const rc = vi.fn().mockImplementation(
+        makeAsyncFn((req) => {
+          const fn = String(req.functionName)
+          if (fn === "getExchangeIds") return [MOCK_EXCHANGE_ID]
+          if (fn === "getPoolExchange")
+            return [CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1]
+          if (fn === "allowance") return 0n
+          return 0n
+        }),
+      )
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({
+        readContract: rc,
+        simulateContract,
+      } as any)
+
+      await expect(
+        new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
+      ).rejects.toThrow("Approved allowance not visible at the approval block.")
+      expect(simulateContract).toHaveBeenCalledTimes(1)
+      expect(simulateContract).toHaveBeenCalledWith(
+        expect.objectContaining({ functionName: "approve" }),
+      )
+    })
+
+    it("throws when the approval receipt is reverted", async () => {
+      mockedWaitForTransactionReceipt.mockResolvedValueOnce({
+        transactionHash: MOCK_TX_HASH,
+        status: "reverted",
+        blockNumber: MOCK_BLOCK_NUMBER,
+      } as Awaited<ReturnType<typeof waitForTransactionReceipt>>)
+
+      const rc = makeMentoReadContract(CELO_PROD_STABLE, CELO_PROD_GD)
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({
+        readContract: rc,
+        simulateContract,
+      } as any)
+
+      await expect(
+        new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
+      ).rejects.toThrow("Approval transaction reverted on-chain.")
+      expect(simulateContract).toHaveBeenCalledTimes(1)
+      expect(simulateContract).toHaveBeenCalledWith(
+        expect.objectContaining({ functionName: "approve" }),
+      )
+    })
+
   })
 
   // ── sell ─────────────────────────────────────────────────────────────────────
