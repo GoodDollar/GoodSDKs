@@ -601,7 +601,7 @@ export class GoodReserveSDK {
     amount: bigint,
     blockNumber: bigint,
   ) {
-    const maxAttempts = 5
+    const maxAttempts = 20
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let visibleAllowance: bigint = 0n;
       try {
@@ -618,7 +618,7 @@ export class GoodReserveSDK {
       if (visibleAllowance >= amount) return
       if (attempt < maxAttempts - 1) {
         await new Promise<void>((resolve) => {
-          setTimeout(resolve, 250)
+          setTimeout(resolve, 500)
         })
       }
     }

@@ -347,9 +347,19 @@ describe("GoodReserveSDK", () => {
         simulateContract,
       } as any)
 
-      await expect(
-        new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
-      ).rejects.toThrow("Approved allowance not visible at the approval block.")
+      vi.useFakeTimers()
+      try {
+        const assertion = expect(
+          new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
+        ).rejects.toThrow(
+          "Approved allowance not visible at the approval block.",
+        )
+        await vi.runAllTimersAsync()
+        await assertion
+      } finally {
+        vi.useRealTimers()
+      }
+
       expect(simulateContract).toHaveBeenCalledTimes(1)
       expect(simulateContract).toHaveBeenCalledWith(
         expect.objectContaining({ functionName: "approve" }),
@@ -439,7 +449,7 @@ describe("GoodReserveSDK", () => {
       }
 
       // An RPC failure must consume a retry rather than abort the whole swap.
-      expect(pinnedReads).toBe(5)
+      expect(pinnedReads).toBe(20)
       expect(simulateContract).toHaveBeenCalledTimes(1)
     })
 
