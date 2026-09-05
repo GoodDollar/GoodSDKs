@@ -1,35 +1,40 @@
-name: Deploy engagement production
+name: Deploy identity production
 
 on:
+  # `prod` preserves deployment/contract history not present on main; update it
+  # only through the protected main-to-prod merge documented in PROD_BRANCH_AUDIT.
   push:
-    branches: [main]
+    branches: [prod]
     paths:
-      - "apps/engagement-app/**"
-      - "packages/engagement-sdk/**"
-      - ".github/workflows/vercel-deploy-engagement.yml"
+      - "apps/demo-identity-app/**"
+      - "packages/citizen-sdk/**"
+      - "packages/react-hooks/**"
+      - "package.json"
+      - "yarn.lock"
+      - ".github/workflows/vercel-deploy-identity.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  # Serialize production changes and allow an in-flight deployment to finish.
-  group: engagement-production
+  # Never cancel an in-flight production deployment in favor of a newer push.
+  group: identity-production
   cancel-in-progress: false
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ENGAGEMENT_PROJECT_ID }}
+  VERCEL_PROJECT_ID: prj_TYzFsq9KkF1MGQ9ue2WhwrtucbTh
   VERCEL_CLI_VERSION: 44.7.3
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      # Environment approval gates access to production Vercel credentials.
-      name: production
-      url: ${{ steps.deploy.outputs.url }}
     env:
       VERCEL_DEPLOY_TOKEN: ${{ secrets.VERCEL_DEPLOY_TOKEN }}
+    environment:
+      # Environment approval gates access to production Vercel credentials.
+      name: identity-production
+      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -44,17 +49,25 @@ jobs:
         run: npm install --global vercel@${VERCEL_CLI_VERSION}
 
       - name: Pull production project settings
-        working-directory: apps/engagement-app
+        working-directory: apps/demo-identity-app
         run: vercel pull --yes --environment=production --token="$VERCEL_DEPLOY_TOKEN"
 
       - name: Build production output
-        working-directory: apps/engagement-app
+        working-directory: apps/demo-identity-app
         run: vercel build --prod --token="$VERCEL_DEPLOY_TOKEN"
+
+      - name: Reject CI, Vercel, and npm secrets in built assets
+        run: node scripts/scan-build-secrets.mjs apps/demo-identity-app/.vercel/output
 
       - name: Deploy prebuilt production output
         id: deploy
-        working-directory: apps/engagement-app
+        working-directory: apps/demo-identity-app
         # The prebuilt output is production-ready; no preview promotion is needed.
         run: |
           url="$(vercel deploy --prebuilt --prod --token="$VERCEL_DEPLOY_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: HTTP smoke test
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: curl --fail --silent --show-error --retry 5 --retry-all-errors "$DEPLOYMENT_URL/"
