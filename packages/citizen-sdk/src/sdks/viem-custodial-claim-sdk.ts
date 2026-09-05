@@ -11,7 +11,12 @@ import {
 } from "viem"
 
 import { waitForTransactionReceipt } from "viem/actions"
-import { ClaimSDK, type ClaimSDKOptions } from "./viem-claim-sdk" // Import the base ClaimSDK
+import {
+  ClaimSDK,
+  type ClaimSDKOptions,
+  type ClaimTransactionSubmittedCallback,
+} from "./viem-claim-sdk" // Import the base ClaimSDK
+import { safeInvokeSubmittedCallback } from "../utils/transactionCallbacks"
 import type { WalletClaimStatus } from "../types"
 
 interface ClaimCustodialSDKOptions extends Omit<ClaimSDKOptions, 'account'> {
@@ -38,13 +43,13 @@ export class ClaimCustodialSDK extends ClaimSDK {
      * Override submitAndWait to handle LocalAccount signing for Celo RPC compatibility
      * Submits a transaction and waits for its receipt.
      * @param params - Parameters for simulating the contract call.
-     * @param onHash - Optional callback to receive the transaction hash.
+     * @param onHash - Optional callback invoked after broadcast and before receipt confirmation.
      * @returns The transaction receipt.
      * @throws If submission fails or no active wallet address is found.
      */
     async submitAndWait(
         params: SimulateContractParameters,
-        onHash?: (hash: `0x${string}`) => void,
+        onHash?: ClaimTransactionSubmittedCallback,
     ): Promise<TransactionReceipt> {
         const account = this.walletClient.account
         if (!account?.address) {
@@ -93,7 +98,11 @@ export class ClaimCustodialSDK extends ClaimSDK {
                 hash = await this.walletClient.writeContract(request)
             }
 
-            onHash?.(hash)
+            await safeInvokeSubmittedCallback(
+                hash,
+                onHash,
+                "[ClaimSDK] onClaimSubmitted callback",
+            )
 
             // Wait one block to prevent immediate errors
             await new Promise((res) => setTimeout(res, 5000))
