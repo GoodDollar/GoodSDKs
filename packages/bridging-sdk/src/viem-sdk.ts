@@ -77,9 +77,10 @@ export class BridgingSDK {
   }
 
   private getPublicClient(chainId: ChainId): PublicClient {
-    const client = chainId === this.currentChainId
-      ? this.publicClient
-      : this.publicClients[chainId]
+    const client =
+      chainId === this.currentChainId
+        ? this.publicClient
+        : this.publicClients[chainId]
     if (client) {
       if (client.chain?.id !== undefined && client.chain.id !== chainId) {
         throw new Error(`Public client chain does not match ${chainId}`)
@@ -105,7 +106,8 @@ export class BridgingSDK {
 
     const config = (async () => {
       const sourceAddress = BRIDGE_CONTRACT_ADDRESSES[fromChain]
-      const destinationAddress = toChain === undefined ? undefined : BRIDGE_CONTRACT_ADDRESSES[toChain]
+      const destinationAddress =
+        toChain === undefined ? undefined : BRIDGE_CONTRACT_ADDRESSES[toChain]
       if (!sourceAddress || (toChain !== undefined && !destinationAddress)) {
         throw new Error("Bridge configuration unavailable for this route")
       }
@@ -123,13 +125,23 @@ export class BridgingSDK {
               functionName: "bridgeFees",
             }),
       ])
-      const [dailyLimit, txLimit, accountDailyLimit, minAmount, onlyWhitelisted] = limits
+      const [dailyLimit, txLimit, accountDailyLimit, minAmount, onlyWhitelisted] =
+        limits
       const protocolFeeBps = fees === null ? null : fees[2]
-      if (protocolFeeBps !== null && (protocolFeeBps < 0n || protocolFeeBps > 10000n)) {
+      if (
+        protocolFeeBps !== null &&
+        (protocolFeeBps < 0n || protocolFeeBps > 10000n)
+      ) {
         throw new Error("Invalid destination protocol fee")
       }
       return {
-        routeLimits: { dailyLimit, txLimit, accountDailyLimit, minAmount, onlyWhitelisted },
+        routeLimits: {
+          dailyLimit,
+          txLimit,
+          accountDailyLimit,
+          minAmount,
+          onlyWhitelisted,
+        },
         protocolFeeBps,
       }
     })()
@@ -445,11 +457,20 @@ export class BridgingSDK {
     let feeEstimate: FeeEstimate
     let protocolFeeBps: bigint
     try {
-      if (!SUPPORTED_CHAINS[fromChain] || !SUPPORTED_CHAINS[toChain] || fromChain === toChain) {
+      if (
+        !SUPPORTED_CHAINS[fromChain] ||
+        !SUPPORTED_CHAINS[toChain] ||
+        fromChain === toChain
+      ) {
         throw new Error("Unsupported bridge route")
       }
       feeEstimate = await this.estimateFee(toChain, protocol, fromChain)
-      const config = await this.getRouteConfiguration(fromChain, toChain, protocol, params.refresh)
+      const config = await this.getRouteConfiguration(
+        fromChain,
+        toChain,
+        protocol,
+        params.refresh,
+      )
       protocolFeeBps = config.protocolFeeBps!
     } catch (err) {
       requirements.push({
@@ -500,11 +521,13 @@ export class BridgingSDK {
     const needsApproval = allowance < amount
     const canBridge = requirements.length === 0
 
-    const decimalShift = SUPPORTED_CHAINS[toChain].decimals - SUPPORTED_CHAINS[fromChain].decimals
-    const destinationAmount = decimalShift >= 0
-      ? amount * 10n ** BigInt(decimalShift)
-      : amount / 10n ** BigInt(-decimalShift)
-    const protocolFee = destinationAmount * protocolFeeBps / 10000n
+    const decimalShift =
+      SUPPORTED_CHAINS[toChain].decimals - SUPPORTED_CHAINS[fromChain].decimals
+    const destinationAmount =
+      decimalShift >= 0
+        ? amount * 10n ** BigInt(decimalShift)
+        : amount / 10n ** BigInt(-decimalShift)
+    const protocolFee = (destinationAmount * protocolFeeBps) / 10000n
     const quote: BridgeFeeQuote = {
       fee: feeEstimate.fee,
       feeInNative: feeEstimate.feeInNative,
@@ -670,7 +693,12 @@ export class BridgingSDK {
       if (!data.data?.[0]) return { status: "pending" }
       const msg = data.data[0]
       return {
-        status: msg.status.name === "DELIVERED" ? "completed" : msg.status.name === "FAILED" ? "failed" : "pending",
+        status:
+          msg.status.name === "DELIVERED"
+            ? "completed"
+            : msg.status.name === "FAILED"
+              ? "failed"
+              : "pending",
         srcTxHash: msg.source.tx.txHash,
         dstTxHash: msg.destination?.tx.txHash,
         timestamp: new Date(msg.created).getTime(),
@@ -681,7 +709,12 @@ export class BridgingSDK {
       if (!data.data?.[0]) return { status: "pending" }
       const tx = data.data[0]
       return {
-        status: tx.status === "executed" ? "completed" : tx.status === "failed" ? "failed" : "pending",
+        status:
+          tx.status === "executed"
+            ? "completed"
+            : tx.status === "failed"
+              ? "failed"
+              : "pending",
         srcTxHash: tx.sourceTxHash,
         dstTxHash: tx.destinationTxHash,
         timestamp: new Date(tx.createdAt).getTime(),
@@ -707,7 +740,9 @@ export class BridgingSDK {
   ): Promise<BridgeConfig> {
     const fromChain = route?.fromChain ?? this.currentChainId
     if (fromChain !== this.currentChainId) {
-      throw new Error(`Switch network to ${SUPPORTED_CHAINS[fromChain]?.name || fromChain}`)
+      throw new Error(
+        `Switch network to ${SUPPORTED_CHAINS[fromChain]?.name || fromChain}`,
+      )
     }
     if (route) {
       if (!SUPPORTED_CHAINS[route.toChain] || route.toChain === fromChain) {
@@ -719,7 +754,12 @@ export class BridgingSDK {
       this.getG$Balance(address),
       this.publicClient.getBalance({ address }),
       this.getAllowance(address).catch(() => 0n),
-      this.getRouteConfiguration(fromChain, route?.toChain, route?.protocol, options.refresh),
+      this.getRouteConfiguration(
+        fromChain,
+        route?.toChain,
+        route?.protocol,
+        options.refresh,
+      ),
     ])
 
     return {
