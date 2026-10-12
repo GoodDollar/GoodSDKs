@@ -27,10 +27,17 @@ interface BridgeFormProps {
 }
 
 export function BridgeForm({ defaultProtocol, onBusyChange }: BridgeFormProps) {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const walletChainId = useChainId() as ChainId
   const { switchChain, error: switchError } = useSwitchChain()
+  // A replaced client invalidates preflight even if its account and chain match.
+  const walletContext = useMemo(
+    () => ({ walletClient, connector, address, isConnected, walletChainId }),
+    [walletClient, connector, address, isConnected, walletChainId],
+  )
+  const activeWalletContext = useRef(walletContext)
+  activeWalletContext.current = walletContext
 
   const [previewChain, setPreviewChain] = useState<ChainId>(42220)
   const fromChain =
@@ -88,6 +95,10 @@ export function BridgeForm({ defaultProtocol, onBusyChange }: BridgeFormProps) {
     onBusyChange(isBusy)
     return () => onBusyChange(false)
   }, [isBusy, onBusyChange])
+
+  useEffect(() => {
+    if (amount && !submittingRef.current) setBridgeStatus(null)
+  }, [amount, routeKey, isConnected, walletChainId, connector?.uid])
 
   // Debounce amount input
   useEffect(() => {
@@ -250,6 +261,7 @@ export function BridgeForm({ defaultProtocol, onBusyChange }: BridgeFormProps) {
     )
       return
     const submittedKey = quoteKey
+    const submittedWallet = walletContext
     submittingRef.current = true
     setSubmitting(true)
     setBridgeStatus(null)
@@ -261,7 +273,10 @@ export function BridgeForm({ defaultProtocol, onBusyChange }: BridgeFormProps) {
         ...route,
         refresh: true,
       })
-      if (currentQuoteKey.current !== submittedKey)
+      if (
+        currentQuoteKey.current !== submittedKey ||
+        activeWalletContext.current !== submittedWallet
+      )
         throw new Error("Wallet or form changed; review a new quote.")
       setQuoteState({ key: submittedKey, data })
       if (!data.canBridge || !data.quote) {
@@ -277,14 +292,18 @@ export function BridgeForm({ defaultProtocol, onBusyChange }: BridgeFormProps) {
         )
       }
       const refreshedConfig = await sdk.getBridgeConfig(sender, route)
-      if (currentQuoteKey.current !== submittedKey)
+      if (
+        currentQuoteKey.current !== submittedKey ||
+        activeWalletContext.current !== submittedWallet
+      )
         throw new Error("Wallet or form changed; review a new quote.")
       setConfigState({ key: configKey, data: refreshedConfig })
       if (
         (await walletClient.getChainId()) !== fromChain ||
         (await walletClient.getAddresses())[0]?.toLowerCase() !==
           sender.toLowerCase() ||
-        currentQuoteKey.current !== submittedKey
+        currentQuoteKey.current !== submittedKey ||
+        activeWalletContext.current !== submittedWallet
       ) {
         throw new Error("Wallet changed; review a new quote.")
       }
@@ -342,8 +361,7 @@ export function BridgeForm({ defaultProtocol, onBusyChange }: BridgeFormProps) {
       !quoteError &&
       !parsedAmount.error &&
       !recipientError &&
-      !isBusy &&
-      bridgeStatus?.step !== "completed",
+      !isBusy,
   )
   const destinationDecimals = SUPPORTED_CHAINS[toChain].decimals
   const displayedQuote = quoteResult?.quote
