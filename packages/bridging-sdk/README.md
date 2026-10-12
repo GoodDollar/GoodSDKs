@@ -289,6 +289,40 @@ await sdk.doBridge(quote, (status) => {
 
 See `apps/demo-bridging-app` for a complete end-to-end implementation.
 
+### Local QA (no transactions)
+
+Verified with **Node.js 22.23.3** and **Yarn 4.6.0**. Use that Node version; the SDK test runner requires Node 20.19+ or 22.12+. Run these commands from the repository root:
+
+```bash
+corepack enable
+yarn --version # 4.6.0 (the repository pins Yarn)
+yarn install --immutable
+yarn turbo run build --filter=demo-bridging-app
+yarn workspace @goodsdks/bridging-sdk test
+yarn workspace demo-bridging-app dev --host 127.0.0.1
+```
+
+Open **http://127.0.0.1:3000**. The filtered build also builds the local SDK and hook dependencies; do not skip it on a clean checkout. No private keys, funding, Reown account, approvals or signatures are required. The SDK test command runs the rounding, destination-rate, cache/refresh, failed-read, live-validation and provider-status cases automatically, without network access.
+
+**Configuration:** none is required for read-only preview or an injected browser wallet. The app uses public mainnet RPCs, the SDK's GoodServer fee endpoint, and provider status APIs. It needs internet access; RPC outages, blocked endpoints or unavailable routes must show an error, not fabricated fees. Tailwind/fonts are loaded from their existing public CDNs.
+
+For optional RPC overrides or WalletConnect, copy the safe example:
+
+```bash
+cp apps/demo-bridging-app/.env.example apps/demo-bridging-app/.env.local
+```
+
+The example contains public RPC URLs and a blank `VITE_REOWN_PROJECT_ID`. Leave that blank for QA; an optional public Reown project ID enables the wallet modal. All `VITE_*` values are exposed to the browser: **never put secrets, private keys or private RPC credentials in this file**. Restart the dev server after configuration changes. The `.env.local` file and build outputs are ignored by Git.
+
+**Short checklist:**
+
+1. Leave the wallet disconnected. The form starts with a 1,000 G$ read-only preview; sending is disabled. Alternatively, connect an empty browser test wallet without signing anything.
+2. Select **Celo → Ethereum / LayerZero** (or another route reported available by GoodServer). Wait for loading to finish. Confirm the destination-labelled G$ fee percentage, deducted G$ fee and expected received amount; the source-labelled native provider fee is separate. Source configured limits show minimum, transaction, bridge/account daily limits and whitelist restriction.
+3. Change the amount to `2000`. Fee/received amounts update after the debounce without reloading configuration. An empty wallet's balance/eligibility warnings do not hide quote values; sending remains disabled.
+4. Change destination or provider, then click **Refresh quote**. Configuration reloads, and old route/input values disappear while loading. An unsupported Axelar route (e.g. Celo → Fuse) shows unavailable/error, never a zero-fee fallback.
+5. For a safe failure check, enable the browser Network panel's **Offline** mode and click **Refresh quote**. Expect a visible configuration error, unavailable values and disabled sending. Restore **Online**, then refresh to recover.
+6. Stop here. **Do not fund, approve or click Bridge with a funded wallet.** Automated tests cover rounding, caching and delivery-status mappings; QA requires no real bridge. If separately testing transactions, the form refreshes before submission and source confirmation is explicitly not destination delivery.
+
 ## Contributing
 
 Please read our [Contributing Guidelines](https://github.com/GoodDollar/GoodSDKs/blob/main/CONTRIBUTING.md) for details.
