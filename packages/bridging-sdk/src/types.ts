@@ -14,12 +14,19 @@ export interface BridgeRequirement {
   message: string
 }
 
+/** Configured limits in normalized G$ base units (18 decimals), not remaining capacity. */
 export interface BridgeRouteLimits {
   minAmount: bigint
   dailyLimit: bigint
   txLimit: bigint
   accountDailyLimit: bigint
   onlyWhitelisted: boolean
+}
+
+export interface BridgeRoute {
+  fromChain: ChainId
+  toChain: ChainId
+  protocol: BridgeProtocol
 }
 
 export interface BridgeConfig {
@@ -30,26 +37,43 @@ export interface BridgeConfig {
   allowance: bigint
   fees: GoodServerFeeResponse | null
   routeLimits: BridgeRouteLimits | null
+  /** Source chain whose bridgeLimits are returned. */
+  routeLimitsChainId: ChainId
+  /** Destination bridge fee in basis points; null when no route was selected. */
+  protocolFeeBps: bigint | null
+  protocolFeeChainId: ChainId | null
 }
 
 export interface BridgeQuote {
+  /** Provider fee in source-chain native currency base units, paid separately. */
   fee: bigint
   feeInNative: string
   protocol: BridgeProtocol
   target: Address
   targetChainId: ChainId
+  /** G$ base units on the source chain. */
   amount: bigint
   adapterParams?: `0x${string}`
 }
 
+export interface BridgeFeeQuote extends BridgeQuote {
+  /** Destination bridgeFees().fee, in basis points (10,000 = 100%). */
+  protocolFeeBps: bigint
+  /** G$ fee deducted from the transfer, in destination-token base units. */
+  protocolFee: bigint
+  /** Estimated net G$ received, in destination-token base units. */
+  amountReceived: bigint
+}
+
 export interface BridgeQuoteResult {
-  quote: BridgeQuote | null
+  quote: BridgeFeeQuote | null
   needsApproval: boolean
   canBridge: boolean
   requirements: BridgeRequirement[]
 }
 
 export interface BridgeStatus {
+  /** completed confirms the source transaction, not destination delivery. */
   step: "approving" | "bridging" | "completed" | "failed"
   approveTxHash?: Hash
   bridgeTxHash?: Hash

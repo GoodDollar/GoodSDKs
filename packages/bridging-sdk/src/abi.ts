@@ -5,6 +5,7 @@ export const MESSAGE_PASSING_BRIDGE_ABI = parseAbi([
   // Read functions
   "function canBridge(address from, uint256 amount) view returns (bool isWithinLimit, string errorMessage)",
   "function bridgeLimits() view returns (uint256 dailyLimit, uint256 txLimit, uint256 accountDailyLimit, uint256 minAmount, bool onlyWhitelisted)",
+  "function bridgeFees() view returns (uint256 minFee, uint256 maxFee, uint256 fee)",
   // Write functions
   "function bridgeTo(address target, uint256 targetChainId, uint256 amount, uint8 bridge) payable",
   "function bridgeToWithAxelar(address target, uint256 targetChainId, uint256 amount) payable",

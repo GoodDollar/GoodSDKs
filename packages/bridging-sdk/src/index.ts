@@ -15,6 +15,8 @@ export type {
   CanBridgeResult,
   BridgeConfig,
   BridgeQuote,
+  BridgeFeeQuote,
+  BridgeRoute,
   BridgeQuoteResult,
   BridgeRequirement,
   BridgeRequirementType,
