@@ -211,19 +211,37 @@ export class StreamingSDK {
         )
     }
 
-    async getActiveStreams(
-        options: GetStreamsOptions,
-    ): Promise<StreamInfo[]> {
-        const streams = await this.subgraphClient.queryStreams(options)
+    /**
+     * Streams for an account, running or closed.
+     *
+     * Defaults to `status: "all"`. Pass `includeLastFlowRate` to also read the
+     * rate a closed stream ran at — `flowRate` itself is `0n` once a stream ends.
+     */
+    async getStreams(options: GetStreamsOptions): Promise<StreamInfo[]> {
+        const streams = await this.subgraphClient.queryStreams({
+            status: "all",
+            ...options,
+        })
 
         return streams.map((stream) => ({
             sender: stream.sender,
             receiver: stream.receiver,
             token: stream.token,
+            tokenSymbol: stream.tokenSymbol,
             flowRate: stream.currentFlowRate,
             timestamp: BigInt(stream.createdAtTimestamp),
             streamedSoFar: stream.streamedUntilUpdatedAt,
+            isActive: stream.isActive,
+            closedAtTimestamp: stream.closedAtTimestamp,
+            lastFlowRate: stream.lastFlowRate,
         }))
+    }
+
+    /** Running streams only. Equivalent to `getStreams({ status: "active" })`. */
+    async getActiveStreams(
+        options: GetStreamsOptions,
+    ): Promise<StreamInfo[]> {
+        return this.getStreams({ ...options, status: "active" })
     }
 
     /**
