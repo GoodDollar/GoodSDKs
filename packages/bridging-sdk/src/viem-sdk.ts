@@ -4,10 +4,13 @@ import {
   parseAbi,
   formatUnits,
   parseUnits,
+  createPublicClient,
+  http,
   type Address,
   type Hash,
   type TransactionReceipt,
 } from "viem"
+import { celo, mainnet, fuse, xdc } from "viem/chains"
 import {
   SUPPORTED_CHAINS,
   BRIDGE_CONTRACT_ADDRESSES,
@@ -31,9 +34,13 @@ import type {
   AxelarscanResponse,
   BridgeConfig,
   BridgeQuote,
+  BridgeFeeQuote,
+  BridgeRoute,
+  BridgeRouteLimits,
   BridgeQuoteResult,
   BridgeRequirement,
   BridgeStatus,
+  BridgingSDKOptions,
 } from "./types"
 
 import { MESSAGE_PASSING_BRIDGE_ABI } from "./abi"
@@ -45,11 +52,20 @@ export class BridgingSDK {
   private fees: GoodServerFeeResponse | null = null
   private lastFeeFetchTime: number = 0
   private readonly FEE_CACHE_TTL = 60000 // 60 seconds
+  private routeConfigCache?: {
+    key: string
+    config: Promise<{
+      routeLimits: BridgeRouteLimits
+      protocolFeeBps: bigint | null
+    }>
+  }
 
   constructor(
     publicClient: PublicClient,
     walletClient?: WalletClient,
     chainId?: ChainId,
+    private readonly publicClients: Record<number, PublicClient> = {},
+    private readonly options: BridgingSDKOptions = {},
   ) {
     if (!publicClient) throw new Error("Public client is required")
 
@@ -62,12 +78,99 @@ export class BridgingSDK {
     }
   }
 
+  private getPublicClient(chainId: ChainId): PublicClient {
+    const client =
+      chainId === this.currentChainId
+        ? this.publicClient
+        : this.publicClients[chainId]
+    if (client) {
+      if (client.chain?.id !== undefined && client.chain.id !== chainId) {
+        throw new Error(`Public client chain does not match ${chainId}`)
+      }
+      return client
+    }
+
+    const chain = [celo, mainnet, fuse, xdc].find(chain => chain.id === chainId)
+    if (!chain) throw new Error(`Unsupported chain ID: ${chainId}`)
+    return createPublicClient({ chain, transport: http() }) as PublicClient
+  }
+
+  private async getRouteConfiguration(
+    fromChain: ChainId,
+    toChain?: ChainId,
+    protocol?: BridgeProtocol,
+    refresh = false,
+  ): Promise<{ routeLimits: BridgeRouteLimits; protocolFeeBps: bigint | null }> {
+    const key = `${fromChain}:${toChain ?? ""}:${protocol ?? ""}`
+    if (!refresh && this.routeConfigCache?.key === key) {
+      return this.routeConfigCache.config
+    }
+
+    const config = (async () => {
+      const sourceAddress = BRIDGE_CONTRACT_ADDRESSES[fromChain]
+      const destinationAddress =
+        toChain === undefined ? undefined : BRIDGE_CONTRACT_ADDRESSES[toChain]
+      if (!sourceAddress || (toChain !== undefined && !destinationAddress)) {
+        throw new Error("Bridge configuration unavailable for this route")
+      }
+      const [limits, fees] = await Promise.all([
+        this.getPublicClient(fromChain).readContract({
+          address: sourceAddress as Address,
+          abi: MESSAGE_PASSING_BRIDGE_ABI,
+          functionName: "bridgeLimits",
+        }),
+        toChain === undefined
+          ? null
+          : this.getPublicClient(toChain).readContract({
+              address: destinationAddress as Address,
+              abi: MESSAGE_PASSING_BRIDGE_ABI,
+              functionName: "bridgeFees",
+            }),
+      ])
+      const [dailyLimit, txLimit, accountDailyLimit, minAmount, onlyWhitelisted] =
+        limits
+      const protocolFeeBps = fees === null ? null : fees[2]
+      if (
+        protocolFeeBps !== null &&
+        (protocolFeeBps < 0n || protocolFeeBps > 10000n)
+      ) {
+        throw new Error("Invalid destination protocol fee")
+      }
+      return {
+        routeLimits: {
+          dailyLimit,
+          txLimit,
+          accountDailyLimit,
+          minAmount,
+          onlyWhitelisted,
+        },
+        protocolFeeBps,
+      }
+    })()
+    const entry = { key, config }
+    this.routeConfigCache = entry
+    try {
+      return await config
+    } catch (error) {
+      if (this.routeConfigCache === entry) this.routeConfigCache = undefined
+      throw error
+    }
+  }
+
   /**
    * Initializes the SDK by fetching and caching bridge fees
    */
   async initialize(): Promise<void> {
     try {
-      const response = await fetch(API_ENDPOINTS.GOODSERVER_FEES)
+      const apiKey = this.options.corsProxyApiKey?.trim()
+      let feeUrl: string = API_ENDPOINTS.GOODSERVER_FEES
+      if (apiKey) {
+        const proxyUrl = new URL("https://corsproxy.io/")
+        proxyUrl.searchParams.set("key", apiKey)
+        proxyUrl.searchParams.set("url", API_ENDPOINTS.GOODSERVER_FEES)
+        feeUrl = proxyUrl.toString()
+      }
+      const response = await fetch(feeUrl)
       if (!response.ok) {
         throw new Error(`Failed to fetch fee estimates: ${response.statusText}`)
       }
@@ -344,7 +447,8 @@ export class BridgingSDK {
 
   /**
    * Evaluates whether a bridge operation can proceed and returns a validated quote.
-   * Performs dual-chain balance checks (source and target).
+   * Reuses selected-route configuration, but checks balances and canBridge for every amount.
+   * Set refresh to reload fee/limit configuration before submitting the final quote.
    */
   async getQuote(params: {
     sender: Address
@@ -353,6 +457,7 @@ export class BridgingSDK {
     fromChain: ChainId
     toChain: ChainId
     protocol: BridgeProtocol
+    refresh?: boolean
   }): Promise<BridgeQuoteResult> {
     const { sender, amount, fromChain, toChain, protocol } = params
     const recipient = params.recipient || sender
@@ -360,8 +465,23 @@ export class BridgingSDK {
 
     // 1. Route and Fee Check
     let feeEstimate: FeeEstimate
+    let protocolFeeBps: bigint
     try {
+      if (
+        !SUPPORTED_CHAINS[fromChain] ||
+        !SUPPORTED_CHAINS[toChain] ||
+        fromChain === toChain
+      ) {
+        throw new Error("Unsupported bridge route")
+      }
       feeEstimate = await this.estimateFee(toChain, protocol, fromChain)
+      const config = await this.getRouteConfiguration(
+        fromChain,
+        toChain,
+        protocol,
+        params.refresh,
+      )
+      protocolFeeBps = config.protocolFeeBps!
     } catch (err) {
       requirements.push({
         type: "route_unavailable",
@@ -411,20 +531,31 @@ export class BridgingSDK {
     const needsApproval = allowance < amount
     const canBridge = requirements.length === 0
 
-    const quote: BridgeQuote = {
+    const decimalShift =
+      SUPPORTED_CHAINS[toChain].decimals - SUPPORTED_CHAINS[fromChain].decimals
+    const destinationAmount =
+      decimalShift >= 0
+        ? amount * 10n ** BigInt(decimalShift)
+        : amount / 10n ** BigInt(-decimalShift)
+    const protocolFee = (destinationAmount * protocolFeeBps) / 10000n
+    const quote: BridgeFeeQuote = {
       fee: feeEstimate.fee,
       feeInNative: feeEstimate.feeInNative,
       protocol,
       target: recipient,
       targetChainId: toChain,
       amount,
+      protocolFeeBps,
+      protocolFee,
+      amountReceived: destinationAmount - protocolFee,
     }
 
     return { quote, needsApproval, canBridge, requirements }
   }
 
   /**
-   * Executes bridge with automatic approval
+   * Executes bridge with automatic approval.
+   * completed confirms the source transaction; use getTransactionStatus for delivery.
    */
   async doBridge(
     quote: BridgeQuote,
@@ -572,7 +703,12 @@ export class BridgingSDK {
       if (!data.data?.[0]) return { status: "pending" }
       const msg = data.data[0]
       return {
-        status: msg.status.name === "DELIVERED" ? "completed" : "pending",
+        status:
+          msg.status.name === "DELIVERED"
+            ? "completed"
+            : msg.status.name === "FAILED"
+              ? "failed"
+              : "pending",
         srcTxHash: msg.source.tx.txHash,
         dstTxHash: msg.destination?.tx.txHash,
         timestamp: new Date(msg.created).getTime(),
@@ -583,7 +719,12 @@ export class BridgingSDK {
       if (!data.data?.[0]) return { status: "pending" }
       const tx = data.data[0]
       return {
-        status: tx.status === "executed" ? "completed" : "pending",
+        status:
+          tx.status === "executed"
+            ? "completed"
+            : tx.status === "failed"
+              ? "failed"
+              : "pending",
         srcTxHash: tx.sourceTxHash,
         dstTxHash: tx.destinationTxHash,
         timestamp: new Date(tx.createdAt).getTime(),
@@ -597,11 +738,38 @@ export class BridgingSDK {
       : `https://axelarscan.io/gmp/${txHash}`
   }
 
-  async getBridgeConfig(address: Address): Promise<BridgeConfig> {
-    const [tokenBalance, nativeBalance, allowance] = await Promise.all([
+  /**
+   * Loads source balances and configured limits, plus the destination fee for a selected route.
+   * Configuration is cached until the route changes or refresh is requested; balances are not.
+   * Without a route, returns current-chain limits and no destination protocol fee.
+   */
+  async getBridgeConfig(
+    address: Address,
+    route?: BridgeRoute,
+    options: { refresh?: boolean } = {},
+  ): Promise<BridgeConfig> {
+    const fromChain = route?.fromChain ?? this.currentChainId
+    if (fromChain !== this.currentChainId) {
+      throw new Error(
+        `Switch network to ${SUPPORTED_CHAINS[fromChain]?.name || fromChain}`,
+      )
+    }
+    if (route) {
+      if (!SUPPORTED_CHAINS[route.toChain] || route.toChain === fromChain) {
+        throw new Error("Unsupported bridge route")
+      }
+      await this.estimateFee(route.toChain, route.protocol, fromChain)
+    }
+    const [tokenBalance, nativeBalance, allowance, config] = await Promise.all([
       this.getG$Balance(address),
       this.publicClient.getBalance({ address }),
       this.getAllowance(address).catch(() => 0n),
+      this.getRouteConfiguration(
+        fromChain,
+        route?.toChain,
+        route?.protocol,
+        options.refresh,
+      ),
     ])
 
     return {
@@ -611,7 +779,10 @@ export class BridgingSDK {
       nativeBalance,
       allowance,
       fees: this.fees,
-      routeLimits: null, // Limits are checked per-route in getQuote
+      routeLimits: config.routeLimits,
+      routeLimitsChainId: fromChain,
+      protocolFeeBps: config.protocolFeeBps,
+      protocolFeeChainId: route?.toChain ?? null,
     }
   }
 

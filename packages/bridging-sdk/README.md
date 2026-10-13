@@ -42,46 +42,46 @@ const sdk = new BridgingSDK(publicClient, walletClient)
 
 ### Recommended Bridging Flow
 
-The SDK exposes a 3-step flow that handles balance checks, fee estimation, approvals, and the bridge transaction.
+No Wagmi dependency is needed. Load route configuration, update the amount, then refresh the final quote before submission.
 
 ```typescript
-import { parseUnits } from "viem"
+import { formatUnits, parseUnits, type Address } from "viem"
 
-// 1. Fetch the user's balances, allowance, and bridge fee in one call
-const config = await sdk.getBridgeConfig("0xUserAddress")
-// config: { g$Balance, nativeBalance, allowance, fee, bridgeLimits }
+const sender: Address = "0xUserAddress" // Replace with the connected wallet
+const route = { fromChain: 42220, toChain: 1, protocol: "AXELAR" as const }
 
-// 2. Get a validated quote — checks all requirements before submitting anything
-const amount = parseUnits("10", 18) // 10 G$ from Celo (18 decimals)
-const { quote, needsApproval, canBridge, requirements } = await sdk.getQuote(
-  amount,
-  42220,        // fromChain: Celo
-  1,            // toChain:   Ethereum
-  "0xRecipientAddress",
-  "AXELAR",
-  config.allowance
-)
+// 1. Load source-chain limits and destination protocol fee configuration
+const config = await sdk.getBridgeConfig(sender, route)
+console.log(config.routeLimitsChainId, config.routeLimits, config.protocolFeeBps)
 
-if (!canBridge) {
-  // At least one blocking requirement failed (wrong chain, insufficient balance, etc.)
+// 2. Amount changes reuse configuration, but balances/allowance/canBridge stay live
+const params = { sender, ...route, amount: parseUnits("10", 18) }
+await sdk.getQuote(params)
+params.amount = parseUnits("20", 18)
+const preview = await sdk.getQuote(params)
+if (preview.quote) {
+  console.log("Net G$ on Ethereum:", formatUnits(preview.quote.amountReceived, 2))
+}
+
+// 3. Explicitly refresh and use the refreshed quote for submission
+const { quote, needsApproval, canBridge, requirements } = await sdk.getQuote({
+  ...params,
+  refresh: true,
+})
+if (!canBridge || !quote) {
   console.error("Cannot bridge:", requirements.map(r => r.message))
   return
 }
-
-// needsApproval will be true if allowance < amount — doBridge handles this automatically
 console.log("Needs approval first:", needsApproval)
-
-// 3. Execute — handles ERC-20 approval (if needed) then submits the bridge transaction
-const receipt = await sdk.doBridge(quote!, (status) => {
-  switch (status.step) {
-    case "approving":  console.log("Approving token spend..."); break
-    case "bridging":   console.log("Submitting bridge transaction..."); break
-    case "completed":  console.log("Done!", status.bridgeTxHash); break
-    case "failed":     console.error("Failed:", status.error); break
+const receipt = await sdk.doBridge(quote, (status) => {
+  if (status.step === "completed") {
+    console.log("Source transaction confirmed:", status.bridgeTxHash)
   }
 })
 
-console.log("Bridge tx:", receipt.transactionHash)
+// Source confirmation is NOT destination delivery. Poll this separately.
+const delivery = await sdk.getTransactionStatus(receipt.transactionHash, route.protocol)
+console.log(delivery.status) // pending | completed (delivered) | failed
 ```
 
 ### React Integration
@@ -105,12 +105,15 @@ const BridgeComponent = () => {
   if (error || !sdk) return <p>Error: {error}</p>
 
   const handleBridge = async () => {
-    const config = await sdk.getBridgeConfig("0xUserAddress")
-    const { quote, canBridge } = await sdk.getQuote(
-      10000000000000000000n, // 10 G$
-      42220, 1, "0xRecipientAddress", "AXELAR",
-      config.allowance
-    )
+    const { quote, canBridge } = await sdk.getQuote({
+      sender: "0xUserAddress",
+      recipient: "0xRecipientAddress",
+      amount: 10000000000000000000n, // 10 G$
+      fromChain: 42220,
+      toChain: 1,
+      protocol: "AXELAR",
+      refresh: true,
+    })
     if (canBridge && quote) {
       await sdk.doBridge(quote)
     }
@@ -125,36 +128,72 @@ const BridgeComponent = () => {
 ### Constructor
 
 ```typescript
-new BridgingSDK(publicClient, walletClient?, chainId?)
+new BridgingSDK(publicClient, walletClient?, chainId?, publicClients?, options?)
 ```
 
-Call `await sdk.initialize()` if you want to pre-warm the fee cache. `getBridgeConfig` does this automatically.
+The optional `publicClients: Record<number, PublicClient>` supplies destination RPC clients, e.g. `{ 1: ethereumPublicClient }`. Otherwise the SDK uses viem's default RPC for the destination chain. Supplied clients must match their chain IDs. Existing constructor calls remain valid.
+
+Call `await sdk.initialize()` to pre-warm the GoodServer native-fee cache. Selecting a route in `getBridgeConfig` loads that data automatically.
+
+Fee estimates use `https://goodserver.gooddollar.org/bridge/estimatefees` directly by default. If your browser deployment needs a CORS proxy, opt in with `BridgingSDKOptions.corsProxyApiKey`:
+
+```typescript
+const sdk = new BridgingSDK(publicClient, walletClient, undefined, {}, {
+  corsProxyApiKey, // Supplied by your application's configuration; do not hardcode
+})
+```
+
+A nonblank key routes only GoodServer fee requests through `https://corsproxy.io/?key=...&url=...`, with both parameters URL-encoded. Omitted, empty or whitespace-only keys keep direct requests. There is no automatic proxy fallback; read errors keep the existing unavailable/error behavior. RPC and transaction-status requests are unchanged.
+
+**Key handling:** browser SDK callers expose the key in their bundle and proxy request URL. Use only a browser-safe, domain-restricted proxy key; keep confidential keys behind your own backend. Never commit a real key or include it in screenshots/network logs.
 
 ### Core Methods
 
-#### `getBridgeConfig(address)`
+#### `getBridgeConfig(address, route?, { refresh? }?)`
 
-Fetches balances, allowance, and fee data in one call.
+Fetches current balances and allowance, source `bridgeLimits`, and the selected destination's `bridgeFees().fee`. Read failures reject the call.
 
 ```typescript
-const config = await sdk.getBridgeConfig("0xUserAddress")
-// Returns: { g$Balance, nativeBalance, allowance, fee, bridgeLimits }
+const route = { fromChain: 42220, toChain: 1, protocol: "AXELAR" as const }
+const config = await sdk.getBridgeConfig("0xUserAddress", route)
+// tokenBalance, nativeBalance, allowance, fees (GoodServer native estimates),
+// routeLimits, routeLimitsChainId, protocolFeeBps, protocolFeeChainId
+await sdk.getBridgeConfig("0xUserAddress", route, { refresh: true })
 ```
 
-#### `getQuote(amount, fromChain, toChain, recipient, protocol, currentAllowance)`
+`routeLimits` describes the **source chain**, identified by `routeLimitsChainId`. Its `dailyLimit`, `txLimit`, `accountDailyLimit`, and `minAmount` are normalized G$ base units (**18 decimals**); `onlyWhitelisted` is a boolean. These are configured values, not remaining capacity or a dynamically calculated maximum. The address-only call remains supported and returns current-chain limits with null destination fee metadata.
+
+Configuration is cached per selected source/destination/protocol route. Amount-only changes reuse it; switching routes (including switching back) reloads it. `{ refresh: true }` bypasses the configuration cache. A failed refresh invalidates that entry rather than falling back to stale or zero fees.
+
+#### `getQuote({ sender, recipient?, amount, fromChain, toChain, protocol, refresh? })`
 
 Validates a bridge request and returns a quote or a list of blocking requirements.
 
 ```typescript
-const { quote, needsApproval, canBridge, requirements } = await sdk.getQuote(
-  amount, 42220, 1, "0xRecipient", "AXELAR", config.allowance
-)
-// Returns: { quote: BridgeQuote | null, needsApproval: boolean, canBridge: boolean, requirements: BridgeRequirement[] }
+const { quote, needsApproval, canBridge, requirements } = await sdk.getQuote({
+  sender: "0xUserAddress",
+  amount,
+  ...route,
+  refresh: true,
+})
+// Returns: { quote: BridgeFeeQuote | null, needsApproval, canBridge, requirements }
 ```
+
+| Quote field | Units / meaning |
+|-------------|-----------------|
+| `amount` | Source-chain G$ base units |
+| `fee` | Source native-currency base units; provider fee paid separately |
+| `protocolFeeBps` | Destination `bridgeFees().fee` in basis points (10,000 = 100%) |
+| `protocolFee` | G$ deducted from the transfer, in destination-token base units |
+| `amountReceived` | Estimated net G$ received, in destination-token base units |
+
+The SDK first converts `amount` to destination units (truncating on downscaling), calculates `protocolFee = destinationAmount * protocolFeeBps / 10_000` with integer division, then deducts it. It does **not** clamp the fee with stored `minFee`/`maxFee`, matching [MessagePassingBridge](https://github.com/GoodDollar/GoodBridge/blob/master/packages/bridge-contracts/contracts/messagePassingBridge/MessagePassingBridge.sol). No additional G$ balance or allowance is required for the protocol fee.
+
+Every quote still checks balances, allowance, native provider fee, route availability, and live `canBridge(sender, amount)`. Failed configuration reads return a null quote with a `route_unavailable` requirement. Use `refresh: true` immediately before submission and submit **that returned quote**.
 
 #### `doBridge(quote, onStatus?)`
 
-Executes a bridge. Automatically approves the token if needed before bridging.
+Executes a bridge. Automatically approves the token if needed before bridging. The `completed` callback confirms the **source transaction only**; it does not confirm destination delivery. Track delivery separately with `getTransactionStatus`.
 
 ```typescript
 const receipt = await sdk.doBridge(quote, (status) => {
@@ -175,7 +214,7 @@ const estimate = await sdk.estimateFee(1, "AXELAR", 42220)
 
 #### `getTransactionStatus(txHash, protocol)`
 
-Polls the bridge explorer for transaction status.
+Queries the bridge explorer for destination delivery status; call repeatedly to poll. Explicit LayerZero `FAILED` and Axelar `failed` responses map to `failed`; missing/in-flight records remain `pending`.
 
 ```typescript
 const status = await sdk.getTransactionStatus("0xTxHash", "AXELAR")
@@ -236,7 +275,7 @@ await sdk.doBridge(quote, (status) => {
 | Fuse     | 122      | 2           | FUSE (18 dec)   |
 | XDC      | 50       | 18          | XDC (18 dec)    |
 
-> **Note**: G$ decimals differ per chain. Bridge fees are always denominated in the source chain's **native currency** (18 decimals on all chains).
+> **Note**: G$ decimals differ per chain. Provider fees use the source chain's **native currency** (18 decimals); protocol fees and received amounts use destination-chain **G$** decimals.
 
 ## Bridge Protocols
 
@@ -261,6 +300,40 @@ await sdk.doBridge(quote, (status) => {
 ## Demo Application
 
 See `apps/demo-bridging-app` for a complete end-to-end implementation.
+
+### Local QA (no transactions)
+
+Verified with **Node.js 22.23.3** and **Yarn 4.6.0**. Use that Node version; the SDK test runner requires Node 20.19+ or 22.12+. Run these commands from the repository root:
+
+```bash
+corepack enable
+yarn --version # 4.6.0 (the repository pins Yarn)
+yarn install --immutable
+yarn turbo run build --filter=demo-bridging-app
+yarn workspace @goodsdks/bridging-sdk test
+yarn workspace demo-bridging-app dev --host 127.0.0.1
+```
+
+Open **http://127.0.0.1:3000**. The filtered build also builds the local SDK and hook dependencies; do not skip it on a clean checkout. No private keys, funding, Reown account, approvals or signatures are required. The SDK test command runs the rounding, destination-rate, cache/refresh, failed-read, live-validation and provider-status cases automatically, without network access.
+
+**Configuration:** none is required for read-only preview or an injected browser wallet. The app uses public mainnet RPCs, the SDK's GoodServer fee endpoint, and provider status APIs. It needs internet access; RPC outages, blocked endpoints or unavailable routes must show an error, not fabricated fees. Tailwind/fonts are loaded from their existing public CDNs.
+
+For optional RPC overrides or WalletConnect, copy the safe example:
+
+```bash
+cp apps/demo-bridging-app/.env.example apps/demo-bridging-app/.env.local
+```
+
+The example contains public RPC URLs, a blank `VITE_REOWN_PROJECT_ID`, and a blank `VITE_CORSPROXY_API_KEY`. Leave them blank for default QA; an optional public Reown project ID enables the wallet modal. Setting `VITE_CORSPROXY_API_KEY` opts the demo's fee reads into authenticated corsproxy.io requests instead of direct GoodServer requests. All `VITE_*` values are exposed to the browser, including this proxy key: use only a browser-safe, domain-restricted key, **never confidential keys, private keys or private RPC credentials**. Restart the dev server after configuration changes. The `.env.local` file and build outputs are ignored by Git. Redact the proxy key from any QA network evidence.
+
+**Short checklist:**
+
+1. Leave the wallet disconnected. The form starts with a 1,000 G$ read-only preview; sending is disabled. Alternatively, connect an empty browser test wallet without signing anything.
+2. Select **Celo → Ethereum / LayerZero** (or another route reported available by GoodServer). Wait for loading to finish. Confirm the destination-labelled G$ fee percentage, deducted G$ fee and expected received amount; the source-labelled native provider fee is separate. Source configured limits show minimum, transaction, bridge/account daily limits and whitelist restriction.
+3. Change the amount to `2000`. Fee/received amounts update after the debounce without reloading configuration. An empty wallet's balance/eligibility warnings do not hide quote values; sending remains disabled.
+4. Change destination or provider, then click **Refresh quote**. Configuration reloads, and old route/input values disappear while loading. An unsupported Axelar route (e.g. Celo → Fuse) shows unavailable/error, never a zero-fee fallback.
+5. For a safe failure check, enable the browser Network panel's **Offline** mode and click **Refresh quote**. Expect a visible configuration error, unavailable values and disabled sending. Restore **Online**, then refresh to recover.
+6. Stop here. **Do not fund, approve or click Bridge with a funded wallet.** Automated tests cover rounding, caching and delivery-status mappings; QA requires no real bridge. If separately testing transactions, the form refreshes before submission and source confirmation is explicitly not destination delivery.
 
 ## Contributing
 

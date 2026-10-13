@@ -1,12 +1,14 @@
 import { useState } from "react"
-import { useAccount } from "wagmi"
-import { WagmiProvider } from "./config"
+import { useAccount, useConnect } from "wagmi"
+import { WagmiProvider, appKitEnabled } from "./config"
 import { BridgeForm } from "./components/BridgeForm"
 import { TransactionHistory } from "./components/TransactionHistory"
 import type { BridgeProtocol } from "@goodsdks/bridging-sdk"
 
 function AppContent() {
   const { isConnected } = useAccount()
+  const { connectors, connect, error, isPending } = useConnect()
+  const [bridgeBusy, setBridgeBusy] = useState(false)
   const [selectedProtocol, setSelectedProtocol] =
     useState<BridgeProtocol>("LAYERZERO")
 
@@ -18,15 +20,14 @@ function AppContent() {
           Main Bridge
         </h1>
         <p className="text-slate-500 max-w-2xl mx-auto text-lg leading-relaxed">
-          Seamlessly convert between Fuse G$ tokens to Celo and vice versa,
-          enabling versatile use of G$ tokens across various platforms and
-          ecosystems.
+          Preview G$ bridging fees and limits across Celo, Ethereum, Fuse and
+          XDC. Local QA needs no funds, approvals, signatures or transactions.
         </p>
       </header>
 
       {/* Main Content Area */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        {!isConnected ? (
+        {!isConnected && (
           <div className="premium-card text-center p-12">
             <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto mb-8">
               <svg
@@ -44,61 +45,81 @@ function AppContent() {
               </svg>
             </div>
             <h2 className="text-2xl font-bold mb-4 text-slate-900">
-              Connect Your Wallet
+              Read-only Preview
             </h2>
             <p className="text-slate-500 mb-10 text-lg">
-              To start bridging G$ tokens across chains, please connect your
-              wallet first.
+              Select a route and enter an amount below without connecting a
+              wallet. You can also connect an empty test wallet; sending stays
+              disabled unless all SDK requirements pass.
             </p>
             <div className="flex justify-center">
-              <w3m-button />
+              {appKitEnabled ? (
+                <w3m-button />
+              ) : (
+                <button
+                  className="premium-button-secondary"
+                  disabled={isPending || !connectors[0]}
+                  onClick={() => connect({ connector: connectors[0] })}
+                >
+                  {isPending
+                    ? "Connecting..."
+                    : "Connect browser wallet (optional)"}
+                </button>
+              )}
             </div>
+            {error && <p role="alert">{error.message}</p>}
           </div>
-        ) : (
-          <div className="space-y-12">
-            {/* Integrated Bridge Section */}
-            <div className="premium-card">
-              <div className="mb-10 text-center">
-                <h2 className="text-slate-600 font-semibold mb-6 flex items-center justify-center gap-2">
-                  Select Bridge Provider
-                </h2>
-                <div className="flex p-1.5 bg-slate-50 rounded-2xl border border-slate-100 max-w-sm mx-auto">
-                  <button
-                    onClick={() => setSelectedProtocol("AXELAR")}
-                    className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all duration-300 ${
-                      selectedProtocol === "AXELAR"
-                        ? "bg-white text-blue-600 shadow-md"
-                        : "text-slate-400 hover:text-slate-600"
-                    }`}
-                  >
-                    Axelar
-                  </button>
-                  <button
-                    onClick={() => setSelectedProtocol("LAYERZERO")}
-                    className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all duration-300 ${
-                      selectedProtocol === "LAYERZERO"
-                        ? "bg-white text-blue-600 shadow-md"
-                        : "text-slate-400 hover:text-slate-600"
-                    }`}
-                  >
-                    LayerZero
-                  </button>
-                </div>
+        )}
+        <div className="space-y-12">
+          {/* Integrated Bridge Section */}
+          <div className="premium-card">
+            <div className="mb-10 text-center">
+              <h2 className="text-slate-600 font-semibold mb-6 flex items-center justify-center gap-2">
+                Select Bridge Provider
+              </h2>
+              <div className="flex p-1.5 bg-slate-50 rounded-2xl border border-slate-100 max-w-sm mx-auto">
+                <button
+                  disabled={bridgeBusy}
+                  onClick={() => setSelectedProtocol("AXELAR")}
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all duration-300 ${
+                    selectedProtocol === "AXELAR"
+                      ? "bg-white text-blue-600 shadow-md"
+                      : "text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  Axelar
+                </button>
+                <button
+                  disabled={bridgeBusy}
+                  onClick={() => setSelectedProtocol("LAYERZERO")}
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all duration-300 ${
+                    selectedProtocol === "LAYERZERO"
+                      ? "bg-white text-blue-600 shadow-md"
+                      : "text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  LayerZero
+                </button>
               </div>
-
-              {/* Enhanced Bridge Form */}
-              <BridgeForm defaultProtocol={selectedProtocol} />
             </div>
 
-            {/* Recent Transactions Section */}
+            {/* Enhanced Bridge Form */}
+            <BridgeForm
+              defaultProtocol={selectedProtocol}
+              onBusyChange={setBridgeBusy}
+            />
+          </div>
+
+          {/* Recent Transactions Section */}
+          {isConnected && (
             <div>
               <h2 className="text-3xl font-bold text-slate-900 mb-8 px-2">
                 Recent Transactions
               </h2>
               <TransactionHistory />
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       {/* Simple Premium Footer */}

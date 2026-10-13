@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup --clean",
+    "test": "vitest run",
     "dev": "tsc --watch",
     "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\""
   },
@@ -28,7 +29,8 @@
     "@repo/typescript-config": "workspace:*",
     "tsup": "^8.3.5",
     "typescript": "latest",
-    "viem": "latest"
+    "viem": "latest",
+    "vitest": "4.1.4"
   },
   "peerDependencies": {
     "viem": "*"
