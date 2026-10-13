@@ -128,12 +128,24 @@ const BridgeComponent = () => {
 ### Constructor
 
 ```typescript
-new BridgingSDK(publicClient, walletClient?, chainId?, publicClients?)
+new BridgingSDK(publicClient, walletClient?, chainId?, publicClients?, options?)
 ```
 
 The optional `publicClients: Record<number, PublicClient>` supplies destination RPC clients, e.g. `{ 1: ethereumPublicClient }`. Otherwise the SDK uses viem's default RPC for the destination chain. Supplied clients must match their chain IDs. Existing constructor calls remain valid.
 
 Call `await sdk.initialize()` to pre-warm the GoodServer native-fee cache. Selecting a route in `getBridgeConfig` loads that data automatically.
+
+Fee estimates use `https://goodserver.gooddollar.org/bridge/estimatefees` directly by default. If your browser deployment needs a CORS proxy, opt in with `BridgingSDKOptions.corsProxyApiKey`:
+
+```typescript
+const sdk = new BridgingSDK(publicClient, walletClient, undefined, {}, {
+  corsProxyApiKey, // Supplied by your application's configuration; do not hardcode
+})
+```
+
+A nonblank key routes only GoodServer fee requests through `https://corsproxy.io/?key=...&url=...`, with both parameters URL-encoded. Omitted, empty or whitespace-only keys keep direct requests. There is no automatic proxy fallback; read errors keep the existing unavailable/error behavior. RPC and transaction-status requests are unchanged.
+
+**Key handling:** browser SDK callers expose the key in their bundle and proxy request URL. Use only a browser-safe, domain-restricted proxy key; keep confidential keys behind your own backend. Never commit a real key or include it in screenshots/network logs.
 
 ### Core Methods
 
@@ -312,7 +324,7 @@ For optional RPC overrides or WalletConnect, copy the safe example:
 cp apps/demo-bridging-app/.env.example apps/demo-bridging-app/.env.local
 ```
 
-The example contains public RPC URLs and a blank `VITE_REOWN_PROJECT_ID`. Leave that blank for QA; an optional public Reown project ID enables the wallet modal. All `VITE_*` values are exposed to the browser: **never put secrets, private keys or private RPC credentials in this file**. Restart the dev server after configuration changes. The `.env.local` file and build outputs are ignored by Git.
+The example contains public RPC URLs, a blank `VITE_REOWN_PROJECT_ID`, and a blank `VITE_CORSPROXY_API_KEY`. Leave them blank for default QA; an optional public Reown project ID enables the wallet modal. Setting `VITE_CORSPROXY_API_KEY` opts the demo's fee reads into authenticated corsproxy.io requests instead of direct GoodServer requests. All `VITE_*` values are exposed to the browser, including this proxy key: use only a browser-safe, domain-restricted key, **never confidential keys, private keys or private RPC credentials**. Restart the dev server after configuration changes. The `.env.local` file and build outputs are ignored by Git. Redact the proxy key from any QA network evidence.
 
 **Short checklist:**
 

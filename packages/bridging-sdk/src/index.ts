@@ -17,6 +17,7 @@ export type {
   BridgeQuote,
   BridgeFeeQuote,
   BridgeRoute,
+  BridgingSDKOptions,
   BridgeQuoteResult,
   BridgeRequirement,
   BridgeRequirementType,

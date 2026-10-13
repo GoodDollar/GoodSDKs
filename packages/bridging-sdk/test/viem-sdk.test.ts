@@ -2,15 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { parseUnits } from "viem"
 import type { PublicClient, TransactionReceipt, WalletClient } from "viem"
 import { BridgingSDK } from "../src/viem-sdk"
-import { SUPPORTED_CHAINS } from "../src/constants"
-import type { BridgeProtocol, BridgeQuote, BridgeRoute } from "../src/types"
+import { API_ENDPOINTS, SUPPORTED_CHAINS } from "../src/constants"
+import type {
+  BridgeProtocol,
+  BridgeQuote,
+  BridgeRoute,
+  BridgingSDKOptions,
+} from "../src/types"
 
 const SENDER = "0x1111111111111111111111111111111111111111" as const
 const TX_HASH = `0x${"ab".repeat(32)}` as const
 const LIMITS = [1000n, 200n, 300n, 1n, true] as const
 const ROUTE: BridgeRoute = { fromChain: 42220, toChain: 1, protocol: "AXELAR" }
 
-function makeSdk(fromChain = 42220) {
+function makeSdk(fromChain = 42220, options: BridgingSDKOptions = {}) {
   const decimals = SUPPORTED_CHAINS[fromChain].decimals
   const state = {
     tokenBalance: parseUnits("100", decimals),
@@ -66,6 +71,7 @@ function makeSdk(fromChain = 42220) {
     undefined,
     fromChain,
     clients as unknown as Record<number, PublicClient>,
+    options,
   )
   const params = {
     sender: SENDER,
@@ -103,6 +109,96 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.unstubAllGlobals())
+
+describe("GoodServer fee request configuration", () => {
+  it("uses GoodServer directly with existing constructor calls", async () => {
+    const { clients } = makeSdk()
+    const sdk = new BridgingSDK(clients[42220] as unknown as PublicClient)
+    await sdk.initialize()
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      "https://goodserver.gooddollar.org/bridge/estimatefees",
+    )
+  })
+
+  it("surfaces direct fetch errors without automatically using a proxy", async () => {
+    const { sdk } = makeSdk()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network unavailable")),
+    )
+    await expect(sdk.initialize()).rejects.toThrow(
+      "SDK initialization failed: Network unavailable",
+    )
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(API_ENDPOINTS.GOODSERVER_FEES)
+  })
+
+  it.each(["", " \t "])(
+    "uses direct requests for a blank key (%j)",
+    async (corsProxyApiKey) => {
+      const { sdk } = makeSdk(42220, { corsProxyApiKey })
+      await sdk.initialize()
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(
+        API_ENDPOINTS.GOODSERVER_FEES,
+      )
+    },
+  )
+
+  it("opts into authenticated proxy requests and encodes query parameters", async () => {
+    const { sdk } = makeSdk(42220, { corsProxyApiKey: " test +&?/# key " })
+    await sdk.initialize()
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(url.origin).toBe("https://corsproxy.io")
+    expect(url.searchParams.get("key")).toBe("test +&?/# key")
+    expect(url.searchParams.get("url")).toBe(API_ENDPOINTS.GOODSERVER_FEES)
+    expect([...url.searchParams.keys()]).toEqual(["key", "url"])
+    expect(url.hash).toBe("")
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses the configured proxy for automatic fee loading and preserves the native-fee cache", async () => {
+    const { sdk } = makeSdk(42220, { corsProxyApiKey: "test-only-key" })
+    expect((await sdk.estimateFee(1, "AXELAR")).fee).toBe(
+      parseUnits("0.011", 18),
+    )
+    await sdk.estimateFee(1, "AXELAR")
+    expect(fetch).toHaveBeenCalledTimes(1)
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(url.searchParams.get("key")).toBe("test-only-key")
+  })
+
+  it("surfaces proxy authentication errors without falling back or returning a zero-fee quote", async () => {
+    const { sdk, params } = makeSdk(42220, { corsProxyApiKey: "test-only-key" })
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, statusText: "Forbidden" })),
+    )
+    const result = await sdk.getQuote(params)
+    expect(result.quote).toBeNull()
+    expect(result.canBridge).toBe(false)
+    expect(result.requirements).toEqual([
+      {
+        type: "route_unavailable",
+        message:
+          "SDK initialization failed: Failed to fetch fee estimates: Forbidden",
+      },
+    ])
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not proxy status reads or attach the fee proxy key to them", async () => {
+    const { sdk } = makeSdk(42220, { corsProxyApiKey: "test-only-key" })
+    await sdk.getTransactionStatus(TX_HASH, "AXELAR")
+    await sdk.getTransactionStatus(TX_HASH, "LAYERZERO")
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `${API_ENDPOINTS.AXELARSCAN}/gmp?txHash=${TX_HASH}`,
+    )
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      `${API_ENDPOINTS.LAYERZERO_SCAN}/messages/tx/${TX_HASH}`,
+    )
+  })
+})
 
 describe("destination protocol fees", () => {
   it("uses the destination rate, truncating destination units before the fee", async () => {

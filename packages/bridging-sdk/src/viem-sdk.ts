@@ -40,6 +40,7 @@ import type {
   BridgeQuoteResult,
   BridgeRequirement,
   BridgeStatus,
+  BridgingSDKOptions,
 } from "./types"
 
 import { MESSAGE_PASSING_BRIDGE_ABI } from "./abi"
@@ -64,6 +65,7 @@ export class BridgingSDK {
     walletClient?: WalletClient,
     chainId?: ChainId,
     private readonly publicClients: Record<number, PublicClient> = {},
+    private readonly options: BridgingSDKOptions = {},
   ) {
     if (!publicClient) throw new Error("Public client is required")
 
@@ -160,7 +162,15 @@ export class BridgingSDK {
    */
   async initialize(): Promise<void> {
     try {
-      const response = await fetch(API_ENDPOINTS.GOODSERVER_FEES)
+      const apiKey = this.options.corsProxyApiKey?.trim()
+      let feeUrl: string = API_ENDPOINTS.GOODSERVER_FEES
+      if (apiKey) {
+        const proxyUrl = new URL("https://corsproxy.io/")
+        proxyUrl.searchParams.set("key", apiKey)
+        proxyUrl.searchParams.set("url", API_ENDPOINTS.GOODSERVER_FEES)
+        feeUrl = proxyUrl.toString()
+      }
+      const response = await fetch(feeUrl)
       if (!response.ok) {
         throw new Error(`Failed to fetch fee estimates: ${response.statusText}`)
       }

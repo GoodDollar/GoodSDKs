@@ -12,7 +12,7 @@ import {
   SUPPORTED_CHAINS,
   BRIDGE_PROTOCOLS,
 } from "@goodsdks/bridging-sdk"
-import { publicClients } from "../config"
+import { publicClients, bridgingOptions } from "../config"
 import type {
   BridgeProtocol,
   ChainId,
@@ -56,6 +56,7 @@ export function BridgeForm({ defaultProtocol, onBusyChange }: BridgeFormProps) {
           : undefined,
         fromChain,
         publicClients,
+        bridgingOptions,
       ),
     [fromChain, isConnected, walletClient],
   )

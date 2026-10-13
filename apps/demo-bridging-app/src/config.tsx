@@ -7,12 +7,15 @@ import {
 import { injected } from "wagmi/connectors"
 import { createPublicClient, http as viemHttp } from "viem"
 import { celo, mainnet, fuse, xdc } from "viem/chains"
-import type { BridgingSDK } from "@goodsdks/bridging-sdk"
+import type { BridgingSDK, BridgingSDKOptions } from "@goodsdks/bridging-sdk"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi"
 import { ReactNode } from "react"
 
 const queryClient = new QueryClient()
+export const bridgingOptions: BridgingSDKOptions = {
+  corsProxyApiKey: import.meta.env.VITE_CORSPROXY_API_KEY,
+}
 
 // Optional: injected wallets and read-only previews work without a Reown project.
 const projectId = import.meta.env.VITE_REOWN_PROJECT_ID?.trim()

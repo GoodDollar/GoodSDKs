@@ -29,6 +29,11 @@ export interface BridgeRoute {
   protocol: BridgeProtocol
 }
 
+export interface BridgingSDKOptions {
+  /** Opt in to corsproxy.io for GoodServer fee reads. Browser callers expose this key. */
+  corsProxyApiKey?: string
+}
+
 export interface BridgeConfig {
   supportedChains: Record<number, BridgeChain>
   currentChainId: ChainId
