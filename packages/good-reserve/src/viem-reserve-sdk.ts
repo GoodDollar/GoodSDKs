@@ -601,19 +601,24 @@ export class GoodReserveSDK {
     amount: bigint,
     blockNumber: bigint,
   ) {
-    const maxAttempts = 5
+    const maxAttempts = 20
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const visibleAllowance = await this.publicClient.readContract({
-        address: token,
-        abi: erc20ABI,
-        functionName: "allowance",
-        args: [owner, spender],
-        blockNumber,
-      })
+      let visibleAllowance: bigint = 0n;
+      try {
+        visibleAllowance = await this.publicClient.readContract({
+          address: token,
+          abi: erc20ABI,
+          functionName: "allowance",
+          args: [owner, spender],
+          blockNumber,
+        })
+      } catch (err) {
+        
+      }
       if (visibleAllowance >= amount) return
       if (attempt < maxAttempts - 1) {
         await new Promise<void>((resolve) => {
-          setTimeout(resolve, 250)
+          setTimeout(resolve, 500)
         })
       }
     }

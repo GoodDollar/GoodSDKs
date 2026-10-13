@@ -347,13 +347,110 @@ describe("GoodReserveSDK", () => {
         simulateContract,
       } as any)
 
-      await expect(
-        new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
-      ).rejects.toThrow("Approved allowance not visible at the approval block.")
+      vi.useFakeTimers()
+      try {
+        const assertion = expect(
+          new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
+        ).rejects.toThrow(
+          "Approved allowance not visible at the approval block.",
+        )
+        await vi.runAllTimersAsync()
+        await assertion
+      } finally {
+        vi.useRealTimers()
+      }
+
       expect(simulateContract).toHaveBeenCalledTimes(1)
       expect(simulateContract).toHaveBeenCalledWith(
         expect.objectContaining({ functionName: "approve" }),
       )
+    })
+
+    it("retries the pinned read when a lagging node rejects it", async () => {
+      // forno load-balances across nodes, so the one serving this read may be
+      // behind the approval block ("block is out of range") or may no longer
+      // hold its state ("historical state is not available").
+      let pinnedReads = 0
+      const rc = vi.fn().mockImplementation((req: any) => {
+        const fn = String(req.functionName)
+        if (fn === "getExchangeIds") return Promise.resolve([MOCK_EXCHANGE_ID])
+        if (fn === "getPoolExchange")
+          return Promise.resolve([CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1])
+        if (fn === "allowance") {
+          // The pre-approval check in ensureAllowance reads at head.
+          if (req.blockNumber === undefined) return Promise.resolve(0n)
+          pinnedReads += 1
+          return pinnedReads < 3
+            ? Promise.reject(new Error("block is out of range"))
+            : Promise.resolve(100n)
+        }
+        return Promise.resolve(0n)
+      })
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({
+        readContract: rc,
+        simulateContract,
+      } as any)
+
+      vi.useFakeTimers()
+      try {
+        const pending = new GoodReserveSDK(publicClient, wc).buy(
+          CELO_PROD_STABLE,
+          100n,
+          90n,
+        )
+        await vi.runAllTimersAsync()
+        const result = await pending
+        expect(result.hash).toBe(MOCK_TX_HASH)
+      } finally {
+        vi.useRealTimers()
+      }
+
+      expect(pinnedReads).toBe(3)
+      expect(simulateContract).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ functionName: "swapIn" }),
+      )
+    })
+
+    it("exhausts every attempt when the pinned read keeps failing", async () => {
+      let pinnedReads = 0
+      const rc = vi.fn().mockImplementation((req: any) => {
+        const fn = String(req.functionName)
+        if (fn === "getExchangeIds") return Promise.resolve([MOCK_EXCHANGE_ID])
+        if (fn === "getPoolExchange")
+          return Promise.resolve([CELO_PROD_STABLE, CELO_PROD_GD, 0n, 0n, 1, 1])
+        if (fn === "allowance") {
+          if (req.blockNumber === undefined) return Promise.resolve(0n)
+          pinnedReads += 1
+          return Promise.reject(new Error("block is out of range"))
+        }
+        return Promise.resolve(0n)
+      })
+      const simulateContract = vi.fn().mockResolvedValue({ request: {} })
+      const wc = makeMockWallet()
+      const publicClient = makeMockClient({
+        readContract: rc,
+        simulateContract,
+      } as any)
+
+      vi.useFakeTimers()
+      try {
+        const assertion = expect(
+          new GoodReserveSDK(publicClient, wc).buy(CELO_PROD_STABLE, 100n, 90n),
+        ).rejects.toThrow(
+          "Approved allowance not visible at the approval block.",
+        )
+        await vi.runAllTimersAsync()
+        await assertion
+      } finally {
+        vi.useRealTimers()
+      }
+
+      // An RPC failure must consume a retry rather than abort the whole swap.
+      expect(pinnedReads).toBe(20)
+      expect(simulateContract).toHaveBeenCalledTimes(1)
     })
 
     it("throws when the approval receipt is reverted", async () => {
