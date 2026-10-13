@@ -29,6 +29,8 @@ export default defineConfig({
   plugins: [react()],
   define: {
     "process.browser": true,
-    "process.env": process.env,
+    // Dependencies may branch on NODE_ENV. No other server/CI environment
+    // variable is copied into the browser bundle.
+    "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV ?? "production"),
   },
 });

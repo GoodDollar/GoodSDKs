@@ -1,38 +1,60 @@
-name: deploy-prod
+name: Deploy engagement production
+
 on:
   push:
+    branches: [main]
     paths:
       - "apps/engagement-app/**"
       - "packages/engagement-sdk/**"
-      - ".github/workflows/*engagement*.yml"
-    branches:
-      - main
+      - ".github/workflows/vercel-deploy-engagement.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serialize production changes and allow an in-flight deployment to finish.
+  group: engagement-production
+  cancel-in-progress: false
+
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ENGAGEMENT_PROJECT_ID }}
+  VERCEL_CLI_VERSION: 44.7.3
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
+      # Environment approval gates access to production Vercel credentials.
       name: production
       url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_DEPLOY_TOKEN: ${{ secrets.VERCEL_DEPLOY_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version: 20.19.1
           cache: yarn
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
-      - run: npm install --global turbo@latest
-      - run: npm install --global vite@latest
+
+      - run: corepack enable
       - run: yarn install --immutable
-      #get env vars
-      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@${VERCEL_CLI_VERSION}
+
+      - name: Pull production project settings
         working-directory: apps/engagement-app
-      - run: echo "$(node -v)"
-      - run: vercel build --prod --token=${{ secrets.VERCEL_DEPLOY_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_DEPLOY_TOKEN"
+
+      - name: Build production output
         working-directory: apps/engagement-app
-      - id: deploy
-        run: echo "::set-output name=url::$(vercel deploy --prod --prebuilt --token=${{ secrets.VERCEL_DEPLOY_TOKEN }})"
+        run: vercel build --prod --token="$VERCEL_DEPLOY_TOKEN"
+
+      - name: Deploy prebuilt production output
+        id: deploy
         working-directory: apps/engagement-app
+        # The prebuilt output is production-ready; no preview promotion is needed.
+        run: |
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_DEPLOY_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"

@@ -2099,7 +2099,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@goodsdks/bridging-sdk@workspace:*, @goodsdks/bridging-sdk@workspace:packages/bridging-sdk":
+"@goodsdks/bridging-sdk@workspace:*, @goodsdks/bridging-sdk@workspace:^, @goodsdks/bridging-sdk@workspace:packages/bridging-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/bridging-sdk@workspace:packages/bridging-sdk"
   dependencies:
@@ -2112,7 +2112,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
+"@goodsdks/citizen-sdk@npm:*, @goodsdks/citizen-sdk@workspace:^, @goodsdks/citizen-sdk@workspace:packages/citizen-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/citizen-sdk@workspace:packages/citizen-sdk"
   dependencies:
@@ -2233,7 +2233,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/good-reserve@workspace:*, @goodsdks/good-reserve@workspace:packages/good-reserve":
+"@goodsdks/good-reserve@workspace:*, @goodsdks/good-reserve@workspace:^, @goodsdks/good-reserve@workspace:packages/good-reserve":
   version: 0.0.0-use.local
   resolution: "@goodsdks/good-reserve@workspace:packages/good-reserve"
   dependencies:
@@ -2248,7 +2248,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/invite-sdk@workspace:*, @goodsdks/invite-sdk@workspace:packages/invite-sdk":
+"@goodsdks/invite-sdk@workspace:^, @goodsdks/invite-sdk@workspace:packages/invite-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/invite-sdk@workspace:packages/invite-sdk"
   dependencies:
@@ -2267,11 +2267,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@goodsdks/react-hooks@workspace:packages/react-hooks"
   dependencies:
-    "@goodsdks/bridging-sdk": "workspace:*"
-    "@goodsdks/citizen-sdk": "npm:*"
-    "@goodsdks/good-reserve": "workspace:*"
-    "@goodsdks/invite-sdk": "workspace:*"
-    "@goodsdks/streaming-sdk": "npm:*"
+    "@goodsdks/bridging-sdk": "workspace:^"
+    "@goodsdks/citizen-sdk": "workspace:^"
+    "@goodsdks/good-reserve": "workspace:^"
+    "@goodsdks/invite-sdk": "workspace:^"
+    "@goodsdks/streaming-sdk": "workspace:^"
     "@repo/typescript-config": "workspace:*"
     "@tanstack/react-query": "npm:^4.36.1"
     "@types/react": "npm:^19"
@@ -2287,7 +2287,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/savings-sdk@npm:*, @goodsdks/savings-sdk@workspace:packages/savings-sdk":
+"@goodsdks/savings-sdk@workspace:^, @goodsdks/savings-sdk@workspace:packages/savings-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/savings-sdk@workspace:packages/savings-sdk"
   dependencies:
@@ -2306,7 +2306,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@goodsdks/savings-widget@workspace:packages/savings-widget"
   dependencies:
-    "@goodsdks/savings-sdk": "npm:*"
+    "@goodsdks/savings-sdk": "workspace:^"
     "@repo/typescript-config": "workspace:*"
     lit: "npm:^3.1.0"
     tsup: "npm:^8.3.5"
@@ -2315,7 +2315,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@goodsdks/streaming-sdk@npm:*, @goodsdks/streaming-sdk@workspace:packages/streaming-sdk":
+"@goodsdks/streaming-sdk@npm:*, @goodsdks/streaming-sdk@workspace:^, @goodsdks/streaming-sdk@workspace:packages/streaming-sdk":
   version: 0.0.0-use.local
   resolution: "@goodsdks/streaming-sdk@workspace:packages/streaming-sdk"
   dependencies:
@@ -2338,7 +2338,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@goodsdks/ui-components@workspace:packages/ui-components"
   dependencies:
-    "@goodsdks/citizen-sdk": "npm:*"
+    "@goodsdks/citizen-sdk": "workspace:^"
     "@reown/appkit": "npm:^1.7.2"
     "@reown/appkit-adapter-ethers": "npm:^1.7.2"
     "@repo/typescript-config": "workspace:*"

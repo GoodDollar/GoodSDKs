@@ -1,12 +1,16 @@
 {
   "name": "GoodSDKs",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
     "dev:streaming-demo": "turbo dev --filter=demo-streaming-app --filter=@goodsdks/react-hooks --filter=@goodsdks/streaming-sdk",
     "lint": "turbo lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "release:plan": "node scripts/release/release.mjs plan",
+    "release:test": "node --test scripts/release/*.test.mjs",
+    "release:validate": "node scripts/release/validate-packages.mjs"
   },
   "devDependencies": {
     "prettier": "^3.2.5",

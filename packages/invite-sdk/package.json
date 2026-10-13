@@ -7,7 +7,7 @@
     "prepack": "yarn build",
     "dev": "tsc --watch",
     "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
-    "lint": "eslint src --max-warnings 0",
+    "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -25,9 +25,16 @@
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoodDollar/GoodSDKs.git",
+    "directory": "packages/invite-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@vitest/ui": "^4.0.18",
@@ -41,6 +48,6 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": "GoodDollar InvitesV2 SDK — typed viem-based wrapper for invite codes, levels, and G$ bounties"
 }
