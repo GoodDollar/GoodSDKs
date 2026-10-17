@@ -44,7 +44,7 @@ export class ClaimCustodialSDK extends ClaimSDK {
      */
     async submitAndWait(
         params: SimulateContractParameters,
-        onHash?: (hash: `0x${string}`) => void,
+        onHash?: (hash: `0x${string}`) => void | Promise<void>,
     ): Promise<TransactionReceipt> {
         const account = this.walletClient.account
         if (!account?.address) {
@@ -93,7 +93,13 @@ export class ClaimCustodialSDK extends ClaimSDK {
                 hash = await this.walletClient.writeContract(request)
             }
 
-            onHash?.(hash)
+            try {
+                Promise.resolve(onHash?.(hash)).catch((error) => {
+                    console.warn("[ClaimSDK] onClaimSubmitted callback failed", error)
+                })
+            } catch (error) {
+                console.warn("[ClaimSDK] onClaimSubmitted callback failed", error)
+            }
 
             // Wait one block to prevent immediate errors
             await new Promise((res) => setTimeout(res, 5000))

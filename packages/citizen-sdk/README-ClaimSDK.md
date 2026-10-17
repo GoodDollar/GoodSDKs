@@ -207,8 +207,8 @@ For Wagmi-based React projects, use the hooks exposed from `@goodsdks/react-hook
   - Resolves the wallet's current state: `not_whitelisted`, `already_claimed`, or `can_claim`.
 - `claimSDK.nextClaimTime()`
   - Computes when the wallet can claim again.
-- `claimSDK.claim()`
-  - Sends the UBI claim transaction, handling faucet triggers when balances are low.
+- `claimSDK.claim(onConfirmFaucetTx?, onClaimSubmitted?)`
+  - Sends the UBI claim transaction, handling faucet triggers when balances are low. `onClaimSubmitted` is called with the transaction hash immediately after broadcast and before receipt confirmation.
 - `claimSDK.getDailyStats()`
   - Fetches daily aggregate claimers and amounts.
 - `claimSDK.triggerFaucet()` / `claimSDK.getFaucetParameters()`
