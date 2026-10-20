@@ -45,3 +45,4 @@ e2e.log
 codex-resume
 .codex 
 .npmrc
+.agents/
