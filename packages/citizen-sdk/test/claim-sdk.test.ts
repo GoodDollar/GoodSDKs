@@ -100,6 +100,25 @@ describe("ClaimSDK claim callbacks", () => {
     expect(events).toEqual(["submitted", "waiting", "confirmed"])
   })
 
+  it("invokes the callback inside submitAndWait before confirmation without blocking on it", async () => {
+    vi.useFakeTimers()
+    const { waitForTransactionReceipt } = await import("viem/actions")
+    const onSubmitted = vi.fn(() => new Promise<void>(() => {}))
+
+    const promise = sdk.submitAndWait({} as any, onSubmitted)
+
+    await vi.waitFor(() => {
+      expect(onSubmitted).toHaveBeenCalledWith(MOCK_HASH)
+    })
+    expect(waitForTransactionReceipt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await expect(promise).resolves.toMatchObject({
+      transactionHash: MOCK_HASH,
+    })
+    expect(onSubmitted).toHaveBeenCalledTimes(1)
+  })
+
   it("swallows onClaimSubmitted errors so claim still resolves", async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})

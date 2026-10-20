@@ -374,7 +374,7 @@ export class ClaimSDK {
     })
 
     const hash = await this.walletClient.writeContract(request)
-    await safeInvokeSubmittedCallback(
+    safeInvokeSubmittedCallback(
       hash,
       onHash,
       "[ClaimSDK] onClaimSubmitted callback",

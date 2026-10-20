@@ -98,7 +98,7 @@ export class ClaimCustodialSDK extends ClaimSDK {
                 hash = await this.walletClient.writeContract(request)
             }
 
-            await safeInvokeSubmittedCallback(
+            safeInvokeSubmittedCallback(
                 hash,
                 onHash,
                 "[ClaimSDK] onClaimSubmitted callback",
