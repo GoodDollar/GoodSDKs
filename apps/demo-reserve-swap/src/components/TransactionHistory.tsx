@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useAccount } from "wagmi"
 import { useGoodReserve } from "@goodsdks/react-hooks"
 import { XDC_CHAIN_ID } from "@goodsdks/good-reserve"
-import type { ReserveEvent } from "@goodsdks/good-reserve"
+import type { GoodReserveSDK, ReserveEvent } from "@goodsdks/good-reserve"
 import { formatUnits } from "viem"
 import { mapFriendlyError } from "../utils/errors"
 
@@ -22,36 +22,63 @@ const presets = [
 ]
 
 export function TransactionHistory() {
-  const { address, chain } = useAccount()
-  const isXdc = chain?.id === XDC_CHAIN_ID
-  const reserveEnv = isXdc ? "development" : "production"
+  const { address } = useAccount()
 
-  const { sdk, loading: sdkLoading } = useGoodReserve(reserveEnv)
+  const { sdk, loading: sdkLoading, error: sdkError } = useGoodReserve("production")
+  const route = sdk?.getRouteInfo()
+  const isXdc = route?.chainId === XDC_CHAIN_ID
 
-  const [events, setEvents] = useState<ReserveEvent[]>([])
+  const [historyContext, setHistoryContext] = useState<{
+    sdk: GoodReserveSDK
+    address: string
+    preset: number
+    events: ReserveEvent[]
+    decimals: Record<string, number>
+  } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const generation = useRef(0)
+  const invalidateHistory = useCallback(() => { generation.current++ }, [])
 
   // Default to 24 hours
   const [selectedPreset, setSelectedPreset] = useState(1)
   const [visibleCount, setVisibleCount] = useState(5)
+  const current = historyContext?.sdk === sdk && historyContext?.address === address && historyContext?.preset === selectedPreset ? historyContext : null
+  const events = current?.events ?? []
 
   const fetchHistory = useCallback(async () => {
-    if (!sdk || !address) return
+    const id = ++generation.current
+    setHistoryContext(null)
+    setError(null)
+    if (!sdk || !address) {
+      setLoading(false)
+      return
+    }
 
     setLoading(true)
-    setError(null)
     setVisibleCount(5)
 
     try {
       const history = await sdk.getTransactionHistory(address, {
         blocksAgo: presets[selectedPreset].blocks,
       })
+      const activeRoute = sdk.getRouteInfo()
+      const tokens = [...new Set([
+        activeRoute.stableToken,
+        activeRoute.goodDollar,
+        ...history.flatMap(event => [event.tokenIn, event.tokenOut]),
+      ].map(token => token.toLowerCase() as `0x${string}`))]
+      const decimals = Object.fromEntries(await Promise.all(
+        tokens.map(async token => [token, await sdk.getTokenDecimals(token)]),
+      ))
+      if (generation.current !== id) return
 
       // Sort descending by block number (newest first)
       history.sort((a, b) => Number(b.block - a.block))
-      setEvents(history)
+      setHistoryContext({ sdk, address, preset: selectedPreset, events: history, decimals })
     } catch (err) {
+      if (generation.current !== id) return
+      setHistoryContext(null)
       const errorMsg = err instanceof Error ? err.message : String(err)
       if (errorMsg.includes("exceeded") || errorMsg.includes("Too many")) {
         setError("The RPC node rejected the large block range. Please try a shorter time preset.")
@@ -59,17 +86,14 @@ export function TransactionHistory() {
         setError(mapFriendlyError(err, "Failed to load transaction history"))
       }
     } finally {
-      setLoading(false)
+      if (generation.current === id) setLoading(false)
     }
   }, [sdk, address, selectedPreset])
 
   useEffect(() => {
-    if (!address) {
-      setEvents([])
-      return
-    }
-    fetchHistory()
-  }, [fetchHistory, address])
+    void fetchHistory()
+    return invalidateHistory
+  }, [fetchHistory, invalidateHistory])
 
   if (!address) {
     return (
@@ -87,7 +111,7 @@ export function TransactionHistory() {
         <h2>Transaction History</h2>
         <button
           onClick={fetchHistory}
-          disabled={loading || sdkLoading}
+          disabled={loading || sdkLoading || !sdk}
           style={{
             background: "none",
             border: "none",
@@ -128,27 +152,26 @@ export function TransactionHistory() {
         ))}
       </div>
 
-      {(error) && (
+      {(error || sdkError) && (
         <div className="status-message error-message" style={{ marginBottom: "16px" }}>
-          {error}
+          {error || sdkError}
         </div>
       )}
 
       {loading && <p style={{ textAlign: "center", color: "var(--text-secondary)", padding: "20px" }}>Scanning blockchain logs...</p>}
 
-      {!loading && events.length === 0 && !error && (
+      {!loading && !sdkLoading && events.length === 0 && !error && !sdkError && (
         <p style={{ textAlign: "center", color: "var(--text-secondary)", padding: "20px" }}>
           No reserve transactions found in this time range.
         </p>
       )}
 
-      {events.length > 0 && !loading && (
+      {current && events.length > 0 && !loading && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {events.slice(0, visibleCount).map((ev) => {
             const isBuy = ev.type === "buy"
-            const stableDec = isXdc ? 6 : 18  // USDC=6 on XDC, cUSD=18 on Celo 
-            const inDecimals = isBuy ? stableDec : 18
-            const outDecimals = isBuy ? 18 : stableDec
+            const inDecimals = current.decimals[ev.tokenIn.toLowerCase()]
+            const outDecimals = current.decimals[ev.tokenOut.toLowerCase()]
 
             const amountIn = formatUnits(ev.amountIn, inDecimals)
             const amountOut = formatUnits(ev.amountOut, outDecimals)
@@ -172,7 +195,7 @@ export function TransactionHistory() {
                     {ev.type.toUpperCase()} G$
                   </div>
                   <a
-                    href={getExplorerUrl(chain?.id, ev.tx)}
+                    href={getExplorerUrl(route?.chainId, ev.tx)}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: "var(--accent-color)", fontSize: "12px", textDecoration: "underline" }}

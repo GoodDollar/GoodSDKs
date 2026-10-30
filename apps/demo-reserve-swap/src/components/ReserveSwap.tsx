@@ -1,41 +1,16 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useAccount, usePublicClient, useSwitchChain } from "wagmi"
 import { useGoodReserve } from "@goodsdks/react-hooks"
-import { erc20ABI, XDC_CHAIN_ID } from "@goodsdks/good-reserve"
+import { erc20ABI, XDC_CHAIN_ID, normalizeReserveStats, type GoodReserveSDK, type ReserveStats } from "@goodsdks/good-reserve"
 import { formatUnits } from "viem"
 import { useReserveSwapQuote } from "./useReserveSwapQuote"
 import { useReserveSwapTx } from "./useReserveSwapTx"
 import { mapFriendlyError } from "../utils/errors"
 
-type RouteInfo = {
-  env: string
-  chainId: number
-  mode: "mento-broker"
-  stableToken: `0x${string}`
-  goodDollar: `0x${string}`
-  broker?: `0x${string}`
-  exchangeProvider?: `0x${string}`
-}
-
-type ReserveStatsState = {
-  goodDollarTotalSupply: bigint
-  stableTokenDecimals: number
-  goodDollarDecimals: number
-  poolReserveBalance: bigint | null
-  poolTokenSupply: bigint | null
-  reserveRatio: number | null
-  exitContribution: number | null
-}
-
 type SlippagePreset = "auto" | 1 | 3 | 5
 
 const AUTO_SLIPPAGE_PERCENT = 3
 const SLIPPAGE_PRESETS = [1, 3, 5] as const
-
-const FALLBACK_STABLE_TOKENS = {
-  celo: "0x765DE816845861e75A25fCA122bb6898B8B1282a" as const,
-  xdc: "0xCCE5f6B605164B7784b4719829d84b0f7493b906" as const,
-}
 
 const compactFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -108,50 +83,51 @@ export function ReserveSwap() {
   const { address, chain } = useAccount()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient()
-  const reserveEnv = chain?.id === XDC_CHAIN_ID ? "development" : "production"
   const {
     sdk,
     loading: sdkLoading,
     error: sdkError,
-  } = useGoodReserve(reserveEnv)
+  } = useGoodReserve("production")
 
   const [direction, setDirection] = useState<"buy" | "sell">("buy")
   const [amountIn, setAmountIn] = useState("")
   const [statsLoading, setStatsLoading] = useState(false)
-  const [decimalsLoading, setDecimalsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
-  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null)
-  const [reserveStats, setReserveStats] = useState<ReserveStatsState | null>(
-    null,
-  )
-  const [stableBalance, setStableBalance] = useState<bigint | null>(null)
-  const [gdBalance, setGdBalance] = useState<bigint | null>(null)
+  const [reserveContext, setReserveContext] = useState<{ sdk: GoodReserveSDK; stats: ReserveStats } | null>(null)
+  const [balances, setBalances] = useState<{ sdk: GoodReserveSDK; address: string; stable: bigint; gd: bigint } | null>(null)
   const [balancesLoading, setBalancesLoading] = useState(false)
-  const [stableDecimals, setStableDecimals] = useState(18)
-  const [gdDecimals, setGdDecimals] = useState(18)
+  const contextGeneration = useRef(0)
+  const balanceGeneration = useRef(0)
+  const invalidateContext = useCallback(() => { contextGeneration.current++ }, [])
+  const invalidateBalances = useCallback(() => { balanceGeneration.current++ }, [])
   const [slippagePreset, setSlippagePreset] =
     useState<SlippagePreset>("auto")
 
   const activeSlippagePercent =
     slippagePreset === "auto" ? AUTO_SLIPPAGE_PERCENT : slippagePreset
 
-  const isXdc = chain?.id === XDC_CHAIN_ID
+  const routeInfo = sdk?.getRouteInfo() ?? null
+  const reserveStats = reserveContext?.sdk === sdk ? reserveContext?.stats ?? null : null
+  const stableDecimals = reserveStats?.stableTokenDecimals ?? null
+  const gdDecimals = reserveStats?.goodDollarDecimals ?? null
+  const decimalsLoading = statsLoading || !reserveStats
+  const currentBalances = reserveStats && balances?.sdk === sdk && balances?.address === address ? balances : null
+  const stableBalance = currentBalances?.stable ?? null
+  const gdBalance = currentBalances?.gd ?? null
+  const isXdc = routeInfo?.chainId === XDC_CHAIN_ID
   const chainLabel = isXdc ? "XDC" : "Celo"
   const stableSymbol = isXdc ? "USDC" : "cUSD"
-  const fallbackStable = isXdc
-    ? FALLBACK_STABLE_TOKENS.xdc
-    : FALLBACK_STABLE_TOKENS.celo
-  const stableToken = sdk?.getStableTokenAddress() ?? fallbackStable
+  const stableToken = routeInfo?.stableToken ?? null
 
   // ── Quote hook (owns quote state + derived values) ──────────────────────────
   const {
     quote,
+    quoteContext,
     quoteLoading,
     quoteError,
     impliedPrice,
     impliedPriceNumber,
     lowLiquidityWarning,
-    refetchQuote,
     clearQuote,
   } = useReserveSwapQuote({
     sdk,
@@ -174,42 +150,47 @@ export function ReserveSwap() {
     stableToken,
     stableDecimals,
     gdDecimals,
+    quoteLoading,
+    decimalsLoading,
     slippagePercent: activeSlippagePercent,
   })
 
   const loadReserveContext = useCallback(async () => {
+    const id = ++contextGeneration.current
+    setReserveContext(null)
     if (!sdk) return
 
-    setDecimalsLoading(true)
     setStatsLoading(true)
     setStatsError(null)
 
     try {
-      const route = sdk.getRouteInfo()
-      setRouteInfo(route as RouteInfo)
-      console.info("GoodReserve route info", route)
+      console.info("GoodReserve route info", sdk.getRouteInfo())
 
       const stats = await sdk.getReserveStats()
 
-      setReserveStats(stats)
-      setStableDecimals(stats.stableTokenDecimals)
-      setGdDecimals(stats.goodDollarDecimals)
+      if (contextGeneration.current !== id) return
+      setReserveContext({ sdk, stats })
     } catch (err) {
+      if (contextGeneration.current !== id) return
+      setReserveContext(null)
+      setBalances(null)
       setStatsError(mapFriendlyError(err, "Failed to read reserve stats"))
     } finally {
-      setDecimalsLoading(false)
-      setStatsLoading(false)
+      if (contextGeneration.current === id) setStatsLoading(false)
     }
   }, [sdk])
 
   useEffect(() => {
+    setAmountIn("")
     void loadReserveContext()
-  }, [loadReserveContext])
+    return invalidateContext
+  }, [loadReserveContext, invalidateContext])
 
   const loadBalances = useCallback(async () => {
+    const id = ++balanceGeneration.current
+    setBalances(null)
     if (!sdk || !address || !publicClient) {
-      setStableBalance(null)
-      setGdBalance(null)
+      setBalancesLoading(false)
       return
     }
 
@@ -231,26 +212,29 @@ export function ReserveSwap() {
           args: [address],
         }),
       ])
-      setStableBalance(stable)
-      setGdBalance(gd)
+      if (balanceGeneration.current !== id) return
+      setBalances({ sdk, address, stable, gd })
     } catch (err) {
+      if (balanceGeneration.current !== id) return
+      setBalances(null)
       console.warn("Failed to load balances", err)
     } finally {
-      setBalancesLoading(false)
+      if (balanceGeneration.current === id) setBalancesLoading(false)
     }
   }, [sdk, address, publicClient])
 
   useEffect(() => {
     void loadBalances()
-  }, [loadBalances])
+    return invalidateBalances
+  }, [loadBalances, invalidateBalances])
 
   const handleRefresh = useCallback(async () => {
-    await loadReserveContext()
-    await refetchQuote()
-    await loadBalances()
-  }, [loadReserveContext, refetchQuote, loadBalances])
+    clearQuote()
+    await Promise.all([loadReserveContext(), loadBalances()])
+  }, [loadReserveContext, clearQuote, loadBalances])
 
   const handleExecute = async () => {
+    if (decimalsLoading || quoteLoading || !quoteContext || txStatus === "pending") return
     if (chain?.id !== routeInfo?.chainId && routeInfo?.chainId) {
       try {
         await switchChainAsync({ chainId: routeInfo.chainId })
@@ -260,7 +244,7 @@ export function ReserveSwap() {
       return
     }
 
-    const didSucceed = await executeSwap(amountIn, quote)
+    const didSucceed = await executeSwap(amountIn, quoteContext)
     if (!didSucceed) return
 
     setAmountIn("")
@@ -294,6 +278,15 @@ export function ReserveSwap() {
     )
   }
 
+  if (!routeInfo || stableDecimals === null || gdDecimals === null) {
+    return (
+      <div className="swap-card">
+        <p>{statsError ?? "Loading reserve token metadata and stats..."}</p>
+        <button onClick={handleRefresh} disabled={statsLoading}>Retry</button>
+      </div>
+    )
+  }
+
   const inputLabel = direction === "buy" ? stableSymbol : "G$"
   const outputLabel = direction === "buy" ? "G$" : stableSymbol
   const inputDecimals = direction === "buy" ? stableDecimals : gdDecimals
@@ -313,15 +306,13 @@ export function ReserveSwap() {
       ? `Auto (${AUTO_SLIPPAGE_PERCENT}%)`
       : `${slippagePreset}%`
 
-  const reserveRatioPercent =
-    reserveStats?.reserveRatio !== null &&
-    reserveStats?.reserveRatio !== undefined
-      ? (reserveStats.reserveRatio / 10000).toFixed(2)
-      : null
+  const reserveRatioPercent = reserveStats
+    ? normalizeReserveStats(reserveStats).reserveRatioPercent
+    : null
   const poolCollateralDetails =
     reserveStats?.poolReserveBalance !== null &&
     reserveStats?.poolReserveBalance !== undefined
-      ? formatTokenAmount(reserveStats.poolReserveBalance, stableDecimals)
+      ? formatTokenAmount(reserveStats.poolReserveBalance, 18)
       : null
   const totalSupplyDetails = reserveStats
     ? formatTokenAmount(reserveStats.goodDollarTotalSupply, gdDecimals)
@@ -333,10 +324,8 @@ export function ReserveSwap() {
     reserveStats?.poolTokenSupply !== undefined &&
     reserveStats.poolTokenSupply > 0n
       ? formatUnits(
-          (reserveStats.poolReserveBalance *
-            10n ** BigInt(gdDecimals) *
-            10n ** 9n) /
-            (reserveStats.poolTokenSupply * 10n ** BigInt(stableDecimals)),
+          (reserveStats.poolReserveBalance * 10n ** 9n) /
+            reserveStats.poolTokenSupply,
           9,
         )
       : null
@@ -385,7 +374,7 @@ export function ReserveSwap() {
         <p>Convert assets via the {chainLabel} GoodReserve</p>
         {isXdc && (
           <p style={{ fontSize: "12px", color: "#64748b", marginTop: "6px" }}>
-            XDC demo uses the current development deployment addresses.
+            XDC uses the production USDC-backed reserve.
           </p>
         )}
         {!isXdc && (
@@ -560,7 +549,7 @@ export function ReserveSwap() {
         <button
           onClick={handleExecute}
           disabled={
-            txStatus === "pending" || decimalsLoading || !quote || !amountIn
+            txStatus === "pending" || decimalsLoading || quoteLoading || quote === null || quote <= 0n || !amountIn
           }
           className="primary-button"
         >
