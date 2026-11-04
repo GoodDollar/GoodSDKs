@@ -95,13 +95,13 @@ export const goodReserveSdkCapabilities = {
     {
       id: "buy",
       method: "GoodReserveSDK.buy",
-      needs: ["walletClient", "connectedWallet"],
+      needs: ["readClient", "walletClient", "connectedWallet"],
       effects: ["transaction"],
     },
     {
       id: "sell",
       method: "GoodReserveSDK.sell",
-      needs: ["walletClient", "connectedWallet"],
+      needs: ["readClient", "walletClient", "connectedWallet"],
       effects: ["transaction"],
     },
   ],
