@@ -36,7 +36,7 @@
     "@types/chai-as-promised": "^7.1.6",
     "@types/mocha": ">=9.1.0",
     "chai": "^4.2.0",
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.9",
     "ethers": "^6.13.5",
     "hardhat": "^2.22.18",
     "hardhat-gas-reporter": "^2.2.2",
