@@ -31,7 +31,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@vitest/ui": "^4.0.18",
-    "tsup": "^8.4.0",
+    "tsup": "^9.0.0",
     "typescript": "latest",
     "viem": "latest",
     "vitest": "^4.0.18"
