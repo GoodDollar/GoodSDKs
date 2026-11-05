@@ -1,0 +1,106 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /apps/demo-bridging-app
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /apps/demo-identity-app
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /apps/demo-reserve-swap
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /apps/demo-streaming-app
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /apps/demo-webcomponents
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /apps/engagement-app
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/bridging-sdk
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/citizen-sdk
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/engagement-contracts
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/engagement-sdk
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/eslint-config
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/good-reserve
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/invite-sdk
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/react-hooks
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/savings-sdk
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/savings-widget
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/streaming-sdk
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/typescript-config
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /packages/ui-components
+    schedule:
+      interval: weekly
