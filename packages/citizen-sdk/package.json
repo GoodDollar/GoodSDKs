@@ -6,7 +6,7 @@
     "build": "tsup --clean",
     "dev": "tsc --watch",
     "bump": "yarn version patch && yarn build && git add package.json && git commit -m \"version bump\"",
-    "test": "vitest run",
+    "test": "vitest run --exclude test/connected-accounts.test.ts",
     "test:watch": "vitest",
     "test:connected": "vitest run test/connected-accounts.test.ts"
   },
@@ -19,14 +19,21 @@
       "import": "./dist/index.js"
     },
     "require": {
-      "types": "./dist/index.cts",
+      "types": "./dist/index.d.cts",
       "require": "./dist/index.cjs"
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoodDollar/GoodSDKs.git",
+    "directory": "packages/citizen-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@vitest/ui": "^4.0.18",
@@ -45,6 +52,6 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": ""
 }

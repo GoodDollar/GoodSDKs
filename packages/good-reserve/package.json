@@ -22,9 +22,16 @@
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoodDollar/GoodSDKs.git",
+    "directory": "packages/good-reserve"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@vitest/ui": "^4.0.18",
@@ -40,6 +47,6 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": "GoodDollar Reserve SDK — buy and sell G$ through the reserve using viem"
 }

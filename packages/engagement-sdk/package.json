@@ -21,9 +21,17 @@
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoodDollar/GoodSDKs.git",
+    "directory": "packages/engagement-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@types/react": "^18",

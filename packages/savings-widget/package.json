@@ -10,8 +10,15 @@
   },
   "main": "./dist/index.global.js",
   "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "devDependencies": {
-    "@goodsdks/savings-sdk": "*",
+    "@goodsdks/savings-sdk": "workspace:^",
     "@repo/typescript-config": "workspace:*",
     "tsup": "^8.3.5",
     "typescript": "latest"
@@ -21,7 +28,15 @@
     "viem": "latest"
   },
   "files": [
-    "dist",
-    "src"
-  ]
+    "dist"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoodDollar/GoodSDKs.git",
+    "directory": "packages/savings-widget"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -1,0 +1,5 @@
+# CODEOWNERS requests the team automatically; the ruleset must separately require
+# code-owner approval for this to become a merge gate.
+# Release automation and deployment changes require repository-owner review.
+/.github/workflows/ @GoodDollar/goodbuilders-maintainers
+/scripts/release/ @GoodDollar/goodbuilders-maintainers
