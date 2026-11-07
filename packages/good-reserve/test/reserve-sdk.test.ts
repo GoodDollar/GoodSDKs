@@ -222,6 +222,7 @@ describe("GoodReserveSDK", () => {
       const pending = sdk[direction](XDC_PROD_STABLE, 100n, 90n)
       await expect(pending).rejects.toBeInstanceOf(ReserveTransactionError)
       await expect(pending).rejects.toMatchObject({
+        operation,
         hash: MOCK_TX_HASH,
         receipt,
         message: expect.stringContaining(`${operation} transaction reverted on-chain.`),
@@ -254,6 +255,24 @@ describe("GoodReserveSDK", () => {
         vi.mocked(wallet.getChainId).mockResolvedValue(CELO_CHAIN_ID)
         return { request: {} } as any
       })
+      await expect(sdk[direction](XDC_PROD_STABLE, 100n, 90n)).rejects.toThrow("Switch your wallet to chain 50")
+      expect(wallet.writeContract).not.toHaveBeenCalled()
+    })
+
+    it("falls back to walletClient.chain.id when getChainId is not provided", async () => {
+      const readContract = makeMentoReadContract(XDC_PROD_STABLE, XDC_PROD_GD)
+      const client = makeMockClient({
+        chain: { id: XDC_CHAIN_ID },
+        readContract,
+      } as any)
+      const wallet = {
+        chain: { id: CELO_CHAIN_ID },
+        getAddresses: vi
+          .fn()
+          .mockResolvedValue(["0x0000000000000000000000000000000000000001"]),
+        writeContract: vi.fn().mockResolvedValue(MOCK_TX_HASH),
+      } as unknown as WalletClient
+      const sdk = new GoodReserveSDK(client, wallet, "production")
       await expect(sdk[direction](XDC_PROD_STABLE, 100n, 90n)).rejects.toThrow("Switch your wallet to chain 50")
       expect(wallet.writeContract).not.toHaveBeenCalled()
     })

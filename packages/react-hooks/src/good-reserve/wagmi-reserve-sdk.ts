@@ -1,7 +1,33 @@
 import { useMemo } from "react"
 import { usePublicClient, useWalletClient } from "wagmi"
 import { type PublicClient } from "viem"
-import { GoodReserveSDK, type ReserveEnv, type GoodReserveSDKOptions } from "@goodsdks/good-reserve"
+import {
+  GoodReserveSDK,
+  ReserveTransactionError,
+  normalizeReserveStats,
+  type ReserveEnv,
+  type GoodReserveSDKOptions,
+  type ReserveStats,
+  type NormalizedReserveStats,
+  type ReserveRouteInfo,
+  type ReserveTransactionResult,
+  type ReserveEvent,
+  type GetReserveEventsOptions,
+} from "@goodsdks/good-reserve"
+
+export {
+  GoodReserveSDK,
+  ReserveTransactionError,
+  normalizeReserveStats,
+  type ReserveEnv,
+  type GoodReserveSDKOptions,
+  type ReserveStats,
+  type NormalizedReserveStats,
+  type ReserveRouteInfo,
+  type ReserveTransactionResult,
+  type ReserveEvent,
+  type GetReserveEventsOptions,
+}
 
 /**
  * Gives you a ready-to-use `GoodReserveSDK` tied to the currently connected

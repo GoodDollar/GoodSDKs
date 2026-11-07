@@ -30,7 +30,7 @@ export interface ReserveTransactionResult {
 /** An on-chain failure, including the submitted hash and receipt for diagnostics. */
 export class ReserveTransactionError extends Error {
   constructor(
-    operation: "Approval" | "Swap",
+    public readonly operation: "Approval" | "Swap",
     public readonly hash: `0x${string}`,
     public readonly receipt: TransactionReceipt,
   ) {
@@ -695,10 +695,14 @@ export class GoodReserveSDK {
   }
 
   private async assertWalletChain(): Promise<void> {
-    const walletChainId = await this.getWalletClient().getChainId()
+    const wc = this.getWalletClient()
+    const walletChainId =
+      typeof wc.getChainId === "function"
+        ? await wc.getChainId()
+        : wc.chain?.id
     if (walletChainId !== this.chainId) {
       throw new Error(
-        `Wallet chain ${walletChainId} does not match reserve read-client chain ${this.chainId}. Switch your wallet to chain ${this.chainId} before retrying.`,
+        `Wallet chain ${walletChainId ?? "unknown"} does not match reserve read-client chain ${this.chainId}. Switch your wallet to chain ${this.chainId} before retrying.`,
       )
     }
   }
