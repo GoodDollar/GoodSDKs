@@ -1,4 +1,7 @@
+import { ReserveTransactionError } from "@goodsdks/good-reserve"
+
 export const mapFriendlyError = (err: unknown, fallback: string): string => {
+  if (err instanceof ReserveTransactionError) return err.message
   const message = err instanceof Error ? err.message : String(err ?? fallback)
   const lower = message.toLowerCase()
 

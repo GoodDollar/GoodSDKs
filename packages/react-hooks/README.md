@@ -80,8 +80,8 @@ export const App = () => (
   - Builds on `useIdentitySDK` and returns a ready `ClaimSDK` once identity checks resolve.
   - Surfaces entitlement errors via the returned `error` string.
 - `useGoodReserve(env?: ReserveEnv, options?: GoodReserveSDKOptions)`
-  - Returns a ready `GoodReserveSDK` for reserve quotes, approvals, buys, and sells on the active chain.
-  - Returns `error` when the connected chain/env pair is unsupported, such as XDC on `production`.
+  - Returns a ready `GoodReserveSDK` for reserve quotes, approvals, buys, and sells on the active chain (including production Celo and production XDC).
+  - Returns `error` when the connected chain/env pair is unsupported, such as XDC on `staging`.
 
 ### Streaming Hooks
 

@@ -306,9 +306,12 @@ export function ReserveSwap() {
       ? `Auto (${AUTO_SLIPPAGE_PERCENT}%)`
       : `${slippagePreset}%`
 
-  const reserveRatioPercent = reserveStats
-    ? normalizeReserveStats(reserveStats).reserveRatioPercent
+  const normalizedStats = reserveStats
+    ? normalizeReserveStats(reserveStats)
     : null
+  const reserveRatioPercent = normalizedStats?.reserveRatioPercent ?? null
+  const exitContributionPercent =
+    normalizedStats?.exitContributionPercent ?? null
   const poolCollateralDetails =
     reserveStats?.poolReserveBalance !== null &&
     reserveStats?.poolReserveBalance !== undefined
@@ -646,6 +649,12 @@ export function ReserveSwap() {
                 <span style={{ fontSize: "13px", color: "#334155" }}>
                   Reserve ratio:{" "}
                   {reserveRatioPercent ? `${reserveRatioPercent}%` : "N/A"}
+                </span>
+                <span style={{ fontSize: "13px", color: "#334155" }}>
+                  Exit contribution:{" "}
+                  {exitContributionPercent
+                    ? `${exitContributionPercent}%`
+                    : "N/A"}
                 </span>
                 <span style={{ fontSize: "13px", color: "#334155" }}>
                   Backing floor:{" "}
