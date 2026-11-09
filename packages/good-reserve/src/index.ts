@@ -1,4 +1,4 @@
-export { GoodReserveSDK } from "./viem-reserve-sdk"
+export { GoodReserveSDK, ReserveTransactionError, normalizeReserveStats } from "./viem-reserve-sdk"
 export {
   goodReserveSdkCapabilities,
   GOOD_RESERVE_SDK_ENVIRONMENTS,
@@ -17,6 +17,7 @@ export type {
   GetReserveEventsOptions,
   ReserveRouteInfo,
   ReserveStats,
+  NormalizedReserveStats,
   GoodReserveSDKOptions,
 } from "./viem-reserve-sdk"
 export {

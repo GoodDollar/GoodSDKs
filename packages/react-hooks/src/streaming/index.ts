@@ -8,6 +8,7 @@ import {
     SubgraphClient,
     SupportedChains,
     type StreamInfo,
+    type StreamStatusFilter,
     type PoolMembership,
     type SUPReserveLocker,
     type SuperTokenBalance,
@@ -57,6 +58,10 @@ export interface UseSetStreamParams {
 export interface UseStreamListParams {
     account: Address
     direction?: "incoming" | "outgoing" | "all"
+    /** Defaults to `"active"`. Pass `"ended"` or `"all"` to include closed streams. */
+    status?: StreamStatusFilter
+    /** Also read the rate each closed stream ran at. See `GetStreamsOptions`. */
+    includeLastFlowRate?: boolean
     environment?: Environment
     first?: number
     skip?: number
@@ -312,6 +317,8 @@ export function useDeleteStream() {
 export function useStreamList({
     account,
     direction = "all",
+    status = "active",
+    includeLastFlowRate = false,
     environment = "production",
     first,
     skip,
@@ -321,11 +328,28 @@ export function useStreamList({
     const publicClient = usePublicClient()
 
     return useQuery<StreamInfo[]>({
-        queryKey: ["streams", account, direction, environment, first, skip, publicClient?.chain?.id],
+        queryKey: [
+            "streams",
+            account,
+            direction,
+            status,
+            includeLastFlowRate,
+            environment,
+            first,
+            skip,
+            publicClient?.chain?.id,
+        ],
         queryFn: async () => {
             const sdk = sdks.get(environment)
             if (!sdk) throw new Error(`SDK not available for environment: ${environment}`)
-            return sdk.getActiveStreams({ account, direction, first, skip })
+            return sdk.getStreams({
+                account,
+                direction,
+                status,
+                includeLastFlowRate,
+                first,
+                skip,
+            })
         },
         enabled: enabled && !!account && !!publicClient,
     })

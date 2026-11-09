@@ -142,6 +142,130 @@ describe("SubgraphClient", () => {
         "outgoing-oldest",
       ])
     })
+
+    const streamRow = (
+      account: Address,
+      overrides: Record<string, unknown> = {},
+    ) => ({
+      id: "stream-1",
+      sender: { id: account },
+      receiver: { id: "0x0000000000000000000000000000000000000002" },
+      token: { id: "0x0000000000000000000000000000000000000003", symbol: "G$" },
+      currentFlowRate: "11",
+      streamedUntilUpdatedAt: "22",
+      updatedAtTimestamp: "100",
+      createdAtTimestamp: "99",
+      ...overrides,
+    })
+
+    it("should filter to running streams by default", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+      requestMock.mockResolvedValue({ streams: [] })
+
+      await client.queryStreams({ account: mockAccount, direction: "outgoing" })
+
+      expect(requestMock).toHaveBeenCalledWith(
+        expect.stringContaining('currentFlowRate_gt: "0"'),
+        expect.anything(),
+      )
+    })
+
+    it("should query only closed streams for status ended", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+      requestMock.mockResolvedValue({ streams: [] })
+
+      await client.queryStreams({
+        account: mockAccount,
+        direction: "outgoing",
+        status: "ended",
+      })
+
+      const query = requestMock.mock.calls[0][0]
+      expect(query).toContain('currentFlowRate: "0"')
+      expect(query).not.toContain("currentFlowRate_gt")
+    })
+
+    it("should drop the flow-rate filter entirely for status all", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+      requestMock.mockResolvedValue({ streams: [] })
+
+      await client.queryStreams({
+        account: mockAccount,
+        direction: "outgoing",
+        status: "all",
+      })
+
+      const query = requestMock.mock.calls[0][0]
+      expect(query).toContain("where: { sender: $account }")
+      expect(query).not.toContain("currentFlowRate_gt")
+    })
+
+    it("should map token symbol and mark running streams active", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+      requestMock.mockResolvedValue({ streams: [streamRow(mockAccount)] })
+
+      const [stream] = await client.queryStreams({
+        account: mockAccount,
+        direction: "outgoing",
+      })
+
+      expect(stream.tokenSymbol).toBe("G$")
+      expect(stream.isActive).toBe(true)
+      expect(stream.closedAtTimestamp).toBeUndefined()
+      expect(stream.lastFlowRate).toBe(BigInt(11))
+    })
+
+    it("should mark zero-rate streams ended and expose the close time", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+      requestMock.mockResolvedValue({
+        streams: [streamRow(mockAccount, { currentFlowRate: "0" })],
+      })
+
+      const [stream] = await client.queryStreams({
+        account: mockAccount,
+        direction: "outgoing",
+        status: "all",
+      })
+
+      expect(stream.isActive).toBe(false)
+      expect(stream.closedAtTimestamp).toBe(100)
+      expect(stream.lastFlowRate).toBeUndefined()
+    })
+
+    it("should read the historical rate of a closed stream when requested", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+      requestMock.mockResolvedValue({
+        streams: [
+          streamRow(mockAccount, {
+            currentFlowRate: "0",
+            streamPeriods: [{ flowRate: "4200" }],
+          }),
+        ],
+      })
+
+      const [stream] = await client.queryStreams({
+        account: mockAccount,
+        direction: "outgoing",
+        status: "ended",
+        includeLastFlowRate: true,
+      })
+
+      expect(requestMock).toHaveBeenCalledWith(
+        expect.stringContaining("streamPeriods"),
+        expect.anything(),
+      )
+      expect(stream.currentFlowRate).toBe(BigInt(0))
+      expect(stream.lastFlowRate).toBe(BigInt(4200))
+    })
+
+    it("should not request stream periods unless asked", async () => {
+      const mockAccount = "0x0000000000000000000000000000000000000001" as Address
+      requestMock.mockResolvedValue({ streams: [] })
+
+      await client.queryStreams({ account: mockAccount, direction: "outgoing" })
+
+      expect(requestMock.mock.calls[0][0]).not.toContain("streamPeriods")
+    })
   })
 
   describe("queryMemberPools", () => {

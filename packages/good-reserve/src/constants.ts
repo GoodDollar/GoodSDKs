@@ -1,6 +1,7 @@
 import { parseAbi, type Address } from "viem"
 
 // Sources:
+// - https://github.com/GoodDollar/GoodProtocol/blob/8c7c8e0062df10183bcb3779a88a02fc848eef74/releases/deployment.json (production-xdc)
 // - https://github.com/GoodDollar/GoodProtocol/blob/04b5d250bc2802c7b04b7c4d87bc00222ea81e2b/releases/deployment.json
 // - https://github.com/GoodDollar/GoodProtocol/blob/04b5d250bc2802c7b04b7c4d87bc00222ea81e2b/releases/deploy-settings.json
 export const CELO_CHAIN_ID = 42220
@@ -37,9 +38,9 @@ export const RESERVE_CONTRACT_ADDRESSES = {
       stableToken: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
     },
     xdc: {
-      mode: "unavailable",
-      reason:
-        "XDC production reserve swap endpoints are not published in GoodProtocol deployment.json yet",
+      mode: "mento-broker",
+      broker: "0x88de45906D4F5a57315c133620cfa484cB297541",
+      exchangeProvider: "0x2fFBB49055d487DdBBb0C052Cd7c2a02A7971e41",
       goodDollar: "0xEC2136843a983885AebF2feB3931F73A8eBEe50c",
       stableToken: "0xfA2958CB79b0491CC627c1557F441eF849Ca8eb1",
     },

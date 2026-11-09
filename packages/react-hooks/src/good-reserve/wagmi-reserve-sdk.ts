@@ -10,14 +10,17 @@ import { GoodReserveSDK, type ReserveEnv, type GoodReserveSDKOptions } from "@go
  * object literal on every render without blowing away the memo.
  *
  * If the connected chain doesn't have reserve endpoints for the chosen env
- * (e.g. XDC on production) the SDK will be null and `error` will tell you why.
+ * (e.g. XDC on staging) the SDK will be null and `error` will tell you why.
+ * Production Celo and XDC are supported; select development only explicitly.
  * Use `GoodReserveSDK.isChainEnvSupported(chainId, env)` to gate your UI
  * before the hook even tries to build the SDK.
  *
  * @example
  * const { sdk, error } = useGoodReserve("production")
  * if (error) return <p>{error}</p>
- * const quote = await sdk.getBuyQuote(cUSD, parseUnits("10", 18))
+ * const stable = sdk.getStableTokenAddress()
+ * const decimals = await sdk.getTokenDecimals(stable)
+ * const quote = await sdk.getBuyQuote(stable, parseUnits("10", decimals))
  */
 export function useGoodReserve(env: ReserveEnv = "production", options?: GoodReserveSDKOptions) {
   const publicClient = usePublicClient() as PublicClient | undefined

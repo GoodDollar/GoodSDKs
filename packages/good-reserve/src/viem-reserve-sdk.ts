@@ -5,6 +5,7 @@ import {
   type TransactionReceipt,
   type SimulateContractParameters,
   maxUint256,
+  formatUnits,
 } from "viem"
 import { waitForTransactionReceipt } from "viem/actions"
 import {
@@ -24,6 +25,18 @@ export type ReserveEnv = "production" | "staging" | "development"
 export interface ReserveTransactionResult {
   hash: `0x${string}`
   receipt: TransactionReceipt
+}
+
+/** An on-chain failure, including the submitted hash and receipt for diagnostics. */
+export class ReserveTransactionError extends Error {
+  constructor(
+    operation: "Approval" | "Swap",
+    public readonly hash: `0x${string}`,
+    public readonly receipt: TransactionReceipt,
+  ) {
+    super(`${operation} transaction reverted on-chain. Transaction: ${hash}. Check the receipt and refresh your quote before retrying.`)
+    this.name = "ReserveTransactionError"
+  }
 }
 
 export interface ReserveEvent {
@@ -54,13 +67,43 @@ export type ReserveRouteInfo = {
 }
 
 export interface ReserveStats {
+  /** Total G$ supply in token-native base units (goodDollarDecimals). */
   goodDollarTotalSupply: bigint
   stableTokenDecimals: number
   goodDollarDecimals: number
+  /** Pool collateral normalized to 18 decimals, even for a 6-decimal stable token. */
   poolReserveBalance: bigint | null
+  /** Pool G$ supply normalized to 18 decimals, not token-native base units. */
   poolTokenSupply: bigint | null
+  /** Raw uint32 fraction with denominator 1e8; not percent or basis points. */
   reserveRatio: number | null
+  /** Raw uint32 fraction with denominator 1e8; not percent or basis points. */
   exitContribution: number | null
+}
+
+export interface NormalizedReserveStats {
+  reserveRatioPercent: string | null
+  exitContributionPercent: string | null
+  poolReserveBalance: string | null
+  poolTokenSupply: string | null
+}
+
+/**
+ * Converts raw pool stats to exact decimal strings: percentages without labels,
+ * and pool amounts in whole token units using their normalized 18-decimal scale.
+ * Preserves null; rounding and locale/currency formatting belong to the caller.
+ */
+export function normalizeReserveStats(stats: ReserveStats): NormalizedReserveStats {
+  return {
+    reserveRatioPercent: stats.reserveRatio === null
+      ? null : formatUnits(BigInt(stats.reserveRatio), 6),
+    exitContributionPercent: stats.exitContribution === null
+      ? null : formatUnits(BigInt(stats.exitContribution), 6),
+    poolReserveBalance: stats.poolReserveBalance === null
+      ? null : formatUnits(stats.poolReserveBalance, 18),
+    poolTokenSupply: stats.poolTokenSupply === null
+      ? null : formatUnits(stats.poolTokenSupply, 18),
+  }
 }
 
 export interface GoodReserveSDKOptions {
@@ -84,8 +127,8 @@ export class GoodReserveSDK {
   /**
    * Quick check to see if a given chain + env actually has reserve swap
    * endpoints deployed. Call this before constructing the SDK to avoid
-   * catching a constructor error in your UI — e.g. XDC production has no
-   * published endpoints yet, so it will always return false there.
+   * catching a constructor error in your UI — e.g. XDC staging has no
+   * published endpoints, while production and explicit development are supported.
    *
    * @example
    * if (!GoodReserveSDK.isChainEnvSupported(chainId, 'production')) {
@@ -557,6 +600,7 @@ export class GoodReserveSDK {
     onHash?: (hash: `0x${string}`) => void,
   ) {
     const account = await this.getAccount()
+    await this.assertWalletChain()
     const allowance = await this.publicClient.readContract({
       address: token,
       abi: erc20ABI,
@@ -570,7 +614,7 @@ export class GoodReserveSDK {
     // the amount needed for this swap. If exactApproval=false, we approve maxUint256
     // so users don't have to eat the gas cost of another approval next time.
     const approvalAmount = this.exactApproval ? amount : maxUint256
-    await this.submitAndWait(
+    const { receipt } = await this.submitAndWait(
       {
         address: token,
         abi: erc20ABI,
@@ -579,6 +623,47 @@ export class GoodReserveSDK {
       },
       onHash,
     )
+    if (!receipt.blockNumber) {
+      throw new Error("Approval receipt missing block number.")
+    }
+    await this.verifyAllowanceAtBlock(
+      token,
+      account,
+      spender,
+      amount,
+      receipt.blockNumber,
+    )
+  }
+
+  private async verifyAllowanceAtBlock(
+    token: Address,
+    owner: Address,
+    spender: Address,
+    amount: bigint,
+    blockNumber: bigint,
+  ) {
+    const maxAttempts = 20
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let visibleAllowance: bigint = 0n;
+      try {
+        visibleAllowance = await this.publicClient.readContract({
+          address: token,
+          abi: erc20ABI,
+          functionName: "allowance",
+          args: [owner, spender],
+          blockNumber,
+        })
+      } catch (err) {
+        
+      }
+      if (visibleAllowance >= amount) return
+      if (attempt < maxAttempts - 1) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 500)
+        })
+      }
+    }
+    throw new Error("Approved allowance not visible at the approval block.")
   }
 
   private async submitAndWait(
@@ -587,17 +672,35 @@ export class GoodReserveSDK {
   ): Promise<ReserveTransactionResult> {
     const wc = this.getWalletClient()
     const account = await this.getAccount()
+    await this.assertWalletChain()
 
     const { request } = await this.publicClient.simulateContract({
       account,
       ...params,
     })
 
-    const hash = await wc.writeContract(request)
+    await this.assertWalletChain()
+    const hash = await wc.writeContract({ ...request, chain: this.publicClient.chain })
     onHash?.(hash)
 
     const receipt = await waitForTransactionReceipt(this.publicClient, { hash })
+    if (receipt.status !== "success") {
+      throw new ReserveTransactionError(
+        params.functionName === "approve" ? "Approval" : "Swap",
+        hash,
+        receipt,
+      )
+    }
     return { hash, receipt }
+  }
+
+  private async assertWalletChain(): Promise<void> {
+    const walletChainId = await this.getWalletClient().getChainId()
+    if (walletChainId !== this.chainId) {
+      throw new Error(
+        `Wallet chain ${walletChainId} does not match reserve read-client chain ${this.chainId}. Switch your wallet to chain ${this.chainId} before retrying.`,
+      )
+    }
   }
 
   private async attachTimestamps(

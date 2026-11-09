@@ -36,9 +36,21 @@ export interface StreamInfo {
   sender: Address
   receiver: Address
   token: Address
+  /** Current rate for a running stream; `0n` once the stream has been closed. */
   flowRate: bigint
   timestamp: bigint
   streamedSoFar?: bigint
+  /** Symbol of the super token, as reported by the subgraph. */
+  tokenSymbol?: string
+  /** `false` once the stream has been closed. */
+  isActive: boolean
+  /** Unix seconds at which the stream was closed; `undefined` while it runs. */
+  closedAtTimestamp?: number
+  /**
+   * Rate the stream ran at before it was closed.
+   * Only populated when the query requested it via `includeLastFlowRate`.
+   */
+  lastFlowRate?: bigint
 }
 
 export interface StreamLookupParams {
@@ -104,10 +116,25 @@ export interface StreamQueryResult {
   sender: Address
   receiver: Address
   token: Address
+  /** Symbol of the super token, as reported by the subgraph. */
+  tokenSymbol: string
+  /** Current rate for a running stream; `0n` once the stream has been closed. */
   currentFlowRate: bigint
   streamedUntilUpdatedAt: bigint
   updatedAtTimestamp: number
   createdAtTimestamp: number
+  /** `false` once the stream has been closed. */
+  isActive: boolean
+  /**
+   * Unix seconds at which the stream was closed; `undefined` while it runs.
+   * Mirrors `updatedAtTimestamp`, which is the close time for an ended stream.
+   */
+  closedAtTimestamp?: number
+  /**
+   * Rate the stream ran at before it was closed, read from its final
+   * `streamPeriod`. Only populated when `includeLastFlowRate` was requested.
+   */
+  lastFlowRate?: bigint
 }
 
 // GDA Pool Types
@@ -157,9 +184,28 @@ export interface SUPReserveLocker {
 }
 
 // Query Options
+/**
+ * Which streams a query should return.
+ * - `active` — currently running (`currentFlowRate > 0`)
+ * - `ended`  — closed (`currentFlowRate == 0`)
+ * - `all`    — both
+ */
+export type StreamStatusFilter = "active" | "ended" | "all"
+
 export interface GetStreamsOptions {
   account: Address
   direction?: "incoming" | "outgoing" | "all"
+  /**
+   * Defaults to `"active"`, which is the historical behaviour of this query.
+   * Pass `"ended"` or `"all"` to include closed streams.
+   */
+  status?: StreamStatusFilter
+  /**
+   * Also fetch the rate each stream ran at before it closed, from its final
+   * `streamPeriod`. Costs an extra nested selection per row, so it is opt-in;
+   * without it, ended streams report a rate of `0n`.
+   */
+  includeLastFlowRate?: boolean
   /**
    * Maximum number of merged results to return.
    * For `direction: "all"`, pagination is applied after outgoing + incoming

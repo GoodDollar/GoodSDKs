@@ -55,8 +55,7 @@ export const BRIDGE_PROTOCOLS: Record<BridgeProtocol, string> = {
 }
 
 export const API_ENDPOINTS = {
-  // Use a CORS proxy since the direct GoodServer API might block browser requests
-  GOODSERVER_FEES: "https://corsproxy.io/?url=https://goodserver.gooddollar.org/bridge/estimatefees",
+  GOODSERVER_FEES: "https://goodserver.gooddollar.org/bridge/estimatefees",
   LAYERZERO_SCAN: "https://scan.layerzero-api.com/v1",
   AXELARSCAN: "https://api.axelarscan.io",
 } as const

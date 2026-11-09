@@ -9,6 +9,7 @@ import {
   SUPReserveLocker,
   GetStreamsOptions,
   GetBalanceHistoryOptions,
+  StreamStatusFilter,
 } from "../types"
 
 const SUBGRAPH_BATCH_SIZE = 100
@@ -17,31 +18,36 @@ const MAX_SUBGRAPH_RESULTS = 5000
 /**
  * GraphQL query definitions
  */
-const GET_OUTGOING_STREAMS = gql`
-  query GetOutgoingStreams($account: String!, $skip: Int = 0, $first: Int = 100) {
-    streams(
-      where: { sender: $account, currentFlowRate_gt: "0" }
-      first: $first
-      skip: $skip
-      orderBy: createdAtTimestamp
-      orderDirection: desc
-    ) {
-      id
-      sender { id }
-      receiver { id }
-      token { id, symbol }
-      currentFlowRate
-      streamedUntilUpdatedAt
-      updatedAtTimestamp
-      createdAtTimestamp
-    }
-  }
-`
+/**
+ * Stream documents are built per (direction, status, includeLastFlowRate) rather
+ * than being static, because the `currentFlowRate` filter used to be hardcoded to
+ * `_gt: "0"` — which made closed streams unreachable through this client at all.
+ */
+const STREAM_STATUS_FILTERS: Record<StreamStatusFilter, string> = {
+  active: `, currentFlowRate_gt: "0"`,
+  ended: `, currentFlowRate: "0"`,
+  all: "",
+}
 
-const GET_INCOMING_STREAMS = gql`
-  query GetIncomingStreams($account: String!, $skip: Int = 0, $first: Int = 100) {
+function buildStreamsQuery(
+  direction: StreamDirection,
+  status: StreamStatusFilter,
+  includeLastFlowRate: boolean,
+): string {
+  const party = direction === "outgoing" ? "sender" : "receiver"
+  // The final period of a closed stream carries the rate it ran at, which
+  // `currentFlowRate` no longer does once the flow is deleted.
+  const lastFlowRate = includeLastFlowRate
+    ? `
+      streamPeriods(first: 1, orderBy: startedAtTimestamp, orderDirection: desc) {
+        flowRate
+      }`
+    : ""
+
+  return `
+  query GetStreams($account: String!, $skip: Int = 0, $first: Int = 100) {
     streams(
-      where: { receiver: $account, currentFlowRate_gt: "0" }
+      where: { ${party}: $account${STREAM_STATUS_FILTERS[status]} }
       first: $first
       skip: $skip
       orderBy: createdAtTimestamp
@@ -54,10 +60,27 @@ const GET_INCOMING_STREAMS = gql`
       currentFlowRate
       streamedUntilUpdatedAt
       updatedAtTimestamp
-      createdAtTimestamp
+      createdAtTimestamp${lastFlowRate}
     }
   }
 `
+}
+
+const streamsQueryCache = new Map<string, string>()
+
+function streamsQuery(
+  direction: StreamDirection,
+  status: StreamStatusFilter,
+  includeLastFlowRate: boolean,
+): string {
+  const key = `${direction}:${status}:${includeLastFlowRate}`
+  let query = streamsQueryCache.get(key)
+  if (!query) {
+    query = buildStreamsQuery(direction, status, includeLastFlowRate)
+    streamsQueryCache.set(key, query)
+  }
+  return query
+}
 
 const GET_TOKEN_BALANCE = gql`
   query GetTokenBalance($account: String!) {
@@ -180,6 +203,7 @@ interface SubgraphStream {
   streamedUntilUpdatedAt: string
   updatedAtTimestamp: string
   createdAtTimestamp: string
+  streamPeriods?: { flowRate: string }[]
 }
 interface SubgraphSnapshot { token: SubgraphToken; balanceUntilUpdatedAt: string; updatedAtTimestamp: string }
 interface SubgraphSnapshotLog { token: SubgraphToken; balance: string; timestamp: string }
@@ -245,37 +269,75 @@ export class SubgraphClient {
   }
 
   async queryStreams(options: GetStreamsOptions): Promise<StreamQueryResult[]> {
-    const { account, direction = "all", first, skip = 0 } = options
+    const {
+      account,
+      direction = "all",
+      status = "active",
+      includeLastFlowRate = false,
+      first,
+      skip = 0,
+    } = options
 
     if (!account) return []
 
     const requestedWindow =
       first === undefined ? undefined : Math.min(skip + first, MAX_SUBGRAPH_RESULTS)
 
-    const mapStreams = (streams: SubgraphStream[]) => streams.map((s) => ({
-      id: s.id,
-      sender: s.sender.id as Address,
-      receiver: s.receiver.id as Address,
-      token: s.token.id as Address,
-      currentFlowRate: BigInt(s.currentFlowRate),
-      streamedUntilUpdatedAt: BigInt(s.streamedUntilUpdatedAt),
-      updatedAtTimestamp: Number(s.updatedAtTimestamp),
-      createdAtTimestamp: Number(s.createdAtTimestamp),
-    }))
+    const mapStreams = (streams: SubgraphStream[]): StreamQueryResult[] =>
+      streams.map((s) => {
+        const currentFlowRate = BigInt(s.currentFlowRate)
+        const isActive = currentFlowRate > BigInt(0)
+        const updatedAt = Number(s.updatedAtTimestamp)
+        const finalPeriodRate = s.streamPeriods?.[0]?.flowRate
+
+        return {
+          id: s.id,
+          sender: s.sender.id as Address,
+          receiver: s.receiver.id as Address,
+          token: s.token.id as Address,
+          tokenSymbol: s.token.symbol,
+          currentFlowRate,
+          streamedUntilUpdatedAt: BigInt(s.streamedUntilUpdatedAt),
+          updatedAtTimestamp: updatedAt,
+          createdAtTimestamp: Number(s.createdAtTimestamp),
+          isActive,
+          // For a closed stream the last update *is* the close.
+          closedAtTimestamp: isActive ? undefined : updatedAt,
+          lastFlowRate: isActive
+            ? currentFlowRate
+            : finalPeriodRate === undefined
+              ? undefined
+              : BigInt(finalPeriodRate),
+        }
+      })
 
     if (direction === "incoming" || direction === "outgoing") {
       const streams = await this.collectStreamsByDirection(
         account,
         direction,
         requestedWindow,
+        status,
+        includeLastFlowRate,
       )
 
       return mapStreams(first === undefined ? streams.slice(skip) : streams.slice(skip, skip + first))
     }
 
     const [outgoing, incoming] = await Promise.all([
-      this.collectStreamsByDirection(account, "outgoing", requestedWindow),
-      this.collectStreamsByDirection(account, "incoming", requestedWindow),
+      this.collectStreamsByDirection(
+        account,
+        "outgoing",
+        requestedWindow,
+        status,
+        includeLastFlowRate,
+      ),
+      this.collectStreamsByDirection(
+        account,
+        "incoming",
+        requestedWindow,
+        status,
+        includeLastFlowRate,
+      ),
     ])
 
     const merged = [...outgoing, ...incoming].sort(
@@ -392,10 +454,11 @@ export class SubgraphClient {
     direction: StreamDirection,
     first: number,
     skip: number,
+    status: StreamStatusFilter,
+    includeLastFlowRate: boolean,
   ): Promise<SubgraphStream[]> {
-    const query = direction === "outgoing" ? GET_OUTGOING_STREAMS : GET_INCOMING_STREAMS
     const data = await this.client.request<{ streams: SubgraphStream[] }>(
-      query,
+      streamsQuery(direction, status, includeLastFlowRate),
       {
         account: account.toLowerCase(),
         first,
@@ -409,7 +472,9 @@ export class SubgraphClient {
   private async collectStreamsByDirection(
     account: Address,
     direction: StreamDirection,
-    limit?: number,
+    limit: number | undefined,
+    status: StreamStatusFilter,
+    includeLastFlowRate: boolean,
   ): Promise<SubgraphStream[]> {
     const cappedLimit =
       limit === undefined ? MAX_SUBGRAPH_RESULTS : Math.min(limit, MAX_SUBGRAPH_RESULTS)
@@ -422,7 +487,14 @@ export class SubgraphClient {
       if (remaining <= 0) break
 
       const batchFirst = Math.min(SUBGRAPH_BATCH_SIZE, remaining)
-      const batch = await this.fetchStreamsBatch(account, direction, batchFirst, batchSkip)
+      const batch = await this.fetchStreamsBatch(
+        account,
+        direction,
+        batchFirst,
+        batchSkip,
+        status,
+        includeLastFlowRate,
+      )
       streams.push(...batch)
 
       if (batch.length < batchFirst) break

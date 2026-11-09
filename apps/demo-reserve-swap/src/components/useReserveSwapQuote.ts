@@ -1,12 +1,23 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { formatUnits, parseUnits } from "viem"
 import type { GoodReserveSDK } from "@goodsdks/good-reserve"
 import { mapFriendlyError } from "../utils/errors"
 
 type Direction = "buy" | "sell"
 
+export interface ReserveSwapQuote {
+  sdk: GoodReserveSDK
+  direction: Direction
+  amountIn: string
+  stableToken: `0x${string}`
+  stableDecimals: number
+  gdDecimals: number
+  amountOut: bigint
+}
+
 export interface UseReserveSwapQuoteResult {
   quote: bigint | null
+  quoteContext: ReserveSwapQuote | null
   quoteLoading: boolean
   quoteError: string | null
   impliedPrice: string | null
@@ -24,9 +35,9 @@ export function useReserveSwapQuote(params: {
   sdk: GoodReserveSDK | null
   direction: Direction
   amountIn: string
-  stableToken: `0x${string}`
-  stableDecimals: number
-  gdDecimals: number
+  stableToken: `0x${string}` | null
+  stableDecimals: number | null
+  gdDecimals: number | null
   decimalsLoading: boolean
 }): UseReserveSwapQuoteResult {
   const {
@@ -39,53 +50,78 @@ export function useReserveSwapQuote(params: {
     decimalsLoading,
   } = params
 
-  const [quote, setQuote] = useState<bigint | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const request = useMemo(() => ({
+    sdk, direction, amountIn, stableToken, stableDecimals, gdDecimals, decimalsLoading,
+  }), [sdk, direction, amountIn, stableToken, stableDecimals, gdDecimals, decimalsLoading])
+  const [state, setState] = useState<{
+    request: typeof request
+    quote: ReserveSwapQuote | null
+    loading: boolean
+    error: string | null
+  } | null>(null)
+  const generation = useRef(0)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const invalidateQuote = useCallback(() => {
+    generation.current++
+    if (timer.current !== null) clearTimeout(timer.current)
+  }, [])
+
+  let parsedAmount: bigint | null = null
+  const inputDecimals = direction === "buy" ? stableDecimals : gdDecimals
+  if (!decimalsLoading && inputDecimals !== null && /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(amountIn)) {
+    if ((amountIn.split(".")[1]?.length ?? 0) <= inputDecimals) {
+      try {
+        const parsed = parseUnits(amountIn, inputDecimals)
+        if (parsed > 0n) parsedAmount = parsed
+      } catch {
+        parsedAmount = null
+      }
+    }
+  }
+  const canQuote = !!sdk && !!stableToken && stableDecimals !== null && gdDecimals !== null && parsedAmount !== null
 
   const fetchQuote = useCallback(async () => {
-    if (!sdk || decimalsLoading || !amountIn || isNaN(Number(amountIn))) return
+    if (timer.current !== null) clearTimeout(timer.current)
+    const id = ++generation.current
+    setState({ request, quote: null, loading: canQuote, error: null })
+    if (!canQuote || !request.sdk || !request.stableToken || request.stableDecimals === null || request.gdDecimals === null || parsedAmount === null) return
 
-    setLoading(true)
-    setError(null)
     try {
-      if (direction === "buy") {
-        const parsed = parseUnits(amountIn, stableDecimals)
-        setQuote(await sdk.getBuyQuote(stableToken, parsed))
-      } else {
-        const parsed = parseUnits(amountIn, gdDecimals)
-        setQuote(await sdk.getSellQuote(parsed, stableToken))
-      }
+      const amountOut = request.direction === "buy"
+        ? await request.sdk.getBuyQuote(request.stableToken, parsedAmount)
+        : await request.sdk.getSellQuote(parsedAmount, request.stableToken)
+      if (generation.current !== id) return
+      setState({
+        request,
+        quote: { ...request, sdk: request.sdk, stableToken: request.stableToken, stableDecimals: request.stableDecimals, gdDecimals: request.gdDecimals, amountOut },
+        loading: false,
+        error: null,
+      })
     } catch (err) {
-      setQuote(null)
-      setError(mapFriendlyError(err, "Failed to fetch quote"))
-    } finally {
-      setLoading(false)
+      if (generation.current !== id) return
+      setState({ request, quote: null, loading: false, error: mapFriendlyError(err, "Failed to fetch quote") })
     }
-  }, [
-    sdk,
-    decimalsLoading,
-    amountIn,
-    direction,
-    stableToken,
-    stableDecimals,
-    gdDecimals,
-  ])
+  }, [request, canQuote, parsedAmount])
 
   useEffect(() => {
-    const timer = setTimeout(fetchQuote, 400)
-    return () => clearTimeout(timer)
-  }, [fetchQuote])
+    timer.current = setTimeout(fetchQuote, 400)
+    return invalidateQuote
+  }, [fetchQuote, invalidateQuote])
 
   const clearQuote = useCallback(() => {
-    setQuote(null)
-    setError(null)
-  }, [])
+    invalidateQuote()
+    setState({ request, quote: null, loading: false, error: null })
+  }, [request, invalidateQuote])
+
+  // Hide old quotes during the render before an input/route effect can run.
+  const current = state?.request === request ? state : null
+  const quoteContext = canQuote && !current?.loading ? current?.quote ?? null : null
+  const quote = quoteContext?.amountOut ?? null
 
   // Derived: implied price (stable per G$)
   let impliedPrice: string | null = null
   let impliedPriceNumber: number | null = null
-  if (quote !== null && amountIn && !isNaN(Number(amountIn))) {
+  if (quote !== null && stableDecimals !== null && gdDecimals !== null) {
     try {
       const inputParsed = parseUnits(
         amountIn,
@@ -112,8 +148,8 @@ export function useReserveSwapQuote(params: {
   if (
     direction === "buy" &&
     quote !== null &&
-    amountIn &&
-    !isNaN(Number(amountIn))
+    stableDecimals !== null &&
+    gdDecimals !== null
   ) {
     try {
       const parsedInput = parseUnits(amountIn, stableDecimals)
@@ -130,8 +166,9 @@ export function useReserveSwapQuote(params: {
 
   return {
     quote,
-    quoteLoading: loading,
-    quoteError: error,
+    quoteContext,
+    quoteLoading: canQuote && (current === null || current.loading),
+    quoteError: current?.error ?? null,
     impliedPrice,
     impliedPriceNumber,
     lowLiquidityWarning,
