@@ -38,7 +38,7 @@
     "chai": "^4.2.0",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.5",
-    "hardhat": "^2.22.18",
+    "hardhat": "^3.21.2",
     "hardhat-gas-reporter": "^2.2.2",
     "solidity-coverage": "^0.8.1",
     "ts-node": "^10.9.2",
