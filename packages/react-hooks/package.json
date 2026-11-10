@@ -41,7 +41,7 @@
     "@goodsdks/good-reserve": "workspace:*",
     "@goodsdks/invite-sdk": "workspace:*",
     "@goodsdks/streaming-sdk": "*",
-    "@tanstack/react-query": "^4.36.1",
+    "@tanstack/react-query": "^5.107.1",
     "lz-string": "^1.5.0",
     "react": "^19.1.1",
     "tsup": "^8.4.0"
