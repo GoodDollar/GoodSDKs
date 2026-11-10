@@ -12,6 +12,6 @@
     "@goodsdks/ui-components": "*"
   },
   "devDependencies": {
-    "vite": "6.3.5"
+    "vite": "8.3.6"
   }
 }
