@@ -22,7 +22,7 @@
         "@tamagui/vite-plugin": "^1.125.22",
         "@tamagui/web": "^1.125.22",
         "@tanstack/react-query": "^4.36.1",
-        "react": "^18.3.1",
+        "react": "^19.3.1",
         "react-dom": "^18.3.1",
         "tamagui": "^1.125.22",
         "viem": "^1.21.4",
