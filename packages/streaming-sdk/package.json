@@ -40,7 +40,7 @@
     "viem": "*"
   },
   "dependencies": {
-    "@sfpro/sdk": "^0.1.0",
+    "@sfpro/sdk": "^0.3.2",
     "graphql": "^16.9.0",
     "graphql-request": "^7.1.2"
   }
